@@ -368,6 +368,10 @@ void CGnuShare::RecurseLoad(CString FullPath, CString DirPath, bool doRecurse, D
 			CString	FileName = FilePath.Mid( FilePath.ReverseFind('\\') + 1);
 			DWORD   FileSize = Finder.GetLength();
 
+			// get right size for mp3s, ignoring id3
+			if (FileName.Right(4).CompareNoCase(".mp3") == 0)
+				FileSize = CFileLock::ScanFileSize(FilePath);
+			
 			if( FileSize > 2000 * 1024 * 1024 ) // Pass 2 gb files for now
 				continue;
 			

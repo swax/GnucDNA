@@ -176,13 +176,6 @@ struct FileSource
 		Init();
 	};
 
-	FileSource(IPv4 address, int size, CString hash)
-	{
-		Address  = address;
-		Size     = size;
-		Sha1Hash = hash;
-	};
-
 	FileSource(AltLocation& nAltLoc)
 	{
 		Init();

@@ -330,4 +330,15 @@ void CFileLock::Unlock()
 {
 	m_CriticalSection.Unlock();
 }
+
+int CFileLock::ScanFileSize(CString FilePath)
+{
+	CFileLock scanFile;
+	scanFile.Open(FilePath, CFile::modeRead, true);
+	int FileSize = scanFile.GetLength();
+	scanFile.Close();
+
+	return FileSize;
+}
+
  

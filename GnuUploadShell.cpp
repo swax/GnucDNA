@@ -199,7 +199,7 @@ void CGnuUploadShell::ParseRequest(CString Handshake)
 	LowRequestURI.MakeLower();
 
 	// Find requested file info
-	if (LowRequestURI.Left(22) == "/uri-res/n2r?urn:sha1:")
+	if (LowRequestURI.Left(22).CompareNoCase("/uri-res/n2r?urn:sha1:") == 0)
 	{
 		m_Sha1Hash = m_RequestURI.Mid(22);
 		m_Sha1Hash.MakeUpper();
@@ -208,7 +208,7 @@ void CGnuUploadShell::ParseRequest(CString Handshake)
 		m_Name  = m_Sha1Hash;
 	}
 
-	else if (LowRequestURI.Left(5) == "/get/")
+	else if (LowRequestURI.Left(5).CompareNoCase("/get/") == 0)
 	{
 		CString IndexString = m_RequestURI.Mid(5, m_RequestURI.Find("/", 5) - 5);
 		
@@ -216,7 +216,7 @@ void CGnuUploadShell::ParseRequest(CString Handshake)
 		m_Name  = m_RequestURI.Mid(5 + IndexString.GetLength() + 1); 
 	}
 
-	else if (LowRequestURI.Left(39) == "/gnutella/tigertree/v3?urn:tree:tiger/:")
+	else if (LowRequestURI.Left(39).CompareNoCase("/gnutella/tigertree/v3?urn:tree:tiger/:") == 0)
 	{
 		m_TigerHash = m_RequestURI.Mid(39);
 		m_TigerHash.MakeUpper();
@@ -227,7 +227,7 @@ void CGnuUploadShell::ParseRequest(CString Handshake)
 		m_TigerTreeRequest = true;
 	}
 
-	else if (LowRequestURI.Left(34) == "/gnutella/thex/v1?urn:tree:tiger/:")
+	else if (LowRequestURI.Left(34).CompareNoCase("/gnutella/thex/v1?urn:tree:tiger/:") == 0)
 	{
 		m_TigerHash = m_RequestURI.Mid(34);
 		m_TigerHash.MakeUpper();
@@ -239,16 +239,26 @@ void CGnuUploadShell::ParseRequest(CString Handshake)
 		m_TigerThexRequest = true;
 	}
 
-	else if (LowRequestURI.Left(22) == "/uri-res/N2X?urn:sha1:")
+	else if (LowRequestURI.Left(22).CompareNoCase("/uri-res/N2X?urn:sha1:") == 0)
 	{
-		m_Sha1Hash = m_RequestURI.Mid(22);
-		m_Sha1Hash.MakeUpper();
+		CString HashString = m_RequestURI.Mid(22);
+		HashString.MakeUpper();
+
+		int semipos = HashString.Find(';');
+
+		if(semipos == -1)
+			m_Sha1Hash = HashString;
+		else
+		{
+			m_Sha1Hash  = HashString.Left(semipos);
+			m_TigerHash = HashString.Mid(semipos + 1);
+		}
 
 		m_Index = m_pShare->m_pHash->GetHashIndex(HASH_SHA1, m_Sha1Hash);
 		m_Name  = m_Sha1Hash;
 
 		m_TigerTreeRequest = true;
-		m_TigerThexRequest = true;
+		m_TigerThexRequest = true; 
 	}
 
 	else

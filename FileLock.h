@@ -79,6 +79,8 @@ public:
 	void Flush();
 	void Close();
 
+	static int CFileLock::ScanFileSize(CString FilePath);
+
 	bool  m_IgnoreID3;
 	ULONGLONG m_RealLength;
 	ULONGLONG m_IgnoreBegin;
