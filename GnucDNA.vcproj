@@ -94,8 +94,7 @@
 				TargetEnvironment="1"
 				TypeLibraryName="$(IntDir)/$(ProjectName).tlb"/>
 			<Tool
-				Name="VCPostBuildEventTool"
-				CommandLine=" "/>
+				Name="VCPostBuildEventTool"/>
 			<Tool
 				Name="VCPreBuildEventTool"/>
 			<Tool
