@@ -541,7 +541,7 @@ UINT CGnuShare::ShareWorker(LPVOID pVoidShare)
 	EventList[0]   = (HANDLE) pShare->m_TriggerThread;
 
 	pShare->ResetDirectories(EventCount, EventList);
-	pShare->m_TriggerThread.ResetEvent();
+
 
 	for(;;)
 	{
@@ -876,5 +876,6 @@ void CGnuShare::RemoveShareAltLocation(CString Hash, IPv4 Location)
 
 	m_FilesAccess.Unlock();
 }
+
 
 	
