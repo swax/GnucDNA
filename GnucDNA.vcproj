@@ -183,19 +183,6 @@
 				</File>
 			</Filter>
 			<Filter
-				Name="Download"
-				Filter="">
-				<File
-					RelativePath=".\DnaDownload.cpp">
-				</File>
-				<File
-					RelativePath="GnuDownload.cpp">
-				</File>
-				<File
-					RelativePath="GnuDownloadShell.cpp">
-				</File>
-			</Filter>
-			<Filter
 				Name="Network"
 				Filter="">
 				<File
@@ -668,6 +655,19 @@
 				</File>
 				<File
 					RelativePath=".\GnuChat.cpp">
+				</File>
+			</Filter>
+			<Filter
+				Name="Download"
+				Filter="">
+				<File
+					RelativePath=".\DnaDownload.cpp">
+				</File>
+				<File
+					RelativePath="GnuDownload.cpp">
+				</File>
+				<File
+					RelativePath="GnuDownloadShell.cpp">
 				</File>
 			</Filter>
 		</Filter>

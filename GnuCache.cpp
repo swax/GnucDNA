@@ -1173,7 +1173,7 @@ CString CGnuCache::GetRandWebCache(bool MustBeAlive)
 		
 		span = CTime::GetCurrentTime() - m_AltWebCaches[i].LastRef;
 		if( ( m_AltWebCaches[i].State == ALIVE || (!MustBeAlive && m_AltWebCaches[i].State != DEAD) ) && 
-			( span.GetTotalSeconds() > 3600 || m_AltWebCaches[i].State == UNTESTED ) &&
+			( span.GetTotalSeconds() > 3600 || m_AltWebCaches[i].State == UNTESTED || m_WebMode == MODE_UPDATE) &&
 			( m_WebMode != MODE_GET || ( m_WebMode == MODE_GET && (m_AltWebCaches[i].GWCVer == GWC_VERSION2 || m_AltWebCaches[i].State == UNTESTED) ) ) )
 				FoundCaches.push_back(m_AltWebCaches[i]);
 	}

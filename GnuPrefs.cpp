@@ -94,6 +94,7 @@ void CGnuPrefs::LoadDefaults()
 	m_ReplyFilePath		= false;
 	m_MaxReplies		= 64;
 	m_SendOnlyAvail		= false;
+	m_NoReload          = false;
 
 	// Transfer
 	m_PartialDir     = m_pCore->m_RunPath + "\\Partials";
@@ -288,6 +289,8 @@ void CGnuPrefs::LoadConfig(CString ConfigFile)
 	m_MaxReplies = atoi(buffer);
 	GetPrivateProfileString("Share",	"SendOnlyAvail",		NumtoStr(m_SendOnlyAvail),	buffer, 256, ConfigFile);
 	m_SendOnlyAvail = (0 != atoi(buffer));
+	GetPrivateProfileString("Share",	"NoReload",		NumtoStr(m_NoReload), buffer, 256, ConfigFile);
+	m_NoReload = (0 != atoi(buffer));
 
 	// Transfer
 	CString OldPartialDir = m_PartialDir;

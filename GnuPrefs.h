@@ -85,6 +85,7 @@ public:
 	bool m_ReplyFilePath;
 	int  m_MaxReplies;
 	bool m_SendOnlyAvail;
+	bool m_NoReload;
 
 	// Transfer
 	CString m_PartialDir;

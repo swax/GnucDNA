@@ -577,7 +577,8 @@ UINT CGnuShare::ShareWorker(LPVOID pVoidShare)
 		// Shared dir changed contents
 		if(WhichEvent > 1)
 		{
-			pShare->m_UpdateShared = true;
+			if( !pCore->m_pPrefs->m_NoReload )		
+				pShare->m_UpdateShared = true;
 		}
 		
 
@@ -594,6 +595,7 @@ UINT CGnuShare::ShareWorker(LPVOID pVoidShare)
 			if(pShare->m_UpdateShared)
 			{	
 				pShare->LoadFiles();
+
 				pShare->ResetDirectories(EventCount, EventList);
 				
 				pShare->m_UpdateShared = false;

@@ -390,8 +390,8 @@ void CGnuDownloadShell::Start()
 
 		m_Cooling   = 0;
 
-		m_ReSearchInterval	= 15;
-		m_NextReSearch		= time(NULL) + (60 * 10);
+		//m_ReSearchInterval	= 15;
+		m_NextReSearch		= time(NULL) + (60*60);
 	}
 }
 
@@ -814,8 +814,11 @@ bool CGnuDownloadShell::CheckCompletion()
 
 
 		// Update shared
-		m_pCore->m_pShare->m_UpdateShared = true;
-		m_pCore->m_pShare->m_TriggerThread.SetEvent(); 
+		if( !m_pPrefs->m_NoReload )
+		{
+			m_pCore->m_pShare->m_UpdateShared = true;
+			m_pCore->m_pShare->m_TriggerThread.SetEvent();
+		}
 	}
 
 	return true;
@@ -1214,7 +1217,10 @@ void CGnuDownloadShell::ReSearch()
 	m_Cooling		= 0;
 	m_HostTryPos	= 1;
 
-	// research done at 15m, 30m, 1h, 2h, 4h, 8h, 8h...
+	// limit research to once per hour across all downloads
+	// reason: 800,000 nodes on network all searching 1 per hour
+	// 800,000 / 360 = 222 queries/sec which is too many anyways
+	/*// research done at 15m, 30m, 1h, 2h, 4h, 8h, 8h...
 	ASSERT(m_ReSearchInterval);
 	if(m_ReSearchInterval == 0)
 		m_ReSearchInterval = 15;
@@ -1223,8 +1229,9 @@ void CGnuDownloadShell::ReSearch()
 		m_ReSearchInterval *= 2;
 	else
 		m_ReSearchInterval = 8 * 60;
+	*/
 
-	m_NextReSearch = time(NULL) + (60 * m_ReSearchInterval); 
+	m_NextReSearch = time(NULL) + (60*60); // 1 hour
 }
 
 

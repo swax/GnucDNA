@@ -165,7 +165,7 @@ void CGnuTransfers::Timer()
 
 void CGnuTransfers::MinuteTimer()
 {
-	//	Make sure 5 mins have passed since last research
+	//	Make sure 1 hour has passed since last research
 	if(time(NULL) < m_NextReSearch)
 		return;
 
@@ -198,7 +198,7 @@ void CGnuTransfers::MinuteTimer()
 	{
 		pSelected->ReSearch();
 
-		m_NextReSearch = time(NULL) + (5*60); // dont any researching for 5 mins
+		m_NextReSearch = time(NULL) + (60*60); // dont any researching for 1 hour
 
 	}     
 }
