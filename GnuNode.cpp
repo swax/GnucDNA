@@ -1492,6 +1492,7 @@ void CGnuNode::SetConnected()
 		// Put together vector of support message types
 		std::vector<packet_VendIdent> SupportedMessages;
 		SupportedMessages.push_back( packet_VendIdent("BEAR", 7, 1) );		// tcp connect back
+		SupportedMessages.push_back( packet_VendIdent("GNUC", 7, 1) );		// udp connect back
 		SupportedMessages.push_back( packet_VendIdent("BEAR", 11, 1) );		// leaf guidance
 		//SupportedMessages.push_back( packet_VendIdent("BEAR", 12, 1) );	// leaf guidance
 		SupportedMessages.push_back( packet_VendIdent("GNUC", 60, 1) );		// mode change
@@ -1499,7 +1500,7 @@ void CGnuNode::SetConnected()
 		SupportedMessages.push_back( packet_VendIdent("GTKG", 7, 2) );		// udp connect back
 		//SupportedMessages.push_back( packet_VendIdent("LIME", 11, 2) );	// oob query
 		//SupportedMessages.push_back( packet_VendIdent("LIME", 12, 1) );	// oob query
-		SupportedMessages.push_back( packet_VendIdent("LIME", 21, 1) );	// push proxy
+		SupportedMessages.push_back( packet_VendIdent("LIME", 21, 1) );	    // push proxy
 
 		uint16 VectorSize = SupportedMessages.size();
 
@@ -2250,7 +2251,7 @@ void CGnuNode::NodeManagement()
 			}
 
 			// Send UDP test if needed
-			if(m_SupportsVendorMsg && m_pNet->m_UdpFirewall)
+			if(m_SupportsVendorMsg && m_pNet->m_UdpFirewall != UDP_FULL && m_GnuNodeMode == GNU_ULTRAPEER)
 			{
 				FirewallTest.Ident = packet_VendIdent("GNUC", 7, 1);
 				IPv4 SendBack;

@@ -1,4 +1,7 @@
 stablize connection to bearshare
+why 1.1 disconnecting?
+upgrade ack from 1.1.0.8
+xp2 test
 
 Test
 	Gnutella Leaf Mode / Preferencing / Upgrade Path
@@ -22,8 +25,7 @@ G2
 	Q2/NAT
 	
 	If PI/RELAY recved with UDP address of directly connected host (but not from directly	 connected host), disconnect youngest link
-	ASSER
-	T size of udp being sent, make sure QH does not overflow
+	ASSERT size of udp being sent, make sure QH does not overflow
 	
 Now	
 	IPrefs::SetSpeedUp

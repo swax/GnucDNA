@@ -1896,13 +1896,15 @@ void CG2Control::Receive_Q2(G2_RecvdPacket &PacketQ2)
 
 
 	// If in hub mode and received udp
+	IPv4 ResponseAddress;
+
 	if(m_ClientMode == G2_HUB && PacketQ2.pTCP == NULL)
 	{
 		m_PacketsQ2[AVG_TOTAL]++;
 		if(Query.dna)
 			m_PacketsQ2[AVG_DNA]++;
 
-		IPv4 ResponseAddress = Query.ReturnAddress;
+		ResponseAddress = Query.ReturnAddress;
 		if(ResponseAddress.Host.S_addr == 0)
 			ResponseAddress = PacketQ2.Source;
 
@@ -1937,7 +1939,12 @@ void CG2Control::Receive_Q2(G2_RecvdPacket &PacketQ2)
 			
 			m_KeyInfo[Query.QueryKey] = KeyInfo;
 		}
+	}
 
+	// Send QA if in hub mode and Q2 received UDP or from a local leaf
+	if( m_ClientMode == G2_HUB && 
+		(PacketQ2.pTCP == NULL || (PacketQ2.pTCP && PacketQ2.pTCP->m_NodeMode == G2_CHILD)) )
+	{
 		G2_QA QueryAck;
 		QueryAck.SearchGuid = Query.SearchGuid;
 		QueryAck.Timestamp  = time(NULL);
@@ -1970,7 +1977,7 @@ void CG2Control::Receive_Q2(G2_RecvdPacket &PacketQ2)
 				}
 			}
 
-		Send_QA(ResponseAddress, QueryAck);
+		Send_QA(ResponseAddress, QueryAck, PacketQ2.pTCP);
 	}
 
 

@@ -339,10 +339,10 @@ CString CDnaPrefs::GetDownloadPath(void)
 void CDnaPrefs::SetDownloadPath(LPCTSTR newVal)
 {
 	CreateDirectory(newVal, NULL);
-	CreateDirectory(CString(newVal) + "\\Partials", NULL);	  
+	//CreateDirectory(CString(newVal) + "\\Partials", NULL);	  
 
 	MoveFile(m_gnuPrefs->m_DownloadPath, newVal);
-	MoveFile(m_gnuPrefs->m_DownloadPath + "\\Partials", CString(newVal) + "\\Partials");
+	//MoveFile(m_gnuPrefs->m_DownloadPath + "\\Partials", CString(newVal) + "\\Partials");
 
 	m_gnuPrefs->m_DownloadPath = newVal;
 }
@@ -580,12 +580,15 @@ void CDnaPrefs::SetPartialsDir(LPCTSTR newVal)
 
 	if(m_gnuPrefs->m_PartialDir.Right(1) == "\\")
 	{
-	int newSize = m_gnuPrefs->m_PartialDir.GetLength() - 1;
-	m_gnuPrefs->m_PartialDir = m_gnuPrefs->m_PartialDir.Left(newSize);
+		int newSize = m_gnuPrefs->m_PartialDir.GetLength() - 1;
+		m_gnuPrefs->m_PartialDir = m_gnuPrefs->m_PartialDir.Left(newSize);
 
-	if(m_gnuPrefs->m_PartialDir == m_gnuPrefs->m_DownloadPath)
-		m_gnuPrefs->m_PartialDir = m_gnuPrefs->m_DownloadPath + "\\Partials";
-	}
+		//if(m_gnuPrefs->m_PartialDir == m_gnuPrefs->m_DownloadPath)
+		//	m_gnuPrefs->m_PartialDir = m_gnuPrefs->m_DownloadPath + "\\Partials";
+	} 
+
+	CreateDirectory(m_gnuPrefs->m_PartialDir, NULL); //new
+	MoveFile(OldPath, m_gnuPrefs->m_PartialDir);	 //new
 
 	if(OldPath != m_gnuPrefs->m_PartialDir)
 		m_gnuPrefs->m_pCore->m_pTrans->LoadDownloads();
