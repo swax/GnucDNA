@@ -68,7 +68,6 @@ CGnuDownloadShell::CGnuDownloadShell(CGnuTransfers* pTrans)
 	m_ShellStatus = ePending;
 	
 	m_Cooling    = 0;
-	m_Searching  = 0;
 	m_HostTryPos = 1;
 	m_G2ResearchInt = G2_RESEARCH_INT;
 	
@@ -85,7 +84,7 @@ CGnuDownloadShell::CGnuDownloadShell(CGnuTransfers* pTrans)
 
 	m_NextHostID  = 1;
 
-	GnuCreateGuid(&m_SearchGuid);
+	m_SearchID = 0;
 
 	m_BackupBytes = 0;
 	m_BackupHosts = 0;
@@ -152,8 +151,7 @@ CGnuDownloadShell::~CGnuDownloadShell()
 		m_TigerTree = NULL;
 	}
 
-	if(m_pNet->m_pG2)
-		m_pNet->m_pG2->EndSearch(m_SearchGuid);
+	m_pNet->EndSearch(m_SearchID);
 
 	// Close file
 	m_File.Abort();
@@ -363,19 +361,6 @@ void CGnuDownloadShell::Start()
 		m_ShellStatus = eActive;
 
 		m_Cooling   = 0;
-		m_Searching = 0;
-
-		if(m_pNet->m_pG2)
-		{
-			m_pNet->m_pG2->EndSearch(m_SearchGuid);
-
-			G2_Search* pSearch = new G2_Search;
-
-			pSearch->Query.SearchGuid = m_SearchGuid;
-			pSearch->Query.URNs.push_back("urn:sha1:" + m_Sha1Hash);
-
-			m_pNet->m_pG2->StartSearch(pSearch);
-		}
 	}
 }
 
@@ -393,7 +378,8 @@ void CGnuDownloadShell::Stop()
 	m_ShellStatus = eDone;
 	
 	m_Cooling   = 0;
-	m_Searching = 0;
+
+	m_pNet->EndSearch(m_SearchID);
 	
 	m_ReasonDead  = "Stopped";
 }
@@ -440,16 +426,6 @@ void CGnuDownloadShell::Timer()
 				m_Queue[i].RetryWait--;
 	}
 
-	
-	// If download is being researched
-	if(m_Searching)
-	{
-		if(m_pNet->m_pG2)
-			m_pNet->m_pG2->StepSearch(m_SearchGuid);
-
-		m_Searching--;
-	}
-
 	// If download is pending
 	if(m_ShellStatus == ePending)
 	{
@@ -489,19 +465,6 @@ void CGnuDownloadShell::Timer()
 				TryNextHost();
 			}
 		}
-
-		// Research G2 veeery slowly
-		if( m_pNet->m_pG2)
-		{
-			if(m_G2ResearchInt > 0 )
-				m_G2ResearchInt--;
-
-			if(m_G2ResearchInt == 0 )
-			{
-				m_pNet->m_pG2->StepSearch(m_SearchGuid);
-				m_G2ResearchInt = G2_RESEARCH_INT;
-			}
-		}
 	}
 
 	// If it is waiting to retry
@@ -528,47 +491,6 @@ void CGnuDownloadShell::Timer()
 			m_Sockets[i]->Close();
 	}
 
-
-	// Check if a re-query should be done
-	//if(m_ShellStatus == eDone)
-	//	m_DoReQuery = false;
-	//else
-	//{
-	//	m_TotalSecCount++;
-
-	//	if(m_TotalSecCount == 5  * 60 || // 5 minutes
-	//	   m_TotalSecCount == 20 * 60 || // 20 minutes
-	//	   (m_TotalSecCount >= 60 * 60 && m_TotalSecCount % (60 * 60) == 0)) // Each hour
-	//	{
-	//			m_DoReQuery = true;
-	//			m_ReSearchedNodes.clear();
-	//	}
-	//}
-
-	if( m_pNet->m_pGnu)
-	{
-		std::list<int>::iterator itID;
-		for(itID = m_RequeryList.begin(); itID != m_RequeryList.end(); itID++)
-		{
-			std::map<int,CGnuNode*>::iterator itNode = m_pNet->m_pGnu->m_NodeIDMap.find(*itID);
-			if(itNode != m_pNet->m_pGnu->m_NodeIDMap.end())
-			{
-				CGnuNode* pNode = itNode->second;
-
-				if(pNode->m_NextRequeryWait == 0)
-				{
-					SendGnuQuery(pNode);
-
-					pNode->m_NextRequeryWait = REQUERY_WAIT;
-					m_RequeryList.erase(itID);
-
-					break;
-				}
-			}
-			else
-				itID = m_RequeryList.erase(itID);
-		}
-	}
 	
 	// Backup parts and hosts
 	if(m_BackupInterval == 5)
@@ -726,77 +648,6 @@ DWORD CGnuDownloadShell::GetStatus()
 	return TRANSFER_CLOSED;
 }
 
-void CGnuDownloadShell::SendGnuQuery(CGnuNode* Dest)
-{
-	if( m_pNet->m_pGnu )
-	{
-		CString SearchUrn;
-
-		// Add hash to search
-		if(!m_Sha1Hash.IsEmpty())
-		{
-			SearchUrn += "urn:sha1:" + m_Sha1Hash;
-
-			m_Search = ""; // Find all exact matches
-		}
-
-		memcpy(m_Packet + 25, m_Search, m_Search.GetLength());
-
-		memcpy(m_Packet + 25 + m_Search.GetLength(), "\0", 1);
-		memcpy(m_Packet + 25 + m_Search.GetLength() + 1, SearchUrn, SearchUrn.GetLength());
-		memcpy(m_Packet + 25 + m_Search.GetLength() + SearchUrn.GetLength() + 1, "\0", 1);
-
-
- 		packet_Query* Query = (packet_Query*) m_Packet;
-		
-		Query->Header.Guid		= m_SearchGuid;
-		Query->Header.Function	= 0x80;
-		Query->Header.Hops		= 0;
-		Query->Header.TTL		= MAX_TTL;
-		Query->Header.Payload	= 2 + m_Search.GetLength() + 1 + SearchUrn.GetLength() + 1;
-
-		Query->Speed			= 0;
-
-
-		// Find key if it does not exist, insert it
-		if( m_pNet->m_pGnu->m_TableLocal.FindValue(m_SearchGuid) == -1)
-			m_pNet->m_pGnu->m_TableLocal.Insert(m_SearchGuid, 0);
-		
-		
-		//If Dest is equal to NULL send query to all hosts
-		if(Dest == NULL)
-		{
-			m_pNet->m_pGnu->Broadcast_LocalQuery(m_Packet, 23 + 2 + m_Search.GetLength() + SearchUrn.GetLength() + 2);
-		
-			return;
-		}
-
-
-		for(int i = 0; i < m_pNet->m_pGnu->m_NodeList.size(); i++)	
-		{
-			CGnuNode* p = m_pNet->m_pGnu->m_NodeList[i];
-
-			if(p->m_Status == SOCK_CONNECTED)
-				if(p == Dest)
-				{
-					p->SendPacket(m_Packet, 23 + 2 + m_Search.GetLength() + SearchUrn.GetLength() + 2, PACKET_QUERY, Query->Header.Hops);	
-					
-					break;
-				}
-		}
-	}
-}
-
-void CGnuDownloadShell::IncomingGnuNode(CGnuNode* pNode)
-{
-	if(m_ShellStatus  == eDone)
-		return;
-
-	ASSERT(pNode->m_GnuNodeMode == GNU_ULTRAPEER);
-
-	m_RequeryList.push_back(pNode->m_NodeID);
-}
-
 int CGnuDownloadShell::GetBytesCompleted()
 {
 	int BytesCompleted = 0;
@@ -834,7 +685,8 @@ bool CGnuDownloadShell::CheckCompletion()
 		return true;
 	
 	m_Cooling   = 0;
-	m_Searching = 0;
+	
+	m_pNet->EndSearch(m_SearchID);
 
 	// Close File
 	m_File.Abort();
@@ -966,7 +818,6 @@ void CGnuDownloadShell::BackupHosts()
 	Backup += "PartialPath="	+ m_PartialPath + "\n";
 	Backup += "Sha1Hash="		+ m_Sha1Hash + "\n";
 	Backup += "Search="			+ m_Search + "\n";
-	Backup += "SearchGuid="		+ EncodeBase16((byte*) &m_SearchGuid, 16) + "\n";
 	Backup += "Meta="			+ m_MetaXml + "\n"; // dont load meta here because schemas might not be loaded yet
 	Backup += "AvgSpeed="		+ NumtoStr(m_AvgSpeed) + "\n";
 	Backup += "HashComputed="	+ NumtoStr(m_HashComputed) + "\n";
@@ -1195,7 +1046,6 @@ void CGnuDownloadShell::ReSearch()
 	if(m_FileLength && GetBytesCompleted() >= m_FileLength )
 		return;
 
-	SendGnuQuery(NULL);
 
 	// Go through all search results to find matches
 	// Especially needed for DownloadFile() and concurrent/similar searches
@@ -1210,10 +1060,21 @@ void CGnuDownloadShell::ReSearch()
 			AddHost( pResult->ResultList[k] );
 	}
 
-	Start(); // Make sure this is before or m_Searching gets reset
+	// End current search
+	m_pNet->EndSearch(m_SearchID); 
+
+	// Create new search by hash
+	CGnuSearch* pSearch = new CGnuSearch(m_pNet);
+	m_pNet->m_SearchList.push_back(pSearch);
+	
+	m_SearchID = pSearch->m_SearchID;
+	
+	pSearch->SendHashQuery("", HASH_SHA1, m_Sha1Hash);
+
+
+	Start(); 
 	
 	m_Retry     = false;
-	m_Searching = 3 * 60; // Wait 3 mins for results
 }
 
 CString CGnuDownloadShell::GetAltLocationHeader(CString ToIP, int HostCount)

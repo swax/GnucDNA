@@ -515,8 +515,7 @@ void CGnuUpdate::StartDownload()
 		m_FileList[i].DownloadID = Download->m_DownloadID;
 
 		Download->m_Search = m_FileList[i].Name;
-		GnuCreateGuid(&Download->m_SearchGuid);
-
+		
 		Download->Init(m_FileList[i].Name, m_FileList[i].Size, HASH_SHA1, m_FileList[i].Hash);
 
 		m_pTrans->m_DownloadAccess.Lock();

@@ -133,12 +133,14 @@
 #define SOCK_CONNECTED		2
 #define SOCK_CLOSED			3
 
+// Priority of each packet
 #define PACKET_PING			5
 #define PACKET_PONG			4
 #define PACKET_QUERY		3
 #define PACKET_QUERYHIT		2
 #define PACKET_PUSH			1
 #define PACKET_BYE			1
+#define PACKET_VENDMSG		1
 
 #define ERROR_NONE			0
 #define ERROR_HOPS			1

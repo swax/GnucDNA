@@ -139,4 +139,32 @@ struct packet_RouteTablePatch	// Size 29+
 	// Patch Table...			// 28+
 };
 
+struct packet_VendIdent // Size 8
+{
+	char VendorID[4];			// 0 - 3
+	uint16 Type;			    // 4 - 5
+	uint16 Version;				// 6 - 7
+
+	packet_VendIdent()
+	{ };
+
+	packet_VendIdent(char vendor[4], uint16 type, uint16 version)
+	{
+		memcpy(VendorID, vendor, 4);
+		Type    = type;
+		Version = version;
+	};
+};
+
+struct packet_VendMsg // Size 31+
+{
+	packet_Header Header;		// 0  - 22
+
+	packet_VendIdent Ident;	// 23 - 30
+
+	// Message Payload...
+};
+
+
+
 #pragma pack (pop)

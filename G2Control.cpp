@@ -2065,12 +2065,19 @@ void CG2Control::Receive_QA(G2_RecvdPacket &PacketQA)
 
 	m_SearchPacketsRecvd++;
 
+	// QA: 100, 200, 400, 100, S:500
+	//TRACE0("QA::" + IPtoStr(PacketQA.Source.Host)+ ": " );
+	//int sum = 0;
+
 	// Mark hubs as done
 	for( int i = 0; i < QueryAck.DoneHubs.size(); i++)
 	{
 		if(QueryAck.DoneHubs[i].Address.Host.S_addr == 0)
 			continue;
 
+		//sum += QueryAck.DoneHubs[i].LeafCount;
+		//TRACE0(IPtoStr(QueryAck.DoneHubs[i].Address.Host) + "-" + NumtoStr(QueryAck.DoneHubs[i].LeafCount) + ", ");
+			
 #ifdef _DEBUG
 		std::map<uint32, bool>::iterator itTried = pSearch->TriedHubs.find( QueryAck.DoneHubs[i].Address.Host.S_addr );
 		if( itTried != pSearch->TriedHubs.end())
@@ -2085,6 +2092,8 @@ void CG2Control::Receive_QA(G2_RecvdPacket &PacketQA)
 		// Add new hubs to cache
 		UpdateGlobal( QueryAck.DoneHubs[i] );	
 	}
+	//TRACE0( "Total: " + NumtoStr(sum) );
+	//TRACE0("\n");
 
 	// Add alt hubs to cache
 	for( i = 0; i < QueryAck.AltHubs.size(); i++)

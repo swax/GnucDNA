@@ -69,9 +69,9 @@ CGnuControl::CGnuControl(CGnuNetworks* pNet)
 	m_NetworkName		= "GNUTELLA";
 
 //#ifdef _DEBUG
-	m_GnuClientMode = GNU_ULTRAPEER;
-//#else
 //	m_GnuClientMode = GNU_LEAF;
+//#else
+	m_GnuClientMode = GNU_ULTRAPEER;
 //#endif
 
 	m_ForcedUltrapeer = false;
@@ -166,38 +166,30 @@ void CGnuControl::Broadcast_Query(packet_Query* Query, int length, CGnuNode* exc
 
 void CGnuControl::Broadcast_LocalQuery(byte* Packet, int length)
 {
-	/* See if any downloads have the same keywords and use same guid
-	CString QueryText = (char*) Packet + 25;
-	
-	if(!QueryText.IsEmpty())
-		for(i = 0; i < m_pTrans->m_DownloadList.size(); i++)
-			if(m_pTrans->m_DownloadList[i]->m_Search.Find(QueryText) == 0)
-				Guid = m_pTrans->m_DownloadList[i]->m_SearchGuid;*/
-
-
 	packet_Query* Query = (packet_Query*) Packet;
 	
 	//Query->Header.Guid	= // Already added before this is called
 	Query->Header.Function	= 0x80;
 	Query->Header.Hops		= 0;
-	Query->Header.TTL		= MAX_TTL;
+	Query->Header.TTL		= 7; // Reset before sent
 	Query->Header.Payload	= length - 23;
 
 
 	// New MinSpeed Field
-	Query->Speed = 0;		 // bit 0 to 8, Was reserved to indicate the number of max query hits expected, 0 if no maximum   
-	/*Query->Speed |= 1 << 10; // bit 10, I understand and desire Out Of Band queryhits via UDP   
+	Query->Speed = 0;				// bit 0 to 8, Was reserved to indicate the number of max query hits expected, 0 if no maximum   
 	
-	//Query->Speed |= 1 << 13; // bit 11 I understand the H GGEP extension in queryhits
-	//Query->Speed |= 1 << 13; // bit 12 Leaf guided dynamic querying   
-
-	Query->Speed |= 1 << 13; // bit 13, I understand and want XML metadata in query hits   
+	//if(m_pNet->m_UdpFirewall == UDP_FULL)
+	//	Query->Speed |= 1 << 10;	// bit 10, I understand and desire Out Of Band queryhits via UDP   
+	
+	//Query->Speed |= 1 << 11;		// bit 11 I understand the H GGEP extension in queryhits
+	Query->Speed |= 1 << 12;		// bit 12 Leaf guided dynamic querying   
+	Query->Speed |= 1 << 13;		// bit 13, I understand and want XML metadata in query hits   
 		
 	//if(m_pNet->m_TcpFirewall)
-		Query->Speed |= 1 << 14; // bit 14, I am firewalled, please reply only if not firewalled 
+	//	Query->Speed |= 1 << 14;	// bit 14, I am firewalled, please reply only if not firewalled 
 
-	Query->Speed |= 1 << 15; // bit 15, Special meaning of the minspeed field, has to be always set.  
-*/
+	Query->Speed |= 1 << 15;		// bit 15, Special meaning of the minspeed field, has to be always set.  
+
 
 	m_TableLocal.Insert(Query->Header.Guid, 0);
 
@@ -207,7 +199,12 @@ void CGnuControl::Broadcast_LocalQuery(byte* Packet, int length)
 		CGnuNode *p = m_NodeList[i];
 	
 		if(p->m_Status == SOCK_CONNECTED)
+		{
+			if(p->m_RemoteMaxTTL)
+				Query->Header.TTL = p->m_RemoteMaxTTL;
+
 			p->SendPacket(Packet, length, PACKET_QUERY, Query->Header.Hops);
+		}
 	}
 
 // Test sending query to leaf based on hash table
@@ -505,8 +502,8 @@ void CGnuControl::Forward_Query(GnuQuery &FileQuery, std::list<int> &MatchingNod
 	packet_Query* pQuery = (packet_Query*) FileQuery.Packet;
 	if(pQuery->Header.TTL == 0)
 		pQuery->Header.TTL++;
-	if(pQuery->Header.Hops == MAX_TTL)
-		pQuery->Header.Hops--;
+	
+	// Hops already increased in packet handling
 
 	std::list<int>::iterator  itNodeID;
 
@@ -1058,4 +1055,22 @@ void CGnuControl::SwitchGnuClientMode(int GnuMode)
 
 	// Change mode
 	m_GnuClientMode = GnuMode;
+}
+
+void CGnuControl::StopSearch(GUID SearchGuid)
+{
+	if(m_pNet->m_pGnu->m_GnuClientMode != GNU_LEAF)
+		return;
+
+	packet_VendMsg ReplyMsg;
+	ReplyMsg.Header.Guid = SearchGuid;
+	ReplyMsg.Ident = packet_VendIdent("BEAR", 12, 1);
+	
+	uint16 Hits = 0xFFFF;
+
+	for(int i = 0; i < m_NodeList.size(); i++)	
+		if(m_NodeList[i]->m_GnuNodeMode == GNU_ULTRAPEER && 
+			m_NodeList[i]->m_Status == SOCK_CONNECTED &&
+			m_NodeList[i]->m_SupportsVendorMsg)
+			m_NodeList[i]->Send_VendMsg( ReplyMsg, (byte*) &Hits, 2 );
 }

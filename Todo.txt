@@ -1,21 +1,18 @@
 
-Set minspeed field of query
-Handle UDP gnutella incoming
-Send UDP response
-Handle UDP gnutella results
+Ultrapeer Side: Leaf Guided Dynamic Query
+Dynamic Querying
+Recv/Send Out of band hits
+Push Proxy 
 
-Read minspeed in queries
-Send udp test to host
-Receive udp reply
-Send udp results
-
-No handshake header for out of band
-x-dynamic-query for staggard queries
-
-Gnu Questions
-	Why does limewire make 6 connects in leaf mode?
-
-
+Test
+    Download re-search, stop and start
+	Verify 'Supported Messages' correctly formatted
+	Verify last hop queriest are being sent out
+	
+Gnutella
+    No upgrade to ultrapeer
+    Download Researching at interval
+    
 G2
 	Q2/NAT
 	QH2/FW

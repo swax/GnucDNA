@@ -957,6 +957,12 @@
 			RelativePath=".\Features.txt">
 		</File>
 		<File
+			RelativePath=".\G2.txt">
+		</File>
+		<File
+			RelativePath=".\Gnutella.txt">
+		</File>
+		<File
 			RelativePath="LGPL.txt">
 		</File>
 		<File

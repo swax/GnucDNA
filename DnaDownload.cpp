@@ -30,6 +30,7 @@
 #include "GnuCore.h"
 #include "GnuPrefs.h"
 #include "GnuTransfers.h"
+#include "GnuNetworks.h"
 #include "GnuMeta.h"
 #include "GnuSchema.h"
 #include "GnuSearch.h"
@@ -143,14 +144,21 @@ LONG CDnaDownload::GetSourceCount(LONG DownloadID)
 
 BOOL CDnaDownload::IsSearching(LONG DownloadID)
 {
-	
 
 	std::map<int, CGnuDownloadShell*>::iterator itDL = m_gnuTrans->m_DownloadMap.find(DownloadID);
-
 	if(itDL != m_gnuTrans->m_DownloadMap.end())
-		return itDL->second->m_Searching;
+	{
+		std::map<int, CGnuSearch*>::iterator itSearch = m_gnuTrans->m_pNet->m_SearchIDMap.find(itDL->second->m_SearchID);
+		if(itSearch !=  m_gnuTrans->m_pNet->m_SearchIDMap.end())
+		{
+			CGnuSearch* pSearch = itSearch->second;
 
-	return TRUE;
+			if( !pSearch->m_SearchPaused )
+				return TRUE;
+		}
+	}
+
+	return FALSE;
 }
 
 BOOL CDnaDownload::IsRetrying(LONG DownloadID)

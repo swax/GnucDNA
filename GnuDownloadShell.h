@@ -45,9 +45,6 @@ public:
 	void Start();
 	void Stop();
 
-	void SendGnuQuery(CGnuNode*);
-	void IncomingGnuNode(CGnuNode*);
-
 	bool IsDownloading();
 	bool IsRemotelyQueued();
 
@@ -93,7 +90,6 @@ public:
 	int     m_DownloadID;
 	
 	int     m_Cooling;
-	int     m_Searching;
 	int		m_HostTryPos;
 	int     m_G2ResearchInt;
 
@@ -121,7 +117,7 @@ public:
 	//CString m_BitprintHash;
 
 	CString     m_Search;
-	GUID        m_SearchGuid;
+	int         m_SearchID;
 
 	CString m_MetaXml; // used because meta loaded after transfers loaded
 	int m_MetaID;
@@ -129,7 +125,6 @@ public:
 
 	std::vector<CGnuDownload*> m_Sockets;
 
-	std::list<int> m_RequeryList;
 
 	// File info
 	CFileLock m_File;

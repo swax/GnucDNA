@@ -381,7 +381,6 @@ CGnuDownloadShell* CGnuTransfers::LoadDownloadHosts(CString FilePath)
 	Download->m_BackupPath  	= FilePath;
 	Download->m_Sha1Hash		= GetBackupString("Sha1Hash", CurrentPos, Backup);
 	Download->m_Search			= GetBackupString("Search", CurrentPos, Backup);
-	DecodeBase16(GetBackupString("SearchGuid", CurrentPos, Backup), 32, (byte*) &Download->m_SearchGuid);
 	Download->m_AvgSpeed		= atoi(GetBackupString("AvgSpeed", CurrentPos, Backup));
 	Download->m_HashComputed	= atoi(GetBackupString("HashComputed", CurrentPos, Backup));
 	Download->m_HashVerified	= atoi(GetBackupString("HashVerified", CurrentPos, Backup));

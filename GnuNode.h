@@ -73,6 +73,7 @@ public:
 	void Receive_Query(packet_Query*, int);
 	void Receive_QueryHit(packet_QueryHit*, DWORD);
 	void Receive_Bye(packet_Bye*,	  int);
+	void Receive_VendMsg(packet_VendMsg*,	  int);
 
 	void Decode_QueryHit( std::vector<FileSource> &Sources, packet_QueryHit* QueryHit, uint32 length);
 
@@ -82,6 +83,8 @@ public:
 	void SetPatchBit(int &remotePos, double &Factor, byte value);
 
 	void Receive_Unknown(byte*, DWORD);
+
+	void PacketError(CString Type, CString Error, byte* packet, int length);
 
 	byte  m_pBuff[PACKET_BUFF];
 	int   m_ExtraLength;
@@ -103,6 +106,7 @@ public:
 	void Send_Bye(CString Reason);
 	void Send_PatchReset();
 	void Send_PatchTable();
+	void Send_VendMsg(packet_VendMsg VendMsg, byte* payload=NULL, int length=0);
 	
 	// Sending data, packet prioritization
 	CCriticalSection m_TransferPacketAccess;
@@ -131,7 +135,6 @@ public:
 	// Misc functions
 	bool GetAlternateHostList(CString &);
 	bool GetAlternateSuperList(CString &);
-	void AvoidTriangles();
 
 	void Refresh();
 	void Timer();
@@ -175,6 +178,12 @@ public:
 	CString m_lowHandshake;
 	CString m_RemoteAgent;
 
+	bool m_SupportsVendorMsg;
+	bool m_SupportsLeafGuidance;
+
+	int  m_RemoteMaxTTL;
+	
+
 	// Compression
 	bool m_dnapressionOn;
 	bool m_InflateRecv;
@@ -203,9 +212,9 @@ public:
 	UINT	  m_NodeFileCount;
 	int		  m_NodeLeafMax;
 
-	bool	m_DowngradeRequest; // Is true if we request node to become child, or remote node requests us to become a child node
+	bool m_DowngradeRequest; // Is true if we request node to become child, or remote node requests us to become a child node
 	
-	bool	m_UltraPongSent;
+	bool m_UltraPongSent;
 
 	// QRP - Recv
 	UINT	m_CurrentSeq;
@@ -249,11 +258,6 @@ public:
 	int   m_Efficeincy;
 	int   m_StatPings[2],     m_StatPongs[2], m_StatQueries[2],
 		  m_StatQueryHits[2], m_StatPushes[2];  // Total received during last 1000 packets and total that were good
-
-
-	// Mapping
-	void MapPong(packet_Pong* Pong);
-	std::vector<MapNode> NearMap[2];
 
 	
 	// Bandwidth, [0] is Received, [1] is Sent, [2] is Dropped

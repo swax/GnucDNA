@@ -4,6 +4,8 @@ GnucDNA 1.1.0.1
 	swabby: Gnutella Inter-Ultrapeer Query Routing
 	swabby: Gnutella support for unknown and variable packet sizes
 	swabby: Gnutella pongs only sent for hosts directly connected
+	swabby: Gnutella vendor message support
+	swabby: Download re-search performed with standard search class
 	jthomps: Removed mutex, moved to GnucCOM
 	
 GnucDNA 1.1.0.0

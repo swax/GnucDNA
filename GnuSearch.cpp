@@ -97,6 +97,9 @@ CGnuSearch::~CGnuSearch(void)
 
 	m_pNet->m_SearchIDMap.erase( m_pNet->m_SearchIDMap.find(m_SearchID) );
 
+	if(m_pNet->m_pGnu)
+		m_pNet->m_pGnu->StopSearch(m_QueryID);
+
 	if(m_pNet->m_pG2)
 		m_pNet->m_pG2->EndSearch(m_QueryID);
 }
@@ -126,6 +129,8 @@ void CGnuSearch::SendQuery(CString Query)
 
 	if( m_pNet->m_pG2 )
 	{
+		m_pNet->m_pG2->EndSearch(m_QueryID);
+
 		G2_Search* pSearch = new G2_Search;
 
 		pSearch->Query.SearchGuid = m_QueryID;
@@ -211,6 +216,8 @@ void CGnuSearch::SendMetaQuery(CString Query, int MetaID, std::vector<CString> M
 
 	if( m_pNet->m_pG2 )
 	{
+		m_pNet->m_pG2->EndSearch(m_QueryID);
+
 		G2_Search* pSearch = new G2_Search;
 
 		pSearch->Query.SearchGuid      = m_QueryID;
@@ -262,6 +269,8 @@ void CGnuSearch::SendHashQuery(CString Query, int HashID, CString Hash)
 
 	if( m_pNet->m_pG2 )
 	{
+		m_pNet->m_pG2->EndSearch(m_QueryID);
+
 		G2_Search* pSearch = new G2_Search;
 
 		pSearch->Query.SearchGuid      = m_QueryID;
@@ -609,6 +618,9 @@ void CGnuSearch::Timer()
 			if(m_pCore->m_dnaCore->m_dnaEvents)
 				m_pCore->m_dnaCore->m_dnaEvents->SearchPaused(m_SearchID);
 
+			if(m_pNet->m_pGnu)
+				m_pNet->m_pGnu->StopSearch(m_QueryID);
+
 			return;
 		}
 
@@ -774,11 +786,6 @@ int CGnuSearch::Download(UINT ResultID)
 		Download->m_AttributeMap[itAttr->first] = itAttr->second;
 	
 	Download->m_MetaXml = Download->GetMetaXML(false);
-
-	// Add hosts we've searched to the new download
-	std::list<int>::iterator itID;
-	for(itID = m_RequeryList.begin(); itID != m_RequeryList.end(); itID++)
-		Download->m_RequeryList.push_back(*itID);
 
 
 	// Change download name if there's a duplicate

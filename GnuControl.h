@@ -75,6 +75,9 @@ public:
 	void PacketIncoming(int NodeID, byte* packet, int size, int ErrorCode, bool Local);
 	void PacketOutgoing(int NodeID, byte* packet, int size, bool Local);
 
+	// Searching
+	void StopSearch(GUID SearchGuid);
+
 	void Timer();
 	void HourlyTimer();
 
