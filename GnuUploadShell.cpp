@@ -913,7 +913,7 @@ bool CGnuUploadShell::LoadTigerTree()
 					m_TreeSize += TigerDime.WriteRecord(0x0A, 0x20, TigerRecordID, TigerRecordType, (*itFile).TigerTree, (*itFile).TreeSize);
 				}	
 
-				// else
+				else
 				{
 					m_TigerTree = new byte[(*itFile).TreeSize];
 					m_TreeSize  = (*itFile).TreeSize;

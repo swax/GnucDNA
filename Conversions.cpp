@@ -284,7 +284,7 @@ CString EncodeBase32(const unsigned char* buffer, unsigned int bufLen)
 
 void DecodeBase32(const char *base32Buffer, unsigned int base32BufLen, byte *buffer, unsigned int bufLen)
 {
-    int            i, index, max, lookup, offset;
+    int            i, index, lookup, offset;
     unsigned char  word;
 
     memset(buffer, 0, DecodeLengthBase32(base32BufLen));
