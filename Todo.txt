@@ -1,4 +1,5 @@
-
+Sockets flaky when mfc linked shared
+After mfc replaced go back to static
 
 Q2/NAT
 QH2/FW
