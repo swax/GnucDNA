@@ -6,7 +6,11 @@ namespace gdna
 {
 
 // Functions
-CString NumtoStr(int);		// Convert DWORD to a CString
+CString NumtoStr(int32);
+CString NumtoStr(uint32);
+CString NumtoStr(int64);
+CString NumtoStr(uint64);
+CString NumtoStr(float);
 
 CString IPtoStr(IP);			// Convert IP to CString
 IP      StrtoIP(CString in);	// Convert CString to an IP
@@ -38,7 +42,7 @@ CString GetVendor(CString VendorID);
 
 CString CommaIze(CString in); // Add commas to big numbers
 CString InsertDecimal(double);
-CString GetPercentage(DWORD , DWORD );
+CString GetPercentage(uint32 , uint32 );
 CString IncrementName(CString);
 
 IPv4 AltLoctoAddress(CString AltLoc);

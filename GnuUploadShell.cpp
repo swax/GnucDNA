@@ -90,6 +90,7 @@ CGnuUploadShell::CGnuUploadShell(CGnuTransfers* pTrans)
 
 	m_nSecsUnderLimit = 0;
 	m_nSecsDead       = 0;
+	m_SecsClosed      = 0;
 
 	m_QueueRequest  = false;
 	m_QueuePos		= 0;
@@ -705,18 +706,29 @@ void CGnuUploadShell::Timer()
 	// Clean up Socket
 	if(m_Status == TRANSFER_CLOSED)
 	{
+		m_SecsClosed++;
+
 		if(m_Socket)
 		{
 			delete m_Socket;
 			m_Socket = NULL;
 		}
 		
+		if(m_TigerTree)
+		{
+			delete [] m_TigerTree;
+			m_TigerTree = NULL;
+		}
+
 		if(m_File.m_hFile != CFile::hFileNull)
 			m_File.Abort();
 	}
+
+	if(m_Status != TRANSFER_CLOSED)
+		m_SecsClosed = 0;
 }
 
-UINT CGnuUploadShell::GetFileLength()
+uint64 CGnuUploadShell::GetFileLength()
 {
 	if (!m_IsPartial)
 	{
@@ -770,23 +782,23 @@ bool CGnuUploadShell::ParseRangeHeader(CString Value)
 	// Full range request
 	if (!FirstValue.IsEmpty() && !LastValue.IsEmpty())
 	{	
-		m_StartPos = atoi(FirstValue);
-		m_StopPos  = atoi(LastValue) + 1;
+		m_StartPos = _atoi64(FirstValue);
+		m_StopPos  = _atoi64(LastValue) + 1;
 	}
 
 	// Only start byte supplied
 	else if (!FirstValue.IsEmpty())
 	{	
-		m_StartPos  = atoi(FirstValue);
+		m_StartPos  = _atoi64(FirstValue);
 	}
 
 	// Negative request. Get the last <LastValue> bytes of file.
 	else if (!LastValue.IsEmpty())
 	{
-		DWORD suffixlen = atoi(LastValue);
+		uint64 suffixlen = _atoi64(LastValue);
 
 		if (suffixlen < m_FileLength)
-			m_StartPos = m_FileLength - atoi(LastValue);
+			m_StartPos = m_FileLength - suffixlen;
 		else
 			m_StartPos = 0;	//Get full file
 	}
@@ -824,8 +836,8 @@ bool CGnuUploadShell::ParseRangeHeader(CString Value)
 		
 		bool RangeOk = false;
 		bool chain   = false;
-		int  StartByte  = m_StartPos;
-		int  EndPos     = m_StopPos;
+		uint64  StartByte  = m_StartPos;
+		uint64  EndPos     = m_StopPos;
 
 		for(int i = 0; i < p->m_PartList.size(); i++)
 			if( p->m_PartList[i].Verified )

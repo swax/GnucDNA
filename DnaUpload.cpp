@@ -98,10 +98,8 @@ DATE CDnaUpload::GetChangeTime(LONG UploadID)
 	return 0;
 }
 
-LONG CDnaUpload::GetBytesCompleted(LONG UploadID)
+ULONGLONG CDnaUpload::GetBytesCompleted(LONG UploadID)
 {
-	
-
 	std::map<int, CGnuUploadShell*>::iterator itUp = m_gnuTrans->m_UploadMap.find(UploadID);
 
 	if(itUp != m_gnuTrans->m_UploadMap.end())
@@ -110,10 +108,8 @@ LONG CDnaUpload::GetBytesCompleted(LONG UploadID)
 	return 0;
 }
 
-LONG CDnaUpload::GetFileLength(LONG UploadID)
+ULONGLONG CDnaUpload::GetFileLength(LONG UploadID)
 {
-	
-
 	std::map<int, CGnuUploadShell*>::iterator itUp = m_gnuTrans->m_UploadMap.find(UploadID);
 
 	if(itUp != m_gnuTrans->m_UploadMap.end())

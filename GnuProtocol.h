@@ -1,5 +1,8 @@
 #pragma once
 
+#define GGEP_H_SHA1     0x01
+#define GGEP_H_BITPRINT 0x02
+
 #include "GnuControl.h"
 
 class CGnuControl;
@@ -73,6 +76,7 @@ public:
 	void Send_VendMsg(CGnuNode* pTCP, packet_VendMsg VendMsg, void* payload=NULL, int length=0, IPv4 Target=IPv4());
 	void Send_Bye(CGnuNode* pTCP, CString Reason, int ErrorCode);
 	void Send_StatsMsg(CGnuNode* pTCP);
+	
 	// Other
 	void Decode_QueryHit( std::vector<FileSource> &Sources, Gnu_RecvdPacket &QHPacket);
 	void Encode_QueryHit(GnuQuery &FileQuery, std::list<UINT> &MatchingIndexes, byte* QueryReply);
@@ -80,7 +84,16 @@ public:
 	GGEPReadResult Decode_GGEPBlock(packet_GGEPBlock &Block, byte* &stream, uint32 &length);
 	int            Encode_GGEPBlock(packet_GGEPBlock &Block, byte* stream, byte* payload, uint32 length);
 	void		   CheckGgepSize(int value);
+	void		   TestGgep();
+
+	uint64 DecodeLF(byte* data, int length);
+	int    EncodeLF(uint64 filesize, byte* data);
+	void   TestLF();
 	
+	int  EncodeCobs(byte* src, int length, byte* dst);
+	int  DecodeCobs(byte* src, int length, byte* dst);
+	void TestCobs();
+
 	int	ParsePayload(byte* &pPayload, int &BytesLeft, byte Break, byte* pBuffer, int BufferSize);
 	byte m_QueryBuffer[1024];
 

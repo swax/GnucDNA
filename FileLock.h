@@ -44,7 +44,7 @@ public:
 	CFileLock();
 	virtual ~CFileLock();
 
-	ULONGLONG GetPosition();
+	uint64 GetPosition();
 	BOOL GetStatus(CFileStatus& rStatus);
 	CString GetFileName();
 	CString GetFileTitle();
@@ -55,7 +55,7 @@ public:
 	BOOL Open(LPCTSTR lpszFileName, UINT nOpenFlags, bool IgnoreID3 = false, CFileException* pError = NULL );
 
 	
-	ULONGLONG SeekToEnd();
+	uint64 SeekToEnd();
 	void SeekToBegin();
 
 	// backward compatible ReadHuge and WriteHuge
@@ -65,27 +65,30 @@ public:
 // Overridables
 	CFile* Duplicate();
 
-	ULONGLONG Seek(LONGLONG lOff, UINT nFrom);
-	void SetLength(ULONGLONG dwNewLen);
-	ULONGLONG GetLength();
+	uint64 CFileLock::Seek(int64 lOff, uint32 nFrom);
+	void SetLength(uint64 dwNewLen);
+	uint64 GetLength();
 
 	UINT Read(void* lpBuf, UINT nCount);
-	void Write(const void* lpBuf, UINT nCount);
+	UINT SeekandRead(int64 lOff, void* lpBuf, UINT nCount);
 
-	void LockRange(ULONGLONG dwPos, ULONGLONG dwCount);
-	void UnlockRange(ULONGLONG dwPos, ULONGLONG dwCount);
+	void Write(const void* lpBuf, UINT nCount);
+	void SeekandWrite(int64 lOff, const void* lpBuf, UINT nCount);
+
+	void LockRange(uint64 dwPos, uint64 dwCount);
+	void UnlockRange(uint64 dwPos, uint64 dwCount);
 
 	void Abort();
 	void Flush();
 	void Close();
 
-	static int CFileLock::ScanFileSize(CString FilePath);
+	static uint64 CFileLock::ScanFileSize(CString FilePath);
 
 	bool  m_IgnoreID3;
-	ULONGLONG m_RealLength;
-	ULONGLONG m_IgnoreBegin;
-	ULONGLONG m_IgnoreLength;
-	ULONGLONG m_IgnoreEnd;
+	uint64 m_RealLength;
+	uint64 m_IgnoreBegin;
+	uint64 m_IgnoreLength;
+	uint64 m_IgnoreEnd;
 
 	CCriticalSection m_CriticalSection;
 };

@@ -1,6 +1,14 @@
 GnucDNA 1.1.1.5
 	swabby: Fixed gnutella udp connect bug
 	swabby: Pong includes only nodes that support udp connect request
+	swabby: Gnutella GGEP COBs and compression support
+	swabby: Fixed corruption condition when downloading large files
+	swabby: GGEP parsing support added to query packet
+	swabby: GGEP parsing support added for query hit results
+	swabby: Support for encoding / decoding 64bit values in packed format
+	swabby: Upload tiger hashes deleted when no longer needed
+	swabby: Closed uploads automatically removed from list after 30 seconds
+	swabby: Full support for files larger than 2gb
 
 GnucDNA 1.1.1.4
 	swabby: Startup and shutdown time improved by moving loading hashes to thread, and saving to intervals

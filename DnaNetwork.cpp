@@ -359,7 +359,7 @@ DATE CDnaNetwork::GetNodeConnectTime(LONG NodeID)
 
 		if(itNode != m_gnuNetwork->m_pGnu->m_NodeIDMap.end())
 		{
-			COleDateTime OleTime(itNode->second->m_ConnectTime.GetTime());
+			COleDateTime OleTime(itNode->second->m_ConnectTime);
 
 			return (DATE) OleTime;
 		}
@@ -371,7 +371,7 @@ DATE CDnaNetwork::GetNodeConnectTime(LONG NodeID)
 
 		if(itNode != m_gnuNetwork->m_pG2->m_G2NodeIDMap.end())
 		{
-			COleDateTime OleTime(itNode->second->m_ConnectTime.GetTime());
+			COleDateTime OleTime(itNode->second->m_ConnectTime);
 
 			return (DATE) OleTime;
 		}

@@ -92,7 +92,7 @@ CGnuNode::CGnuNode(CGnuControl* pComm, CString Host, UINT Port)
 	m_GnuNodeMode		= 0;
 	m_Inbound			= false;
 	m_ConnectBack		= false;
-	m_ConnectTime		= CTime::GetCurrentTime();
+	m_ConnectTime		= time(NULL);
 
 	m_SupportsVendorMsg    = false;
 	m_SupportsLeafGuidance = false;
@@ -1935,7 +1935,7 @@ void CGnuNode::CloseWithReason(CString Reason, int ErrorCode, bool RemoteClosed,
 	{
 		//if( m_RemoteAgent.Find("GnucDNA") != -1)
 		//{
-		//	CTimeSpan Uptime = CTime::GetCurrentTime() - m_ConnectTime;
+		//	CTimeSpan Uptime = time(NULL) - m_ConnectTime;
 		//	m_pCore->DebugLog( m_RemoteAgent + " " + IPv4toStr(m_Address) + ", Uptime " + Uptime.Format("%DD %HH %MM") + " Closed: " + Reason);
 		//}
 	}
@@ -2117,7 +2117,7 @@ void CGnuNode::SplitBundle(byte* bundle, DWORD length)
 	else if(m_ExtraLength != 0)
 	{
 		// client, connecttime, variables log, disconnect
-		m_pCore->DebugLog("Gnu Network", "Extra Length Error - " + m_RemoteAgent + ", Uptime " + NumtoStr(time(NULL) - m_ConnectTime.GetTime()) + ", " + ", Length " + NumtoStr(length) + ", NextPos " + NumtoStr(nextPos) + ", ExtraLength " + NumtoStr(m_ExtraLength));
+		//m_pCore->DebugLog("Gnu Network", "Extra Length Error - " + m_RemoteAgent + ", Uptime " + NumtoStr(time(NULL) - m_ConnectTime) + ", " + ", Length " + NumtoStr(length) + ", NextPos " + NumtoStr(nextPos) + ", ExtraLength " + NumtoStr(m_ExtraLength));
 		
 		CloseWithReason("Packet received too large", BYE_REMOTE); // without this crashes in inflate
 		//ASSERT(0); // Shouldnt happen
@@ -2620,7 +2620,7 @@ void CGnuNode::GetNodeInfo(GnuNodeInfo &RemoteNode)
 	RemoteNode.Address       = m_Address;
 	RemoteNode.Client        = m_RemoteAgent;
 	RemoteNode.LibraryCount  = m_NodeFileCount;
-	RemoteNode.ConnectUptime = time(NULL) - m_ConnectTime.GetTime();
+	RemoteNode.ConnectUptime = time(NULL) - m_ConnectTime;
 
 	if( m_StatsRecvd )
 	{

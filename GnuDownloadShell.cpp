@@ -166,7 +166,7 @@ CGnuDownloadShell::~CGnuDownloadShell()
 	m_ShellAccess.Unlock();
 }
 
-void CGnuDownloadShell::Init(CString Name, int FileSize, int HashID, CString Hash)
+void CGnuDownloadShell::Init(CString Name, uint64 FileSize, int HashID, CString Hash)
 {
 	m_Name = Name;
 
@@ -192,7 +192,7 @@ void CGnuDownloadShell::CreatePartList()
 	m_PartList.clear();
 
 	// Create file parts
-	for(int i = 0; i < m_FileLength; i += m_PartSize)
+	for(uint64 i = 0; i < m_FileLength; i += m_PartSize)
 	{
 		FilePart NewPart;
 
@@ -677,9 +677,9 @@ DWORD CGnuDownloadShell::GetStatus()
 	return TRANSFER_CLOSED;
 }
 
-int CGnuDownloadShell::GetBytesCompleted()
+uint64 CGnuDownloadShell::GetBytesCompleted()
 {
-	int BytesCompleted = 0;
+	uint64 BytesCompleted = 0;
 
 	for(int i = 0; i < m_PartList.size(); i++)
 		BytesCompleted += m_PartList[i].BytesCompleted;
@@ -1244,9 +1244,9 @@ CString CGnuDownloadShell::AvailableRangesCommaSeparated()
 
 	CString list;
 
-	bool chain = false;
-	int  startByte = 0;
-	int  endByte   = 0;
+	bool    chain = false;
+	uint64  startByte = 0;
+	uint64  endByte   = 0;
 
 	for (int i = 0; i < m_PartList.size(); i++)
 	{
@@ -1277,7 +1277,7 @@ CString CGnuDownloadShell::AvailableRangesCommaSeparated()
 	return list;
 }
 
-int CGnuDownloadShell::GetRange(int pos, unsigned char *buf, int len)
+int CGnuDownloadShell::GetRange(uint64 pos, unsigned char *buf, int len)
 {
 	if(m_File.m_hFile == CFile::hFileNull || len == 0)
 		return 0;
@@ -1293,8 +1293,7 @@ int CGnuDownloadShell::GetRange(int pos, unsigned char *buf, int len)
 
 				try
 				{
-					m_File.Seek(pos, CFileLock::begin);
-					return m_File.Read(buf, cpylen);
+					return m_File.SeekandRead(pos, buf, cpylen);
 				}
 				catch(...)
 				{
@@ -1393,8 +1392,7 @@ bool CGnuDownloadShell::PartVerified(int PartNumber)
 
 		try
 		{
-			m_File.Seek(pPart->StartByte + FilePos, CFile::begin);
-			BytesRead = m_File.Read(Buffer, ReadSize);
+			BytesRead = m_File.SeekandRead(pPart->StartByte + FilePos, Buffer, ReadSize);
 		}
 		catch(CFileException* e)
 		{
@@ -1416,12 +1414,12 @@ bool CGnuDownloadShell::PartVerified(int PartNumber)
 		BaseNodes++;
 
 	int NodeOffset = 0;
-	for(int i = 0; i < m_FileLength; i += m_TreeRes, NodeOffset++)
+	for(uint64 i = 0; i < m_FileLength; i += m_TreeRes, NodeOffset++)
 		if(i == pPart->StartByte)
 			break;
 
 	int TreeOffset = m_TreeSize - (BaseNodes * 24) + (NodeOffset * 24);
-	
+
 	if(TreeOffset >= 0 && TreeOffset <= m_TreeSize - 24)
 		if(memcmp(m_TigerTree + TreeOffset, Tiger_Digest, 24) == 0)
 		{

@@ -18,7 +18,7 @@ typedef struct
 {
   MD4_CTX seg_ctx;    
   MD4_CTX top_ctx;   
-  unsigned long nextPos;
+  uint64 nextPos;
 } ED2K_CTX;
 
 void ED2KInit(ED2K_CTX * );

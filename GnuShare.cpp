@@ -329,7 +329,7 @@ void CGnuShare::LoadFiles()
 	m_pHash->m_EverythingHashed = false;
 }
 
-void CGnuShare::RecurseLoad(CString FullPath, CString DirPath, bool doRecurse, DWORD &DirCount, DWORD &DirSize)
+void CGnuShare::RecurseLoad(CString FullPath, CString DirPath, bool doRecurse, DWORD &DirCount, uint64 &DirSize)
 {
 	// Add wild card to directory path
 	CString strWildcard(FullPath);
@@ -373,14 +373,11 @@ void CGnuShare::RecurseLoad(CString FullPath, CString DirPath, bool doRecurse, D
 		{
 			CString FilePath = Finder.GetFilePath();
 			CString	FileName = FilePath.Mid( FilePath.ReverseFind('\\') + 1);
-			DWORD   FileSize = Finder.GetLength();
+			uint64  FileSize = Finder.GetLength();
 
 			// get right size for mp3s, ignoring id3
 			if (FileName.Right(4).CompareNoCase(".mp3") == 0)
 				FileSize = CFileLock::ScanFileSize(FilePath);
-			
-			if( FileSize > 2000 * 1024 * 1024 ) // Pass 2 gb files for now
-				continue;
 			
 			if(m_pCore->m_pPrefs->m_ReplyFilePath && DirPath.GetLength() > 0)
 				FileName = DirPath + "\\" + FileName;

@@ -21,7 +21,7 @@ public:
 
 	bool GetStartPos();
 	bool GetStartPosPartial();
-	bool ByteIsInRanges(int StartByte);
+	bool ByteIsInRanges(uint64 StartByte);
 	bool LoadTigerTree();
 
 	
@@ -50,8 +50,8 @@ public:
 	bool m_PartActive;
 	int  m_PartNumber;
 
-	int m_StartPos;
-	int m_PausePos;
+	uint64 m_StartPos;
+	uint64 m_PausePos;
 
 	bool m_DoHead;
 	bool m_HeadNotSupported;

@@ -501,8 +501,12 @@ void CG2Control::ManageNodes()
 			for(int i = 0; i <= OpenSlots / 2; i++)
 				TryConnect(NeedDnaHubs); // Half connects dna
 		}
-		if(m_pPrefs->m_G2ChildConnects && HubConnects > m_pPrefs->m_G2ChildConnects)
+		
+		while(m_pPrefs->m_G2ChildConnects && HubConnects > m_pPrefs->m_G2ChildConnects)
+		{
 			DropNode(G2_HUB, NeedDnaHubs);
+			HubConnects--;
+		}
 	}
 
 	else if( m_ClientMode == G2_HUB )
@@ -520,9 +524,12 @@ void CG2Control::ManageNodes()
 			for(int i = 0; i <= OpenSlots / 2; i++)
 				TryConnect(NeedDnaHubs); 
 		}
-		if(m_pPrefs->m_G2MaxConnects && HubConnects > m_pPrefs->m_G2MaxConnects)
+		
+		while(m_pPrefs->m_G2MaxConnects && HubConnects > m_pPrefs->m_G2MaxConnects)
+		{
 			DropNode(G2_HUB, NeedDnaHubs);
-
+			HubConnects--;
+		}
 
 		while(ChildConnects > m_pPrefs->m_MaxLeaves)
 		{
@@ -685,9 +692,8 @@ void CG2Control::CreateNode(Node HostInfo)
 
 void CG2Control::DropNode(int G2Mode, bool NeedDna)
 {
-	CG2Node* DeadNode = NULL;
-	CTime CurrentTime = CTime::GetCurrentTime();
-	CTimeSpan LowestTime(0);
+	CG2Node* DeadNode   = NULL;
+	time_t   LowestTime = 0;
 
 	// Drop youngest
 	for(int i = 0; i < m_G2NodeList.size(); i++)
@@ -696,10 +702,10 @@ void CG2Control::DropNode(int G2Mode, bool NeedDna)
 			if(NeedDna && m_G2NodeList[i]->m_RemoteAgent.Find("GnucDNA") != -1)
 				continue;
 
-			if(LowestTime.GetTimeSpan() == 0 || CurrentTime - m_G2NodeList[i]->m_ConnectTime < LowestTime)
+			if(LowestTime == 0 || time(NULL) - m_G2NodeList[i]->m_ConnectTime < LowestTime)
 			{
 				DeadNode	 = m_G2NodeList[i];
-				LowestTime   = CurrentTime - m_G2NodeList[i]->m_ConnectTime;
+				LowestTime   = time(NULL) - m_G2NodeList[i]->m_ConnectTime;
 			}
 		}
 
@@ -1007,7 +1013,7 @@ int CG2Control::ScoreNode(CG2Node* pNode)
 	// Nodes with high uptime and capacity will have a chance to be hubs
 
 	// Uptime of connection to local node, so long lasting nodes are proven trustworthy
-	uint64 Uptime = time(NULL) - pNode->m_ConnectTime.GetTime();
+	time_t Uptime = time(NULL) - pNode->m_ConnectTime;
 	if( Uptime  > OPT_UPTIME)
 		Uptime  = OPT_UPTIME;
 
@@ -2520,7 +2526,7 @@ void CG2Control::Receive_CRAWLR(G2_RecvdPacket &PacketCRAWLR)
 		{
 			G2NodeInfo G2Node  = m_G2NodeList[i]->m_NodeInfo;
 			G2Node.Client      = m_G2NodeList[i]->m_RemoteAgent;
-			G2Node.ConnectUptime = time(NULL) - m_G2NodeList[i]->m_ConnectTime.GetTime();
+			G2Node.ConnectUptime = time(NULL) - m_G2NodeList[i]->m_ConnectTime;
 
 			if( m_G2NodeList[i]->m_NodeMode == G2_HUB ) 
 				G2CrawlAck.G2Hubs.push_back( G2Node );

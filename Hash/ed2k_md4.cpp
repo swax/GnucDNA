@@ -1,7 +1,7 @@
 #include "stdafx.h"
 #include "ed2k_md4.h"
 
-unsigned int EDSEG_SIZE = 1024*9500; // 9728000
+uint64 EDSEG_SIZE = 1024*9500; // 9728000
 
 #define S11 3
 #define S12 7

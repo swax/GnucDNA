@@ -1,5 +1,14 @@
 
-test search with nat flag
+add alt sources
+
+Query M GGEP flag, 1 byte?
+Query Hit CT GGEP flag, 4 bytes?
+Query Hit ALT tag
+
+preference newer versions
+
+compress ip lists, big pong?
+cobs encode query hit push proxies
 
 test gnu big pong - send auto
 
@@ -14,7 +23,7 @@ Now
 	Set upload speed only if uploaded, take other speed stuff out
 	
 	table % full doesnt get too large
-	sending/recving 64kb packets
+	sending/recving 64kb packets	`
 
 
 G2 Questions
@@ -30,10 +39,8 @@ Rainy Day
 	Advanced Query matching
 	Advance error logging
 	http templates as resources
-	Winsock Error Code to String
 	Accurate network stats
 	Move filters out of dna
-	> 2gb files
 	PacketType/Sec using map<CString, int>
 	HTTP request Host: without port, read location header for redirect
 

@@ -44,13 +44,13 @@ CFileLock::~CFileLock()
 
 }
 
-ULONGLONG CFileLock::GetPosition()
+uint64 CFileLock::GetPosition()
 {
 	CAutoLock lock(&m_CriticalSection);
 
 	if(m_IgnoreID3)
 	{
-		ULONGLONG pos = CFile::GetPosition() - m_IgnoreBegin;
+		uint64 pos = CFile::GetPosition() - m_IgnoreBegin;
 		ASSERT(0 <= pos && pos < m_IgnoreLength);
 		return pos;
 	}
@@ -152,7 +152,7 @@ BOOL CFileLock::Open(LPCTSTR lpszFileName, UINT nOpenFlags, bool IgnoreID3, CFil
 
 
 
-ULONGLONG CFileLock::SeekToEnd()
+uint64 CFileLock::SeekToEnd()
 {
 	CAutoLock lock(&m_CriticalSection);
 
@@ -200,7 +200,7 @@ CFile* CFileLock::Duplicate()
 	return CFile::Duplicate();
 }
 
-ULONGLONG CFileLock::Seek(LONGLONG lOff, UINT nFrom)
+uint64 CFileLock::Seek(int64 lOff, uint32 nFrom)
 {
 	CAutoLock lock(&m_CriticalSection);
 
@@ -223,7 +223,7 @@ ULONGLONG CFileLock::Seek(LONGLONG lOff, UINT nFrom)
 	return CFile::Seek(lOff, nFrom);
 }
 
-void CFileLock::SetLength(ULONGLONG dwNewLen)
+void CFileLock::SetLength(uint64 dwNewLen)
 {
 	CAutoLock lock(&m_CriticalSection);
 
@@ -235,7 +235,7 @@ void CFileLock::SetLength(ULONGLONG dwNewLen)
 	CFile::SetLength(dwNewLen);
 }
 
-ULONGLONG CFileLock::GetLength()
+uint64 CFileLock::GetLength()
 {
 	CAutoLock lock(&m_CriticalSection);
 
@@ -253,7 +253,24 @@ UINT CFileLock::Read(void* lpBuf, UINT nCount)
 
 	if(m_IgnoreID3)
 	{
-		ULONGLONG pos = CFile::GetPosition();
+		uint64 pos = CFile::GetPosition();
+
+		if(pos + nCount > m_IgnoreEnd)
+			nCount = m_IgnoreEnd - pos;
+	}
+
+	return CFile::Read(lpBuf, nCount);
+}
+
+UINT CFileLock::SeekandRead(int64 lOff, void* lpBuf, UINT nCount)
+{
+	CAutoLock lock(&m_CriticalSection);
+
+	CFile::Seek(lOff, CFile::begin);
+	
+	if(m_IgnoreID3)
+	{
+		uint64 pos = CFile::GetPosition();
 
 		if(pos + nCount > m_IgnoreEnd)
 			nCount = m_IgnoreEnd - pos;
@@ -274,7 +291,15 @@ void CFileLock::Write(const void* lpBuf, UINT nCount)
 	CFile::Write(lpBuf, nCount);
 }
 
-void CFileLock::LockRange(ULONGLONG dwPos, ULONGLONG dwCount)
+void CFileLock::SeekandWrite(int64 lOff, const void* lpBuf, UINT nCount)
+{
+	CAutoLock lock(&m_CriticalSection);
+
+	CFile::Seek(lOff, CFile::begin);
+	CFile::Write(lpBuf, nCount);
+}
+
+void CFileLock::LockRange(uint64 dwPos, uint64 dwCount)
 {
 	CAutoLock lock(&m_CriticalSection);
 
@@ -287,7 +312,7 @@ void CFileLock::LockRange(ULONGLONG dwPos, ULONGLONG dwCount)
 	CFile::LockRange(dwPos, dwCount);
 }
 
-void CFileLock::UnlockRange(ULONGLONG dwPos, ULONGLONG dwCount)
+void CFileLock::UnlockRange(uint64 dwPos, uint64 dwCount)
 {
 	CAutoLock lock(&m_CriticalSection);
 
@@ -331,11 +356,11 @@ void CFileLock::Unlock()
 	m_CriticalSection.Unlock();
 }
 
-int CFileLock::ScanFileSize(CString FilePath)
+uint64 CFileLock::ScanFileSize(CString FilePath)
 {
 	CFileLock scanFile;
 	
-	int FileSize = 0;
+	uint64 FileSize = 0;
 	if( scanFile.Open(FilePath, CFile::modeRead, true) )
 	{
 		FileSize = scanFile.GetLength();

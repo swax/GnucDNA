@@ -61,7 +61,7 @@ struct HashedFile
 {
 	CString FilePath;
 	int     Index;
-	int		Size;
+	uint64  Size;
 	CString TimeStamp;
 	std::vector<IPv4> AltHosts;
 	

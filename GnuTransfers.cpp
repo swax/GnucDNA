@@ -351,6 +351,7 @@ void CGnuTransfers::ManageUploads()
 			BytesLeft = 0;
 	}*/
 
+	std::vector<CGnuUploadShell*> RemoveList;
 
 	for(i = 0; i < m_UploadList.size(); i++)
 	{
@@ -365,8 +366,14 @@ void CGnuTransfers::ManageUploads()
 			pUp->m_AllocBytes = m_pPrefs->m_BandwidthUp * 1024 / UploadCount;	
 		}
 		
+		if(pUp->m_Status == TRANSFER_CLOSED && pUp->m_SecsClosed > 30)
+			RemoveList.push_back(pUp);
+
 		pUp->Timer();
 	}
+
+	for(i = 0; i < RemoveList.size(); i++)
+		RemoveUpload( RemoveList[i] );
 
 	//Manage upload queues
 	m_UploadQueue.Timer();
@@ -446,7 +453,7 @@ CGnuDownloadShell* CGnuTransfers::LoadDownloadHosts(CString FilePath)
 	
 	Download->m_ShellStatus		= (CGnuDownloadShell::Status) atoi(GetBackupString("Status", CurrentPos, Backup));
 	Download->m_Name			= GetBackupString("Name", CurrentPos, Backup);
-	Download->m_FileLength		= atoi(GetBackupString("FileLength", CurrentPos, Backup));
+	Download->m_FileLength		= _atoi64(GetBackupString("FileLength", CurrentPos, Backup));
 	Download->m_PartSize		= atoi(GetBackupString("PartSize", CurrentPos, Backup));
 	Download->m_OverrideName	= GetBackupString("OverrideName", CurrentPos, Backup);
 	Download->m_OverridePath	= GetBackupString("OverridePath", CurrentPos, Backup);
@@ -514,7 +521,7 @@ CGnuDownloadShell* CGnuTransfers::LoadDownloadHosts(CString FilePath)
 			//nResult.BitprintHash = GetBackupString("BitprintHash", CurrentPos, Backup);
 
 			nResult.FileIndex	= atoi(GetBackupString("FileIndex", CurrentPos, Backup));
-			nResult.Size		= atoi(GetBackupString("Size", CurrentPos, Backup));
+			nResult.Size		= _atoi64(GetBackupString("Size", CurrentPos, Backup));
 
 			nResult.Address.Host = StrtoIP(GetBackupString("Host", CurrentPos, Backup));
 			nResult.Address.Port = atoi(GetBackupString("Port", CurrentPos, Backup));

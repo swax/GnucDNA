@@ -69,7 +69,7 @@ CG2Node::CG2Node(CG2Control* pG2Comm, CString Host, uint32 Port)
 	m_Inbound      = false;
 	m_TriedUpgrade = false;
 
-	m_ConnectTime = CTime::GetCurrentTime();
+	m_ConnectTime = time(NULL);
 	m_RemoteIdent = 0;
 
 	m_Status     = SOCK_CONNECTING;	

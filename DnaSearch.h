@@ -25,7 +25,7 @@ public:
 	LONG CountGoodResults(LONG SearchID);
 	LONG CountTotalResults(LONG SearchID);
 	CString GetResultName(LONG SearchID, LONG ResultID);
-	LONG GetResultSize(LONG SearchID, LONG ResultID);
+	ULONGLONG GetResultSize(LONG SearchID, LONG ResultID);
 	LONG GetResultSpeed(LONG SearchID, LONG ResultID);
 	LONG GetResultHostCount(LONG SearchID, LONG ResultID);
 	CString GetResultHash(LONG SearchID, LONG ResultID, LONG HashID);

@@ -16,8 +16,8 @@ public:
 	LONG GetStatus(LONG UploadID);
 	CString GetName(LONG UploadID);
 	DATE GetChangeTime(LONG UploadID);
-	LONG GetBytesCompleted(LONG UploadID);
-	LONG GetFileLength(LONG UploadID);
+	ULONGLONG GetBytesCompleted(LONG UploadID);
+	ULONGLONG GetFileLength(LONG UploadID);
 	LONG GetBytesPerSec(LONG UploadID);
 	LONG GetSecETD(LONG UploadID);
 	std::vector<int> GetUploadIDs(void);

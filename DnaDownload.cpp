@@ -106,10 +106,8 @@ CString CDnaDownload::GetName(LONG DownloadID)
 	return strResult;
 }
 
-LONG CDnaDownload::GetBytesCompleted(LONG DownloadID)
+ULONGLONG CDnaDownload::GetBytesCompleted(LONG DownloadID)
 {
-	
-
 	std::map<int, CGnuDownloadShell*>::iterator itDL = m_gnuTrans->m_DownloadMap.find(DownloadID);
 
 	if(itDL != m_gnuTrans->m_DownloadMap.end())
@@ -118,10 +116,8 @@ LONG CDnaDownload::GetBytesCompleted(LONG DownloadID)
 	return 0;
 }
 
-LONG CDnaDownload::GetFileLength(LONG DownloadID)
+ULONGLONG CDnaDownload::GetFileLength(LONG DownloadID)
 {
-	
-
 	std::map<int, CGnuDownloadShell*>::iterator itDL = m_gnuTrans->m_DownloadMap.find(DownloadID);
 
 	if(itDL != m_gnuTrans->m_DownloadMap.end())
@@ -511,9 +507,8 @@ std::vector<int> CDnaDownload::GetChunkIDs(LONG DownloadID) // can be used direc
 	return ChunkIDs;
 }
 
-LONG CDnaDownload::GetChunkStart(LONG DownloadID, LONG ChunkID)
+ULONGLONG CDnaDownload::GetChunkStart(LONG DownloadID, LONG ChunkID)
 {
-
 	std::map<int, CGnuDownloadShell*>::iterator itDL = m_gnuTrans->m_DownloadMap.find(DownloadID);
 	if(itDL != m_gnuTrans->m_DownloadMap.end())
 	{
@@ -587,7 +582,7 @@ LONG CDnaDownload::GetSourceBytesPerSec(LONG DownloadID, LONG SourceID)
 	return 0;
 }
 
-LONG CDnaDownload::DownloadFile(LPCTSTR Name, LONG Size, LONG HashID, LPCTSTR Hash)
+LONG CDnaDownload::DownloadFile(LPCTSTR Name, ULONGLONG Size, LONG HashID, LPCTSTR Hash)
 {
 	// Create new download
 	CGnuDownloadShell* Download = new CGnuDownloadShell(m_gnuTrans);

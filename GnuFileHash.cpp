@@ -239,7 +239,7 @@ UINT HashWorker(LPVOID pVoidHash)
 			// Check if finished
 			if(ReadSize != BUFF_SIZE)
 			{
-				int FileSize = HashFile.GetLength();
+				uint64 FileSize = HashFile.GetLength();
 
 				HashFile.Abort();
 
@@ -374,7 +374,7 @@ CString CGnuFileHash::GetFileHash(CString FileName)
 
 	while(FilePos < FileSize)
 	{
-		uint32 BytesRead = 0;
+		int    BytesRead = 0;
 		uint64 ReadSize  = FileSize - FilePos;
 
 		if( ReadSize > BUFF_SIZE)
@@ -571,12 +571,19 @@ void CGnuFileHash::LoadShareHashes(CString HashFileName)
 		
 	for(;;)
 	{
-		CString ReadString;
+		uint64 ReadPos = HashFile.GetPosition();
 
-		if(HashFile.ReadString(ReadString) == false)
+		char readBuff[100];
+		if(HashFile.ReadString(readBuff, 99) == NULL)
 			break;
 
-		if(ReadString == "End")
+		uint64 NextPos = HashFile.GetPosition();
+
+
+		CString NextLine(readBuff);
+		NextLine.Trim("\n");
+
+		if(NextLine == "End")
 		{
 			// Push back hash stuct
 			if(hf.Index)
@@ -592,14 +599,16 @@ void CGnuFileHash::LoadShareHashes(CString HashFileName)
 			for(int i = 0; i < HASH_TYPES; i++)
 				hf.HashValues[i] = "";
 			hf.AltHosts.clear();
+
+			continue;
 		}
 
-		ColonPos = ReadString.Find(":");
+		ColonPos = NextLine.Find(":");
 
 		if(ColonPos != -1)
 		{
-			Ident = ReadString.Left(ColonPos);
-			Value = ReadString.Mid(ColonPos + 1);
+			Ident = NextLine.Left(ColonPos);
+			Value = NextLine.Mid(ColonPos + 1);
 
 			if(Ident == "Name")
 				hf.FilePath = Value;
@@ -613,21 +622,21 @@ void CGnuFileHash::LoadShareHashes(CString HashFileName)
 			}
 
 			if(Ident == "Size")
-				hf.Size = atoi(Value);
+				hf.Size = _atoi64(Value);
 
 			if(Ident == "Time")
 				hf.TimeStamp = Value;
 
 			if(Ident == "urn")
 			{
-				int BackColon = ReadString.ReverseFind(':');
+				int BackColon = NextLine.ReverseFind(':');
 
 				if(BackColon != -1)
 				{
-					int HashID = TagtoHashID( ReadString.Mid(ColonPos + 1, BackColon - ColonPos));
+					int HashID = TagtoHashID( NextLine.Mid(ColonPos + 1, BackColon - ColonPos));
 
 					if(HashID != HASH_UNKNOWN)
-						hf.HashValues[HashID] = ReadString.Mid(BackColon + 1);
+						hf.HashValues[HashID] = NextLine.Mid(BackColon + 1);
 				}
 			}
 
@@ -650,21 +659,32 @@ void CGnuFileHash::LoadShareHashes(CString HashFileName)
 
 			if(Ident == "TigerTree" && hf.TigerTree)
 			{
-				int buffPos = 0;
-				int dotPos  = Value.Find(".");
+				HashFile.Seek(ReadPos + 10, CFile::begin);
 
-				while(dotPos != -1 && buffPos < hf.TreeSize)
+				char tigerBuff[41];
+				memset(tigerBuff, 0, 41);
+
+				int buffPos = 0;
+
+				while(buffPos < hf.TreeSize)
 				{
-					DecodeBase32( Value.Mid(dotPos - 39, 39), 39, hf.TigerTree + buffPos, hf.TreeSize-buffPos);
+					int bytesRead = HashFile.Read(tigerBuff, 40);
+					
+					if(bytesRead < 39)
+						break;
+
+					DecodeBase32(tigerBuff, 39, hf.TigerTree + buffPos, hf.TreeSize - buffPos);
 
 					buffPos += 24;
-					dotPos = Value.Find(".", dotPos + 1);
 				}
+
+				// needed to get back in sync
+				HashFile.ReadString(readBuff, 99);
 			}
 
 			if(Ident == "Alt-Loc")
 			{
-				CString AltLocs = ReadString.Mid(ColonPos + 1);
+				CString AltLocs = NextLine.Mid(ColonPos + 1);
 
 				while( !AltLocs.IsEmpty() )
 					hf.AltHosts.push_back( StrtoIPv4(ParseString(AltLocs, ',')) );

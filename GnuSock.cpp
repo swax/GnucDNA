@@ -597,7 +597,7 @@ void CGnuSock::SendGetGnucleus()
 			if(pNode->m_GnuNodeMode == GNU_ULTRAPEER)
 				ClientMode = "Ultrapeer";
 
-			CTimeSpan Uptime(CTime::GetCurrentTime() - pNode->m_ConnectTime);
+			CTimeSpan Uptime(time(NULL) - pNode->m_ConnectTime);
 
 			Http200 += "\t <tr>\r\n";
 			Http200 += "\t\t <td>\r\n";
@@ -640,7 +640,7 @@ void CGnuSock::SendGetGnucleus()
 
 				Host = IPv4toStr(pNode->m_Address);
 
-				CTimeSpan Uptime(CTime::GetCurrentTime() - pNode->m_ConnectTime);
+				CTimeSpan Uptime(time(NULL) - pNode->m_ConnectTime);
 
 				Http200 += "\t <tr>\r\n";
 				Http200 += "\t\t <td>\r\n";
@@ -725,7 +725,7 @@ void CGnuSock::SendGetGnucleus()
 			if(pNode->m_NodeMode == G2_HUB)
 				ClientMode = "Hub";
 
-			CTimeSpan Uptime(CTime::GetCurrentTime() - pNode->m_ConnectTime);
+			CTimeSpan Uptime(time(NULL) - pNode->m_ConnectTime);
 
 			Http200 += "\t <tr>\r\n";
 			Http200 += "\t\t <td>\r\n";
@@ -768,7 +768,7 @@ void CGnuSock::SendGetGnucleus()
 
 				Host = IPv4toStr(pNode->m_Address);
 
-				CTimeSpan Uptime(CTime::GetCurrentTime() - pNode->m_ConnectTime);
+				CTimeSpan Uptime(time(NULL) - pNode->m_ConnectTime);
 
 				Http200 += "\t <tr>\r\n";
 				Http200 += "\t\t <td>\r\n";

@@ -20,10 +20,10 @@ public:
 	void PushFile();
 	void ParseRequest(CString);
 
-	int  GetStatus();
-	UINT GetFileLength();
-	bool ParseRangeHeader(CString);
-	bool LoadTigerTree();
+	int    GetStatus();
+	uint64 GetFileLength();
+	bool   ParseRangeHeader(CString);
+	bool   LoadTigerTree();
 
 	int GetBytesPerSec();
 	int GetETD();
@@ -67,11 +67,11 @@ public:
 	bool	m_KeepAlive;
 	bool	m_RequsetPending;
 
-	int		m_StartPos;
-	int		m_CurrentPos;
-	int		m_StopPos;
-	int     m_FileLength;
-	int		m_BytesSent;
+	uint64		m_StartPos;
+	uint64		m_CurrentPos;
+	uint64		m_StopPos;
+	uint64      m_FileLength;
+	uint64		m_BytesSent;
 
 	CString m_Challenge;
 	CString m_ChallengeAnswer;
@@ -98,6 +98,7 @@ public:
 
 	int    m_nSecsUnderLimit;
 	int	   m_nSecsDead;
+	int	   m_SecsClosed;
 };
 
 

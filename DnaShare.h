@@ -20,7 +20,7 @@ public:
 	LONG GetFileIndex(LONG FileID);
 	CString GetFileDir(LONG FileID);
 	CString GetFileName(LONG FileID);
-	LONG GetFileSize(LONG FileID);
+	ULONGLONG GetFileSize(LONG FileID);
 	LONG GetFileMatches(LONG FileID);
 	LONG GetFileUploads(LONG FileID);
 	void StartHashing(void);
@@ -41,7 +41,7 @@ public:
 	LONG GetFileMetaID(LONG FileID);
 	CString GetFileAttributeValue(LONG FileID, LONG AttributeID);
 	void SetFileAttributeValue(LONG FileID, LONG AttributeID, LPCTSTR Value);
-	LONG GetTotalFileSize(void);
+	ULONGLONG GetTotalFileSize(void);
 	LONG GetHashSpeed(void);
 	void SetHashSpeed(LONG newVal);
 	void SetFileMetaID(LONG FileID, LONG MetaID);

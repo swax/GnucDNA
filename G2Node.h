@@ -108,7 +108,7 @@ public:
 
 	int m_NodeMode;
 
-	CTime m_ConnectTime;
+	time_t m_ConnectTime;
 
 	CString m_WholeHandshake;
 	CString m_Handshake;

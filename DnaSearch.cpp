@@ -254,10 +254,8 @@ CString CDnaSearch::GetResultName(LONG SearchID, LONG ResultID)
 	return strResult;
 }
 
-LONG CDnaSearch::GetResultSize(LONG SearchID, LONG ResultID)
+ULONGLONG CDnaSearch::GetResultSize(LONG SearchID, LONG ResultID)
 {
-	  
-
 	std::map<int, CGnuSearch*>::iterator itSearch = m_gnuNetwork->m_SearchIDMap.find(SearchID);
 
 	if(itSearch != m_gnuNetwork->m_SearchIDMap.end())

@@ -1095,7 +1095,7 @@ UINT UploadWorker(LPVOID pVoidUpload)
 				BytesSent = 0;
 				BytesRead = 0;
 
-				int ReadSize = pShell->m_StopPos - pShell->m_CurrentPos;
+				uint64 ReadSize = pShell->m_StopPos - pShell->m_CurrentPos;
 
 
 				// If theres a bandwidth limit
@@ -1125,7 +1125,6 @@ UINT UploadWorker(LPVOID pVoidUpload)
 				// If file being uploaded is a partial
 				if(pShell->m_IsPartial)
 				{
-
 					std::map<int, CGnuDownloadShell*>::iterator itPart = pTrans->m_DownloadMap.find(pShell->m_PartialID);
 
 					if(itPart != pTrans->m_DownloadMap.end())
@@ -1151,8 +1150,7 @@ UINT UploadWorker(LPVOID pVoidUpload)
 						}
 						else
 						{*/
-							pShell->m_File.Seek(pShell->m_CurrentPos, CFile::begin);
-							BytesRead = pShell->m_File.Read(pBuff, ReadSize);
+							BytesRead = pShell->m_File.SeekandRead(pShell->m_CurrentPos, pBuff, ReadSize);
 						//}
 
 						// Send Logging

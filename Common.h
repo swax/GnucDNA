@@ -50,7 +50,7 @@ class AltLocation /* : public HashedFile */
 {
 public:
     CString Name;			// Name of File
-	DWORD	Index;			// Index of the remote file
+	uint32	Index;			// Index of the remote file
 	CString Sha1Hash;
     Node	HostPort;		// location of alternate
 
@@ -104,8 +104,8 @@ public:
 
 struct RangeType
 {
-	DWORD StartByte;
-	DWORD EndByte;
+	uint64 StartByte;
+	uint64 EndByte;
 };
 
 
@@ -236,7 +236,7 @@ struct ResultGroup
 
 	CString  Name;
 	CString  NameLower;
-	uint32   Size;
+	uint64   Size;
 	uint32   AvgSpeed;
 
 	CString Sha1Hash;

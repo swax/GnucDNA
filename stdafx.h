@@ -191,7 +191,7 @@ typedef unsigned __int64 word64;
 
 typedef char    int8;
 typedef short   int16;
-typedef long    int32;
+typedef int     int32;
 typedef __int64 int64;
 
 typedef unsigned char    uint8;

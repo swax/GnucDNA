@@ -114,12 +114,38 @@ static byte base32Lookup[BASE32_LOOKUP_MAX][2] =
     { 'Z', 0x19 }
 };
 
-CString NumtoStr(int in)
+CString NumtoStr(int32 in)
 {
 	char buff[16];
-
 	::sprintf (buff, "%d", in);
+	return buff;
+}
 
+CString NumtoStr(uint32 in)
+{
+	char buff[16];
+	::sprintf (buff, "%u", in);
+	return buff;
+}
+
+CString NumtoStr(int64 in)
+{
+	char buff[24];
+	::sprintf (buff, "%I64d", in);
+	return buff;
+}
+
+CString NumtoStr(uint64 in)
+{
+	char buff[24];
+	::sprintf (buff, "%I64u", in);
+	return buff;
+}
+
+CString NumtoStr(float in)
+{
+	char buff[24];
+	::sprintf (buff, "%f", in);
 	return buff;
 }
 
@@ -262,8 +288,7 @@ void DecodeBase32(const char *base32Buffer, unsigned int base32BufLen, byte *buf
     unsigned char  word;
 
     memset(buffer, 0, DecodeLengthBase32(base32BufLen));
-    max = strlen(base32Buffer);
-    for(i = 0, index = 0, offset = 0; i < max; i++)
+    for(i = 0, index = 0, offset = 0; i < base32BufLen; i++)
     {
         lookup = toupper(base32Buffer[i]) - '0';
         /* Check to make sure that the given word falls inside
@@ -298,7 +323,7 @@ void DecodeBase32(const char *base32Buffer, unsigned int base32BufLen, byte *buf
             buffer[offset] |= (word >> index);
             offset++;
 
-            buffer[offset] |= word << (8 - index);
+			buffer[offset] |= word << (8 - index);
         }
     }
 }
@@ -476,7 +501,7 @@ CString InsertDecimal(double dNumber)
 	return strNumber;
 }
 
-CString GetPercentage(DWORD dWhole, DWORD dPart)
+CString GetPercentage(uint32 dWhole, uint32 dPart)
 {
 	CString result = "0.00";
 
@@ -485,7 +510,7 @@ CString GetPercentage(DWORD dWhole, DWORD dPart)
 
 	if(dWhole)
 	{
-		result = NumtoStr(dPart * 10000 / dWhole);
+		result = NumtoStr((uint32) (dPart * 10000 / dWhole));
 
 		if(result.GetLength() > 2)
 			result.Insert( result.GetLength() - 2, ".");

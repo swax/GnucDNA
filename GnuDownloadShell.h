@@ -16,9 +16,9 @@ class CGnuCore;
 
 struct FilePart
 {
-	int  StartByte;
-	int  EndByte;
-	int  BytesCompleted;
+	uint64  StartByte;
+	uint64  EndByte;
+	int     BytesCompleted;
 
 	int  SourceHostID;
 	bool Verified;
@@ -30,7 +30,7 @@ public:
 	CGnuDownloadShell(CGnuTransfers*);
 	virtual ~CGnuDownloadShell();
 	
-	void Init(CString Name, int FileSize, int HashID, CString Hash);
+	void Init(CString Name, uint64 FileSize, int HashID, CString Hash);
 	void CreatePartList();
 
 	void AddHost(FileSource);
@@ -52,7 +52,7 @@ public:
 
 	CGnuDownload* GetCurrent();
 	DWORD   GetStatus();
-	int     GetBytesCompleted();
+	uint64  GetBytesCompleted();
 	CString GetMetaXML(bool file);
 	
 	CString GetFilePath();
@@ -72,7 +72,7 @@ public:
 	int  m_BackupInterval;
 
 	CString AvailableRangesCommaSeparated();
-	int GetRange(int pos, unsigned char *buf, int len);
+	int GetRange(uint64 pos, unsigned char *buf, int len);
 
 	void Timer();
 
@@ -138,7 +138,7 @@ public:
 
 	// File info
 	CFileLock m_File;
-	int   m_FileLength;
+	uint64    m_FileLength;
 
 	//CFile m_CheckFile;
 
@@ -155,7 +155,7 @@ public:
 	CString m_DefaultProxy;
 
 	// Bandwidth stuff
-	DWORD   m_AvgSpeed; 
+	uint32   m_AvgSpeed; 
 
 	int m_AllocBytes;
 	int m_AllocBytesTotal;

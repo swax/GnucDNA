@@ -559,8 +559,12 @@ void CGnuControl::ManageNodes()
 			for(int i = 0; i <= OpenSlots / 2; i++)
 				AddConnect(NeedDnaUltras); // if all thats needed are more dna, dont tax half connects
 		}
-		if(m_pPrefs->m_LeafModeConnects && UltraConnects > m_pPrefs->m_LeafModeConnects)
+
+		while(m_pPrefs->m_LeafModeConnects && UltraConnects > m_pPrefs->m_LeafModeConnects)
+		{
 			DropNode(GNU_ULTRAPEER, NeedDnaUltras); 
+			UltraConnects--;
+		}
 	}
 	
 
@@ -579,9 +583,12 @@ void CGnuControl::ManageNodes()
 			for(int i = 0; i <= OpenSlots / 2; i++)
 				AddConnect(NeedDnaUltras); // if all thats needed are more dna, dont tax half connects
 		}
-		if(m_pPrefs->m_MaxConnects && UltraConnects > m_pPrefs->m_MaxConnects)
-			DropNode(GNU_ULTRAPEER, NeedDnaUltras);
 
+		while(m_pPrefs->m_MaxConnects && UltraConnects > m_pPrefs->m_MaxConnects)
+		{
+			DropNode(GNU_ULTRAPEER, NeedDnaUltras);
+			UltraConnects--;
+		}
 
 		while(LeafConnects > MAX_LEAVES)
 		{
@@ -652,8 +659,7 @@ void CGnuControl::DropNode(int GnuMode, bool NeedDna)
 {
 	
 	CGnuNode* DeadNode = NULL;
-	CTime CurrentTime = CTime::GetCurrentTime();
-	CTimeSpan LowestTime(0);
+	time_t LowestTime  = 0;
 
 	// Drop youngest
 	for(int i = 0; i < m_NodeList.size(); i++)
@@ -662,10 +668,10 @@ void CGnuControl::DropNode(int GnuMode, bool NeedDna)
 			if(NeedDna && m_NodeList[i]->m_RemoteAgent.Find("GnucDNA") != -1)
 				continue;
 
-			if(LowestTime.GetTimeSpan() == 0 || CurrentTime - m_NodeList[i]->m_ConnectTime < LowestTime)
+			if(LowestTime == 0 || time(NULL) - m_NodeList[i]->m_ConnectTime < LowestTime)
 			{
 				DeadNode	 = m_NodeList[i];
-				LowestTime   = CurrentTime - m_NodeList[i]->m_ConnectTime;
+				LowestTime   = time(NULL) - m_NodeList[i]->m_ConnectTime;
 			}
 		}
 
@@ -906,7 +912,7 @@ int CGnuControl::ScoreNode(CGnuNode* pNode)
 	// Nodes with high uptime and capacity will have a chance to be hubs
 
 	// Uptime of connection to local node, so long lasting nodes are proven trustworthy
-	uint64 Uptime = time(NULL) - pNode->m_ConnectTime.GetTime();
+	time_t Uptime = time(NULL) - pNode->m_ConnectTime;
 	if( Uptime  > OPT_UPTIME)
 		Uptime  = OPT_UPTIME;
 

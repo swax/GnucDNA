@@ -882,7 +882,7 @@ CString CGnuCache::WebCacheDoRequest(CString RequestURL)
 					} while(ReadSize != 0);	   
 				}
 				else
-					strFile = NumtoStr(StatusCode) + " ERROR";
+					strFile = NumtoStr((uint32)StatusCode) + " ERROR";
 
 			pFile->Close();             
 			delete pFile;

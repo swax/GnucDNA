@@ -95,7 +95,6 @@ CGnuCore::CGnuCore(CDnaCore* dnaCore)
 	m_pShare->InitShare();
 	m_pTrans->InitTransfers(this);
 
-
 	//CFile TestFile;
 	//TestFile.Open( m_pPrefs->m_DownloadPath + "\\testsend.mp3", CFile::modeCreate | CFile::modeReadWrite);
 	//TestFile.SetLength(1024 * 1024 * 5); // 5 megs

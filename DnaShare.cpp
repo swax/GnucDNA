@@ -143,11 +143,9 @@ CString CDnaShare::GetFileName(LONG FileID)
 	return strResult;
 }
 
-LONG CDnaShare::GetFileSize(LONG FileID)
+ULONGLONG CDnaShare::GetFileSize(LONG FileID)
 {
-	
-
-	UINT retSize = 0;
+	ULONGLONG retSize = 0;
 
 	m_gnuShare->m_FilesAccess.Lock();
 
@@ -534,7 +532,7 @@ void CDnaShare::SetFileAttributeValue(LONG FileID, LONG AttributeID, LPCTSTR Val
 		}
 }
 
-LONG CDnaShare::GetTotalFileSize(void)
+ULONGLONG CDnaShare::GetTotalFileSize(void)
 {
 	
 

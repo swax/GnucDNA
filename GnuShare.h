@@ -45,13 +45,13 @@ public:
 	
 	// Functions called from share thread
 	void LoadFiles();
-	void RecurseLoad(CString, CString, bool, DWORD &, DWORD &);
+	void RecurseLoad(CString, CString, bool, DWORD &, uint64 &);
 	void ResetDirectories(DWORD &, LPHANDLE);
 	void ReleaseEventList(DWORD &EventCount, LPHANDLE EventList);
 
-	DWORD m_TotalLocalFiles;
-	DWORD m_TotalLocalSize;
-	DWORD m_UltrapeerSizeMarker;
+	DWORD  m_TotalLocalFiles;
+	uint64 m_TotalLocalSize;
+	DWORD  m_UltrapeerSizeMarker;
 
 	bool  m_LoadingActive;
 	bool  m_ShareReload;
@@ -112,12 +112,12 @@ struct SharedFile
 
 	std::deque<IPv4> AltHosts;
 
-	UINT  FileID;
-	UINT  Index;
+	uint32  FileID;
+	uint32  Index;
 
-	DWORD Size;  
-	DWORD Matches; 
-	DWORD Uploads;
+	uint64 Size;  
+	uint32 Matches; 
+	uint32 Uploads;
 
 	// Hash
 	std::basic_string<char> HashValues[HASH_TYPES];
@@ -158,7 +158,7 @@ struct SharedDirectory
 
 	CString Name;
 	bool	Recursive;
-	DWORD	Size;
+	uint64	Size;
 	DWORD	FileCount;
 };
 

@@ -19,8 +19,8 @@ public:
 	LONG GetStatus(LONG DownloadID);
 	BOOL IsCompleted(LONG DownloadID);
 	CString GetName(LONG DownloadID);
-	LONG GetBytesCompleted(LONG DownloadID);
-	LONG GetFileLength(LONG DownloadID);
+	ULONGLONG GetBytesCompleted(LONG DownloadID);
+	ULONGLONG GetFileLength(LONG DownloadID);
 	LONG GetSourceCount(LONG DownloadID);
 	BOOL IsSearching(LONG DownloadID);
 	BOOL IsRetrying(LONG DownloadID);
@@ -46,12 +46,12 @@ public:
 	CString GetSourceVendor(LONG DownloadID, LONG SourceID);
 	CString GetSourceHandshake(LONG DownloadID, LONG SourceID);
 	std::vector<int> GetChunkIDs(LONG DownloadID);
-	LONG GetChunkStart(LONG DownloadID, LONG ChunkID);
+	ULONGLONG GetChunkStart(LONG DownloadID, LONG ChunkID);
 	LONG GetChunkCompleted(LONG DownloadID, LONG ChunkID);
 	LONG GetChunkSize(LONG DownloadID, LONG ChunkID);
 	LONG GetChunkFamily(LONG DownloadID, LONG ChunkID);
 	LONG GetSourceBytesPerSec(LONG DownloadID, LONG SourceID);
-	LONG DownloadFile(LPCTSTR Name, LONG Size, LONG HashID, LPCTSTR Hash);
+	LONG DownloadFile(LPCTSTR Name, ULONGLONG Size, LONG HashID, LPCTSTR Hash);
 	CString GetFilePath(LONG DownloadID);
 	void AddSource(LONG DownloadID, LONG NetworkID, LPCTSTR URL);
 	void Proxy(LONG DownloadID, BOOL Enabled, LPCTSTR Default);

@@ -267,6 +267,8 @@ struct packet_GGEPBlock
 	byte* Payload;
 	int   PayloadSize;
 
+	bool Cleanup;
+
 	packet_GGEPBlock()
 	{
 		memset(Name, 0, 15);
@@ -277,7 +279,15 @@ struct packet_GGEPBlock
 
 		Payload     = NULL;
 		PayloadSize = 0;
+
+		Cleanup = false;
 	};
+
+	~packet_GGEPBlock()
+	{
+		if(Cleanup)
+			delete [] Payload;
+	}
 };
 
 #pragma pack (pop)

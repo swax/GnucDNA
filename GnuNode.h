@@ -184,7 +184,7 @@ public:
 	CString m_RemoteChallengeAnswer;
 
 	// Ultrapeers
-	CTime     m_ConnectTime;
+	time_t    m_ConnectTime;
 	UINT	  m_NodeFileCount;
 	bool	  m_TriedUpgrade;
 

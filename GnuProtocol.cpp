@@ -49,6 +49,10 @@
 CGnuProtocol::CGnuProtocol(CGnuControl* pComm)
 {
 	m_pComm  = pComm;
+
+	//TestCobs();
+	//TestGgep();
+	//TestLF();
 }
 
 CGnuProtocol::~CGnuProtocol()
@@ -207,7 +211,7 @@ void CGnuProtocol::Receive_Ping(Gnu_RecvdPacket &Packet)
 		byte upStatus[3];
 		upStatus[0] = (m_pComm->m_GnuClientMode == GNU_ULTRAPEER);
 		upStatus[1] = MAX_LEAVES - m_pComm->CountLeafConnects();
-		upStatus[2] = m_pPrefs->m_MaxConnects = m_pComm->CountUltraConnects();
+		upStatus[2] = m_pPrefs->m_MaxConnects - m_pComm->CountUltraConnects();
 		UpBlock.Last = (scp == false && isDna == false);
 
 		packetLength += Encode_GGEPBlock(UpBlock, m_PacketBuffer + packetLength, upStatus, 3);
@@ -584,43 +588,52 @@ void CGnuProtocol::Receive_Query(Gnu_RecvdPacket &Packet)
 		if(BytesRead)
 			G1Query.Terms.push_back( CString((char*) m_QueryBuffer, BytesRead) );
 
-		// Get extended query info
-		BytesRead = ParsePayload(pPayload, BytesLeft, 0x1C, m_QueryBuffer, 1024);
-		while(BytesRead)
-		{
-			if( m_QueryBuffer[0] == '<' || 
-				(BytesRead >= 4 && memcmp(m_QueryBuffer, "urn:", 4) == 0) )
+		// read extended info in standard format
+		if(pPayload[0] != 0xC3)
+		{	
+			BytesRead = ParsePayload(pPayload, BytesLeft, 0x1C, m_QueryBuffer, 1024);
+		
+			while(BytesRead)
 			{
-				// prevent extra null from  being copied into new string, screwing up comparison
-				if(m_QueryBuffer[BytesRead - 1] == NULL)
-					BytesRead--;
-
-				G1Query.Terms.push_back( CString((char*) m_QueryBuffer, BytesRead) );
-				
-			}
-			else
-			{
-				// check if ggep
-				if(m_QueryBuffer[0] == 0xC3 && BytesRead > 0)
+				if( m_QueryBuffer[0] == '<' || 
+					(BytesRead >= 4 && memcmp(m_QueryBuffer, "urn:", 4) == 0) )
 				{
-					byte* ggepBuff = m_QueryBuffer;
-					ggepBuff  += 1;
-					BytesRead -= 1;
+					// prevent extra null from  being copied into new string, screwing up comparison
+					if(m_QueryBuffer[BytesRead - 1] == NULL)
+						BytesRead--;
 
-					GGEPReadResult Status = BLOCK_GOOD;
+					G1Query.Terms.push_back( CString((char*) m_QueryBuffer, BytesRead) );
 					
-					while(Status == BLOCK_GOOD)
-					{
-						packet_GGEPBlock Block;
-						Status = Decode_GGEPBlock(Block, ggepBuff, BytesRead);
-
-						if(Block.Last)
-							break;
-					}
 				}
-			}
 
-			BytesRead = ParsePayload(pPayload, BytesLeft, 0x1C, m_QueryBuffer, 512);
+				if(pPayload[0] == 0xC3)
+					break;
+
+				BytesRead = ParsePayload(pPayload, BytesLeft, 0x1C, m_QueryBuffer, 1024);
+			}
+		}
+
+		// check if extended info in ggep format
+		if(BytesLeft > 0 && pPayload[0] == 0xC3)
+		{
+			byte*  ggepBuff = pPayload + 1;
+			uint32 ggepSize = BytesLeft - 1;
+
+			GGEPReadResult Status = BLOCK_GOOD;
+			
+			while(Status == BLOCK_GOOD)
+			{
+				packet_GGEPBlock Block;
+				Status = Decode_GGEPBlock(Block, ggepBuff, ggepSize);
+
+				if( strcmp(Block.Name, "M") == 0 && Block.PayloadSize)
+				{
+					byte flags = Block.Payload[0]; // no idea what these are
+				}
+
+				if(Block.Last)
+					break;
+			}
 		}
 
 		m_pShare->m_QueueAccess.Lock();
@@ -1001,22 +1014,80 @@ void CGnuProtocol::Decode_QueryHit( std::vector<FileSource> &Sources, Gnu_RecvdP
 		}
 
 
-		// Get Extended file info
+		// If packet has extended block after result between nulls
 		if(Packet + pos + 1 != NULL)
 		{
-			// Check for GGEP block
+			// set postion and size of extended block
+			byte* extStart  = Packet + pos + 1;
+			int   extLength = 0;
 
-			CString ExInfo = (char*) (Packet + pos + 1);
-			int ExLength = ExInfo.GetLength();
-
-			while(!ExInfo.IsEmpty())
+			for(int i = pos + 1; i < 23 + QueryHit->Header.Payload; i++)
 			{
-				CString SubExInfo = ParseString(ExInfo, 0x1C);
-
-				Item.GnuExtraInfo.push_back(SubExInfo);
+				if( Packet[i] == 0)
+					break;
+				else
+					extLength++;
 			}
 
-			pos += ExLength + 1;
+			pos += extLength + 1;
+
+			// check for data between nulls in standard format
+			if(extStart[0] != 0xC3 && extLength > 0)
+			{
+				byte extBuffer[256];
+				
+				int readSize = ParsePayload(extStart, extLength, 0x1C, extBuffer, 256);
+
+				while(readSize)
+				{
+					CString extString( (char*) extBuffer, readSize);
+
+					if( !extString.IsEmpty() )
+						Item.GnuExtraInfo.push_back( extString );
+
+					if(extStart[0] == 0xC3)
+						break;
+					
+					readSize = ParsePayload(extStart, extLength, 0x1C, extBuffer, 256);
+				}
+			}
+
+			// Check extended block in GGEP format
+			if(extStart[0] == 0xC3 && extLength > 0)
+			{
+				byte*  nextBlock   = extStart  + 1;
+				uint32 blockLength = extLength - 1;
+
+				GGEPReadResult Status = BLOCK_GOOD;
+				
+				while(Status == BLOCK_GOOD)
+				{
+					packet_GGEPBlock block;
+					Status = Decode_GGEPBlock(block, nextBlock, blockLength);
+					
+					// Hashes
+					if( strcmp(block.Name, "H") == 0 && block.PayloadSize)
+					{
+						if( block.Payload[0] == GGEP_H_SHA1 && block.PayloadSize == 1 + 20)
+							Item.Sha1Hash = EncodeBase32(block.Payload + 1, 20);
+
+						else if( block.Payload[0] == GGEP_H_BITPRINT && block.PayloadSize == 1 + 20 + 24)
+						{
+							Item.Sha1Hash  = EncodeBase32(block.Payload + 1,      20);
+							Item.TigerHash = EncodeBase32(block.Payload + 1 + 20, 24);
+						}
+					}
+
+					// Large File
+					if( strcmp(block.Name, "LF") == 0 && block.PayloadSize)
+					{
+						Item.Size = DecodeLF(block.Payload, block.PayloadSize);
+					}
+
+					if(block.Last)
+						break;
+				}
+			}
 		}
 
 		// Add Hash info
@@ -1921,7 +1992,7 @@ void CGnuProtocol::WriteCrawlResult(byte* buffer, CGnuNode* pNode, byte Flags)
 
 	if(Flags | CRAWL_UPTIME)
 	{
-		uint16 minutes = time(NULL) - pNode->m_ConnectTime.GetTime();
+		uint16 minutes = time(NULL) - pNode->m_ConnectTime;
 		minutes /= 60;
 
 		memcpy(buffer + pos, &minutes, 2);
@@ -2350,7 +2421,8 @@ void CGnuProtocol::Send_QueryHit(GnuQuery &FileQuery, byte* pQueryHit, DWORD Rep
 
 		packet_GGEPBlock Block;
 		memcpy(Block.Name, "PUSH", 4);
-		Block.Last = true;
+		//Block.Encoded = true;
+		Block.Last    = true;
 
 		int   GgepPayloadLength = PushProxies.size() * 6;
 		byte* GgepPayload       = new byte[GgepPayloadLength];
@@ -2595,54 +2667,99 @@ void CGnuProtocol::Encode_QueryHit(GnuQuery &FileQuery, std::list<UINT> &Matchin
 	for(itIndex = MatchingIndexes.begin(); itIndex != MatchingIndexes.end(); itIndex++)
 	{	
 		// Add to Search Reply
-		int pos = *itIndex;
+		SharedFile* pFile = &m_pShare->m_SharedFiles[*itIndex];
 
-		if(m_pShare->m_SharedFiles[pos].Name.size() == 0)
+		if(pFile->Name.size() == 0)
 			continue;
 
 		if(MaxReplies && MaxReplies <= TotalReplyCount)	
 			break;
 
-		m_pShare->m_SharedFiles[pos].Matches++;
+		pFile->Matches++;
 
 		// File Index
-		* (UINT*) QueryReplyNext = m_pShare->m_SharedFiles[pos].Index;
+		memcpy(QueryReplyNext, &pFile->Index, 4);
 		QueryReplyNext   += 4;
 		QueryReplyLength += 4;
 
 		// File Size
-		* (UINT*) QueryReplyNext = m_pShare->m_SharedFiles[pos].Size;
+		if(pFile->Size < 0xFFFFFFFF)
+			memcpy(QueryReplyNext, &pFile->Size, 4);
+		else
+			memset(QueryReplyNext, 0xFF, 4);
+
 		QueryReplyNext   += 4;
 		QueryReplyLength += 4;
 		
 		// File Name
-		strcpy ((char*) QueryReplyNext, m_pShare->m_SharedFiles[pos].Name.c_str());
-		QueryReplyNext   += m_pShare->m_SharedFiles[pos].Name.size() + 1;
-		QueryReplyLength += m_pShare->m_SharedFiles[pos].Name.size() + 1;
+		strcpy ((char*) QueryReplyNext, pFile->Name.c_str());
+		QueryReplyNext   += pFile->Name.size() + 1;
+		QueryReplyLength += pFile->Name.size() + 1;
+
+		// If a large file, put all info in GGEP
+		if(pFile->Size > 0xFFFFFFFF)
+		{
+			// ggep magic
+			QueryReplyNext[0] = 0xC3; 
+			QueryReplyNext++;
+			QueryReplyLength++;
+			
+			// Hash Block
+			if( !pFile->HashValues[HASH_SHA1].empty() )
+			{
+				packet_GGEPBlock H_Block;
+				memcpy(H_Block.Name, "H", 1);
+				H_Block.Encoded = true;
+
+				byte hBuff[21];
+				hBuff[0] = GGEP_H_SHA1;
+				DecodeBase32( pFile->HashValues[HASH_SHA1].c_str(), 32, hBuff + 1, 20);
+				
+				int blockSize = Encode_GGEPBlock(H_Block, QueryReplyNext, hBuff, 21);
+
+				QueryReplyNext   += blockSize;
+				QueryReplyLength += blockSize;
+			}
+
+			// Large File Block
+			packet_GGEPBlock LF_Block;
+			memcpy(LF_Block.Name, "LF", 2);
+			LF_Block.Encoded = true;
+			LF_Block.Last    = true;
+
+			byte lfBuff[8];
+			int buffSize = EncodeLF(pFile->Size, lfBuff);
+			
+			int blockSize = Encode_GGEPBlock(LF_Block, QueryReplyNext, lfBuff, buffSize);
+
+			QueryReplyNext   += blockSize;
+			QueryReplyLength += blockSize;
+		}
 
 		// File Hash
-		if( !m_pShare->m_SharedFiles[pos].HashValues[HASH_SHA1].empty() )
+		else if( !pFile->HashValues[HASH_SHA1].empty() )
 		{
 			strcpy ((char*) QueryReplyNext, "urn:sha1:");
 			QueryReplyNext   += 9;
 			QueryReplyLength += 9;
 
-			strcpy ((char*) QueryReplyNext, m_pShare->m_SharedFiles[pos].HashValues[HASH_SHA1].c_str());
-			QueryReplyNext   += m_pShare->m_SharedFiles[pos].HashValues[HASH_SHA1].size() + 1;
-			QueryReplyLength += m_pShare->m_SharedFiles[pos].HashValues[HASH_SHA1].size() + 1;
+			strcpy ((char*) QueryReplyNext, pFile->HashValues[HASH_SHA1].c_str());
+			QueryReplyNext   += pFile->HashValues[HASH_SHA1].size();
+			QueryReplyLength += pFile->HashValues[HASH_SHA1].size();
 		}
-		else
-		{
-			*QueryReplyNext = '\0';
 
-			QueryReplyNext++;
-			QueryReplyLength++;
-		}
+		
+
+		// Add end null
+		QueryReplyNext[0] = NULL;
+		QueryReplyNext++;
+		QueryReplyLength++;
+
 
 		// File Meta
-		if(m_pShare->m_SharedFiles[pos].MetaID)
+		if(pFile->MetaID)
 		{
-			std::map<int, CGnuSchema*>::iterator itMeta = m_pCore->m_pMeta->m_MetaIDMap.find(m_pShare->m_SharedFiles[pos].MetaID);
+			std::map<int, CGnuSchema*>::iterator itMeta = m_pCore->m_pMeta->m_MetaIDMap.find(pFile->MetaID);
 			if(itMeta != m_pCore->m_pMeta->m_MetaIDMap.end())
 			{
 				int InsertPos = MetaTail.Find("</" + itMeta->second->m_NamePlural + ">");
@@ -2653,7 +2770,7 @@ void CGnuProtocol::Encode_QueryHit(GnuQuery &FileQuery, std::list<UINT> &Matchin
 					InsertPos = MetaTail.Find("</" + itMeta->second->m_NamePlural + ">");
 				}
 			
-				MetaTail.Insert(InsertPos, itMeta->second->AttrMaptoNetXML(m_pShare->m_SharedFiles[pos].AttributeMap, ReplyCount));
+				MetaTail.Insert(InsertPos, itMeta->second->AttrMaptoNetXML(pFile->AttributeMap, ReplyCount));
 			}
 		}
 
@@ -2734,6 +2851,39 @@ GGEPReadResult CGnuProtocol::Decode_GGEPBlock(packet_GGEPBlock &Block, byte* &st
 	stream += Block.PayloadSize;
 	length -= Block.PayloadSize;
 
+	// decode cobs
+	if(Block.Encoded && Block.PayloadSize && Block.PayloadSize < 1000)
+	{
+		byte* cobsBuff = new byte[1024];
+		
+		int cobslen = DecodeCobs(Block.Payload, Block.PayloadSize, cobsBuff);
+		
+		Block.Payload     = cobsBuff;
+		Block.PayloadSize = cobslen - 1; // cobs decoder adds null to end of all data
+
+		Block.Cleanup = true;
+	}
+
+	// decompress block
+	if(Block.Compression && Block.PayloadSize)
+	{
+		byte* uncompressedBuff = new byte[1024];
+		DWORD uncompressedSize = 1024;
+
+		if( uncompress(uncompressedBuff, &uncompressedSize, Block.Payload, Block.PayloadSize) == Z_OK)
+		{
+			if(Block.Cleanup)
+				delete [] Block.Payload;
+
+			Block.Payload     = uncompressedBuff;
+			Block.PayloadSize = uncompressedSize;
+
+			Block.Cleanup = true;
+		}
+		else
+			delete [] uncompressedBuff;
+	}
+
 	return BLOCK_GOOD;
 }
 
@@ -2751,6 +2901,41 @@ int CGnuProtocol::Encode_GGEPBlock(packet_GGEPBlock &Block, byte* stream, byte* 
 	pFlags->NameLength  = strlen( Block.Name );
 
 	len++;
+
+	bool deletePayload = false;
+
+	// compress
+	if(Block.Compression)
+	{
+		DWORD compressedLength  = length * 1.2 + 12;
+		byte* compressedPayload = new byte[compressedLength];
+
+		if( compress(compressedPayload, &compressedLength, payload, length) == Z_OK)
+		{
+			payload = compressedPayload;
+			length  = compressedLength;
+
+			deletePayload = true;
+		}
+		else
+			delete [] compressedPayload;
+	}
+
+	// apply cobs
+	if(Block.Encoded)
+	{
+		byte* cobsPayload = new byte[length + 10];
+
+		int cobslen = EncodeCobs(payload, length, cobsPayload);
+
+		if(deletePayload)
+			delete [] payload;
+
+		payload = cobsPayload;
+		length  = cobslen;
+
+		deletePayload = true;
+	}
 
 	// Set name
 	memcpy(stream + len, Block.Name, pFlags->NameLength );
@@ -2788,8 +2973,44 @@ int CGnuProtocol::Encode_GGEPBlock(packet_GGEPBlock &Block, byte* stream, byte* 
 
 	len += length;
 
+	if(deletePayload)
+		delete [] payload;
 
 	return len;
+}
+
+void CGnuProtocol::TestGgep()
+{
+	byte* buffer = new byte[4024];
+
+	for(int j = 0; j < 10000; j++)
+	{
+		// Encode ggep
+		packet_GGEPBlock EncBlock;
+		memcpy(EncBlock.Name, "Test", 4);
+		EncBlock.Compression = true;
+		EncBlock.Encoded = true;
+		EncBlock.Last = true;
+
+		byte payload[500];
+		for(int i = 0; i < 500; i++)
+			payload[i] = rand() % 3;
+
+		uint32 buffsize = Encode_GGEPBlock(EncBlock, buffer, payload, 500);
+
+		// Decode Ggep
+		byte* decBuffer = buffer;
+		packet_GGEPBlock DecBlock;
+		GGEPReadResult result = Decode_GGEPBlock(DecBlock, decBuffer, buffsize);
+
+		if(memcmp(payload, DecBlock.Payload, DecBlock.PayloadSize) != 0)
+		{
+			int x = 0;
+			x++;
+		}
+	}
+	
+	delete [] buffer;
 }
 
 void CGnuProtocol::CheckGgepSize(int value)
@@ -2856,4 +3077,146 @@ void CGnuProtocol::CheckGgepSize(int value)
 	} while (0x40 != (b & 0x40));	
 
 	ASSERT(len == PayloadSize);
+}
+
+#define FinishBlock(X) \
+	(*code_ptr = (X),  \
+	code_ptr = dst++,  \
+	code = 0x01,	   \
+	dstlen++)
+
+int CGnuProtocol::EncodeCobs(byte* src, int length, byte* dst)
+{
+	int dstlen = 0;
+
+	byte* end = src + length;
+
+	byte* code_ptr = dst++;
+	byte  code = 0x01;
+
+	while( src < end )
+	{
+		if( *src == 0 )
+			FinishBlock(code);
+		else
+		{
+			*dst++ = *src;
+			dstlen++;
+			code++;
+			if( code == 0xFF)
+				FinishBlock(code);
+		}
+
+		src++;
+	}
+
+	FinishBlock(code);
+
+	return dstlen;
+}
+
+int CGnuProtocol::DecodeCobs(byte* src, int length, byte* dst)
+{
+	int dstlen = 0;
+
+	byte* end = src + length;
+
+	while( src < end)
+	{
+		int code = *src++;
+
+		for(int i = 1; i < code; i++)
+		{
+			*dst++ = *src++;
+			dstlen++;
+		}
+
+		if( code < 0xFF)
+		{
+			*dst++ = 0;
+			dstlen++;
+		}
+	}
+
+	return dstlen;
+}
+
+void CGnuProtocol::TestCobs()
+{
+	byte source[10];
+	memset(source, 1, 10);
+	//for(int i = 0; i < 10; i++)
+	//	source[i] = rand() % 3;
+
+	byte dest[20];	
+	memset(dest, 0xFF, 20);
+
+	int dstlen = EncodeCobs(source, 10, dest);
+
+	byte check[15];
+	memset(check, 0xFF, 15);
+	int chklen = DecodeCobs(dest, dstlen, check);
+
+	int x = 0; 
+	x++;
+}
+
+uint64 CGnuProtocol::DecodeLF(byte* data, int length)
+{
+	uint64 filesize, b;
+	int i, j;
+
+	if (length < 1 || length > 8)
+		return 0;
+
+	j = i = filesize = 0;
+	
+	do 
+	{
+		b = data[i];
+		filesize |= b << j;
+		j += 8;
+	} while (++i < length);
+
+	if (0 == b)
+		return 0;
+
+	return filesize;
+}
+
+int CGnuProtocol::EncodeLF(uint64 filesize, byte* data)
+{
+	byte* p = data;
+
+	if (0 == filesize)
+		return 0;
+
+	do 
+	{
+		*p++ = filesize;
+	} while (0 != (filesize >>= 8));
+
+	return p - data;
+}
+
+void CGnuProtocol::TestLF()
+{
+	for(int i = 0; i < 100; i++)
+	{
+		uint64 origNum = rand();
+
+		for(int y = 0; y < 2; y++)
+			origNum *= rand();
+
+		byte buffer[8];
+		
+		int buffSize = EncodeLF(origNum, buffer);
+
+		uint64 checkNum = DecodeLF(buffer, buffSize);
+
+		if(origNum != checkNum)
+		{
+			ASSERT(0);
+		}
+	}
 }

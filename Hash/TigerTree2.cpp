@@ -183,7 +183,7 @@ void tt2_initTree(TT2_CONTEXT *ctx, uint64 size)
 	ctx->treeDepth = 1;
 	
 	uint64 nodeCount  = ctx->baseNodes;
-	int    nodeSize   = BLOCKSIZE;
+	uint64 nodeSize   = BLOCKSIZE;
 
 	while(nodeCount > 1)
 	{

@@ -513,8 +513,8 @@ void CGnuDownload::OnReceive(int nErrorCode)
 						int dashpos = tmpRange.Find("-");
 						if (dashpos != -1 && dashpos != 0 && dashpos < tmpRange.GetLength() - 1)
 						{
-							NewRange.StartByte = atol(tmpRange.Left(dashpos));
-							NewRange.EndByte   = atol(tmpRange.Mid(dashpos + 1));
+							NewRange.StartByte = _atoi64(tmpRange.Left(dashpos));
+							NewRange.EndByte   = _atoi64(tmpRange.Mid(dashpos + 1));
 						}
 
 						HostInfo()->AvailableRanges.push_back(NewRange);
@@ -648,13 +648,13 @@ void CGnuDownload::OnReceive(int nErrorCode)
 				}
 
 
-				int ContentLength = 0, RemoteFileSize = 0, StartByte = 0, EndByte = 0;
+				uint64 ContentLength = 0, RemoteFileSize = 0, StartByte = 0, EndByte = 0;
 
 				// Conent-Length
 				CString strContentLength = ParsedHeaders.FindHeader("Content-Length");
 				if( !strContentLength.IsEmpty() )
 				{
-					ContentLength = atol(strContentLength);
+					ContentLength = _atoi64(strContentLength);
 
 					if(m_pShell->m_FileLength == 0)
 					{
@@ -684,12 +684,12 @@ void CGnuDownload::OnReceive(int nErrorCode)
 					
 					if(ContentRange.Find("*") != -1)
 					{
-						sscanf(ContentRange, "bytes */%ld", &RemoteFileSize);
+						sscanf(ContentRange, "bytes */%I64u", &RemoteFileSize);
 						StartByte = m_PausePos - ContentLength;
 						EndByte   = m_PausePos - 1;
 					}
 					else
-						sscanf(ContentRange, "bytes %ld-%ld/%ld", &StartByte, &EndByte, &RemoteFileSize);
+						sscanf(ContentRange, "bytes %I64u-%I64u/%I64u", &StartByte, &EndByte, &RemoteFileSize);
 					
 					// Usually DownloadFile with unknown size
 					if( m_pShell->m_FileLength == 0 && RemoteFileSize)
@@ -1065,7 +1065,7 @@ void CGnuDownload::Close()
 	return true;
 }
 
-bool CGnuDownload::ByteIsInRanges(int StartByte )
+bool CGnuDownload::ByteIsInRanges(uint64 StartByte )
 {
 	FileSource* pParam = HostInfo();
 
@@ -1478,6 +1478,7 @@ void CGnuDownload::DownloadBytes(byte* pBuff, int nSize)
 
 			memcpy(m_TigerReqBuffer + m_TigerPos, pBuff, CopySize);	
 			m_TigerPos += CopySize;
+			m_dwSecBytes += nSize;
 		}
 
 		// TigerTree data downloaded
@@ -1564,7 +1565,7 @@ void CGnuDownload::DownloadBytes(byte* pBuff, int nSize)
 	// Normal File Transfer
 	FilePart* pPart = &m_pShell->m_PartList[m_PartNumber];
 	
-	int FilePos = pPart->StartByte + pPart->BytesCompleted;
+	uint64 FilePos = pPart->StartByte + pPart->BytesCompleted;
 
 	// Prevent download overruns
 	if(FilePos + nSize > pPart->EndByte + 1)
@@ -1586,8 +1587,9 @@ void CGnuDownload::DownloadBytes(byte* pBuff, int nSize)
 		}
 		else
 		{*/
-			m_pShell->m_File.Seek(FilePos, CFileLock::begin);
-			m_pShell->m_File.Write(pBuff, nSize);
+			m_pShell->m_File.SeekandWrite(FilePos, pBuff, nSize);
+
+			//m_pShell->m_pCore->DebugLog("Download", "pos " + CommaIze(NumtoStr(FilePos)) + " writing " + CommaIze(NumtoStr(nSize)) + " bytes from " + IPv4toStr(HostInfo()->Address));
 		//}
 
 		pPart->BytesCompleted += nSize;
@@ -1754,8 +1756,8 @@ void CGnuDownload::Timer()
 bool CGnuDownload::LoadTigerTree()
 {
 	// Create list so we can calc depth we need and depth host is giving us
-	int NodeCount = m_pShell->m_FileLength / BLOCKSIZE;
-	int NodeRes   = BLOCKSIZE;
+	int NodeCount  = m_pShell->m_FileLength / BLOCKSIZE;
+	uint64 NodeRes = BLOCKSIZE;
 
 	if(m_pShell->m_FileLength % BLOCKSIZE > 0)
 		NodeCount++;
