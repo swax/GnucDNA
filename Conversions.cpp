@@ -628,4 +628,17 @@ CString GetVendor(CString VendorID)
 	return VendorID;
 }
 
+IPv4 AltLoctoAddress(CString AltLoc)
+{
+	IPv4 Address;
+	Address.Host = StrtoIP( ParseString(AltLoc, ':') );
+	
+	if( !AltLoc.IsEmpty() )
+		Address.Port = atoi( AltLoc );
+	else
+		Address.Port = 6346; // lime doesnt send port all the time
+
+	return Address;
+}
+
 } // end gdna namespace

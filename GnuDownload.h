@@ -39,6 +39,7 @@ public:
 	void SetError(CString);
 	void Timer();
 
+	void AddHosttoMesh(IPv4 Address);
 
 	FileSource* HostInfo();
 

@@ -59,7 +59,7 @@ public:
 	CString FindHeader(CString);
 	void	ParseTryHeader(CString TryHeader);
 	void    ParseG1TryHeader(CString TryHeader);
-
+	bool    ValidAgent(CString Agent);
 
 	// Receiving
 	void FinishReceive(int BuffLength);

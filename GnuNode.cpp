@@ -513,6 +513,32 @@ void CGnuNode::ParseIncomingHandshake06(CString Data, byte* Stream, int StreamLe
 	m_lowHandshake.MakeLower();
 
 
+	// Make sure agent valid before adding hosts from it
+	if( m_RemoteAgent.IsEmpty() )
+		m_RemoteAgent = FindHeader("User-Agent");
+		
+	if( !ValidAgent(m_RemoteAgent) || !FindHeader("OPnext-uid").IsEmpty() ) // dont connect to openext client
+	{
+		CloseWithReason("Client Not Valid");
+		return;
+	}
+
+	// Parse X-Try header
+	CString TryHeader = FindHeader("X-Try");
+	if(!TryHeader.IsEmpty())
+		ParseTryHeader( TryHeader );
+
+	// Parse X-Try-Ultrapeers header
+	CString UltraTryHeader = FindHeader("X-Try-Ultrapeers");
+	if(!UltraTryHeader.IsEmpty())
+		ParseTryHeader( UltraTryHeader );
+
+	// Parse X-Try-Hubs header
+	CString HubsToTry = FindHeader("X-Try-Hubs");
+	if( !HubsToTry.IsEmpty() )
+		ParseHubsHeader( HubsToTry );
+
+
 	// Connect string, GNUTELLA CONNECT/0.6\r\n
 	if(m_Handshake.Find(m_NetworkName + " CONNECT/") != -1)
 	{
@@ -524,14 +550,6 @@ void CGnuNode::ParseIncomingHandshake06(CString Data, byte* Stream, int StreamLe
 				CloseWithReason("LAN Name Mismatch");
 				return;
 			}
-
-		// Parse User-Agent header
-		m_RemoteAgent = FindHeader("User-Agent");
-		if( !ValidAgent(m_RemoteAgent) )
-		{
-			CloseWithReason("Client Not Specified");
-			return;
-		}
 		
 		// Parse X-Query-Routing
 		bool QueryRouting = false;
@@ -722,22 +740,6 @@ void CGnuNode::ParseIncomingHandshake06(CString Data, byte* Stream, int StreamLe
 	// Error string
 	else
 	{
-		// Parse X-Try header
-		CString TryHeader = FindHeader("X-Try");
-		if(!TryHeader.IsEmpty())
-			ParseTryHeader( TryHeader );
-
-		// Parse X-Try-Ultrapeers header
-		CString UltraTryHeader = FindHeader("X-Try-Ultrapeers");
-		if(!UltraTryHeader.IsEmpty())
-			ParseTryHeader( UltraTryHeader );
-
-		// Parse X-Try-Hubs header
-		CString HubsToTry = FindHeader("X-Try-Hubs");
-		if( !HubsToTry.IsEmpty() )
-			ParseHubsHeader( HubsToTry );
-
-
 		CString StatusLine = m_Handshake.Left( m_Handshake.Find("\r\n") );
 		StatusLine.Replace( m_NetworkName + "/0.6 ", "");
 
@@ -756,6 +758,32 @@ void CGnuNode::ParseOutboundHandshake06(CString Data, byte* Stream, int StreamLe
 	m_lowHandshake.MakeLower();
 
 
+	// Make sure agent valid before adding hosts from it
+	if( m_RemoteAgent.IsEmpty() )
+		m_RemoteAgent = FindHeader("User-Agent");
+		
+	if( !ValidAgent(m_RemoteAgent) || !FindHeader("OPnext-uid").IsEmpty() ) // dont connect to openext client)
+	{
+		CloseWithReason("Client Not Valid");
+		return;
+	}
+
+	// Parse X-Try header
+	CString TryHeader = FindHeader("X-Try");
+	if(!TryHeader.IsEmpty())
+		ParseTryHeader( TryHeader );
+
+	// Parse X-Try-Ultrapeers header
+	CString UltraTryHeader = FindHeader("X-Try-Ultrapeers");
+	if(!UltraTryHeader.IsEmpty())
+		ParseTryHeader( UltraTryHeader );
+
+	// Parse X-Try-Hubs header
+	CString HubsToTry = FindHeader("X-Try-Hubs");
+	if( !HubsToTry.IsEmpty() )
+		ParseHubsHeader( HubsToTry );
+
+
 	// Ok string, GNUTELLA/0.6 200 OK\r\n
 	if(m_Handshake.Find(" 200 OK\r\n") != -1)
 	{
@@ -764,15 +792,6 @@ void CGnuNode::ParseOutboundHandshake06(CString Data, byte* Stream, int StreamLe
 		if(!RemoteIP.IsEmpty())
 			m_pNet->m_CurrentIP = StrtoIP(RemoteIP);
 	
-
-		// Parse User-Agent header
-		m_RemoteAgent = FindHeader("User-Agent");
-		if( !ValidAgent(m_RemoteAgent) )
-		{
-			CloseWithReason("Client Not Specified");
-			return;
-		}
-
 
 		// Parse LAN header
 		if(m_pPrefs->m_LanMode)
@@ -821,23 +840,6 @@ void CGnuNode::ParseOutboundHandshake06(CString Data, byte* Stream, int StreamLe
 		if(!AcceptHeader.IsEmpty())
 			if( AcceptHeader.Find("application/x-gnutella2") != -1 )
 				m_pNet->m_pCache->AddKnown( Node(IPtoStr(m_Address.Host), m_Address.Port, NETWORK_G2) );
-
-		// Parse X-Try header
-		CString TryHeader = FindHeader("X-Try");
-		if(!TryHeader.IsEmpty())
-			ParseTryHeader( TryHeader );
-
-
-		// Parse X-Try-Ultrapeers header
-		CString UltraTryHeader = FindHeader("X-Try-Ultrapeers");
-		if(!UltraTryHeader.IsEmpty())
-			ParseTryHeader( UltraTryHeader );
-
-
-		// Parse X-Try-Hubs header
-		CString HubsToTry = FindHeader("X-Try-Hubs");
-		if( !HubsToTry.IsEmpty() )
-			ParseHubsHeader( HubsToTry );
 
 
 		// Parse Authentication Response
@@ -988,14 +990,17 @@ void CGnuNode::ParseTryHeader(CString TryHeader)
 	int tryFront = 0, 
 		tryMid = TryHeader.Find(":"), 
 		tryBack = TryHeader.Find(",");
+
+	int Added = 0;
 	
-	while(tryBack != -1 && tryMid != -1)
+	while(tryBack != -1 && tryMid != -1 && Added < 5)
 	{
 		Node tryNode;
 		tryNode.Host = TryHeader.Mid(tryFront, tryMid - tryFront);
 		tryNode.Port = atoi( TryHeader.Mid(tryMid + 1, tryBack - tryMid + 1));
 
 		m_pCache->AddKnown( tryNode);
+		Added++;
 
 
 		tryFront  = tryBack + 1; 
@@ -1009,10 +1014,12 @@ void CGnuNode::ParseHubsHeader(CString HubsHeader)
 	if( m_pNet->m_pG2 == NULL )
 		return;
 
+	int Added = 0;
+
 	// 1.2.3.4:6346 2003-03-25T23:59Z,
 	CString Address = ParseString(HubsHeader, ',');
 
-	while( !Address.IsEmpty() )
+	while( !Address.IsEmpty() && Added < 5)
 	{
 		Node tryNode;
 		tryNode.Network = NETWORK_G2;
@@ -1025,6 +1032,7 @@ void CGnuNode::ParseHubsHeader(CString HubsHeader)
 		tryNode.LastSeen = StrToCTime(Address);
 
 		m_pCache->AddKnown( tryNode);
+		Added++;
 
 		Address = ParseString(HubsHeader, ',');
 	}
@@ -1429,10 +1437,10 @@ void CGnuNode::SetConnected()
 
 	
 	// For testing protcol compatibility
-	/*if( m_RemoteAgent.Find("1.1.0.0") == -1 )
-		if( m_RemoteAgent.Find("Lime") == -1 && m_RemoteAgent.Find("Bear") == -1 )
+	/*if( m_RemoteAgent.Find("1.1.0.7") == -1 )
+		//if( m_RemoteAgent.Find("Lime") == -1 && m_RemoteAgent.Find("Bear") == -1 )
 		{
-			CloseWithReason("Not DNA", false, false);
+			CloseWithReason("Not 1.1", false, false);
 			return;
 		}*/
 
@@ -2373,9 +2381,8 @@ bool CGnuNode::ValidAgent(CString Agent)
 	CString lowAgent = Agent;
 	lowAgent.MakeLower();
 
-	// Filter out hosts who try to use multiple vendors in user-agent header
-	if(lowAgent.Find("gnucleus") != -1 && lowAgent.Find("morpheus") != -1)
-		return false;
+	//if(lowAgent.Find("xxx") != -1)
+	//	return false;
 
 	return true;
 }

@@ -161,9 +161,6 @@ void CGnuCache::AddKnown(Node KnownNode)
 
 	if( m_pNet->NotLocal( Node(KnownNode.Host, KnownNode.Port) ) && m_pPrefs->AllowedIP(StrtoIP(KnownNode.Host)) && !m_pPrefs->BlockedIP(StrtoIP(KnownNode.Host)))
 	{
-		if( !NotRecent(StrtoIP(KnownNode.Host)) )
-			return;
-
 		if( !m_AllowPrivateIPs )
 			if( IsPrivateIP(StrtoIP(KnownNode.Host)) )
 				return;
@@ -179,7 +176,13 @@ void CGnuCache::AddKnown(Node KnownNode)
 
 		if(ActiveCache)
 		{
-			ActiveCache->push_front(KnownNode);
+			// put hosts tried in last minute at back of list, probably will be popped anyways
+			// fresh hosts at top of list
+
+			if( IsRecent(StrtoIP(KnownNode.Host)) )
+				ActiveCache->push_back(KnownNode);
+			else
+				ActiveCache->push_front(KnownNode);
 
 			while(ActiveCache->size() > m_MaxCacheSize)
 				ActiveCache->pop_back();
@@ -222,7 +225,7 @@ void CGnuCache::AddWorking(Node WorkingNode)
 	}
 }
 
-bool CGnuCache::NotRecent(IP Host)
+bool CGnuCache::IsRecent(IP Host)
 {
 	std::list<IP>::iterator itIP;
 	for(itIP = m_RecentIPs.begin(); itIP != m_RecentIPs.end(); itIP++)
@@ -230,15 +233,15 @@ bool CGnuCache::NotRecent(IP Host)
 		{
 			m_RecentIPs.erase(itIP);
 			m_RecentIPs.push_back(Host);
-			return false;
+			return true;
 		}
 
 	m_RecentIPs.push_back(Host);
 
-	if(m_RecentIPs.size() > 10)
+	if(m_RecentIPs.size() > RECENT_SIZE)
 		m_RecentIPs.pop_front();
 
-	return true;		
+	return false;		
 }
 
 void CGnuCache::RemoveIP(CString strIP, int Network)

@@ -350,10 +350,10 @@ void CGnuProtocol::Receive_Query(Gnu_RecvdPacket &Packet)
 
 			if(Query->Header.TTL == 1)
 				G1Query.UltraForward = true;
-
-			memcpy(G1Query.Packet, (byte*) Query, Packet.Length);
-			G1Query.PacketSize = Packet.Length;
 		}
+
+		memcpy(G1Query.Packet, (byte*) Query, Packet.Length);
+		G1Query.PacketSize = Packet.Length;
 
 		G1Query.Terms.push_back( CString((char*) Query + 25, TextSize) );
 

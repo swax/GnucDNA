@@ -317,12 +317,27 @@ void CGnuSearch::SendBrowseRequest(CString Host, int Port)
 
 void CGnuSearch::IncomingHost(FileSource &Source)
 {
-	// Check for duplicates in master list
+	int SubnetLimit = 0;
+
+	// check for duplicates
 	for(int i = 0; i < m_WholeList.size(); i++)
-		if(Source.Address.Host.S_addr == m_WholeList[i].Address.Host.S_addr && 
-		   Source.Address.Port == m_WholeList[i].Address.Port && 
-		   Source.Sha1Hash == m_WholeList[i].Sha1Hash)
-			return;
+		if(Source.Sha1Hash == m_WholeList[i].Sha1Hash)
+		{
+			// filter hosts from same subnet if not private
+			if( memcmp(&Source.Address.Host.S_addr, &m_WholeList[i].Address.Host.S_addr, 3) == 0 &&
+				!IsPrivateIP(Source.Address.Host) )
+			{
+				SubnetLimit++;
+			
+				if(SubnetLimit > SUBNET_LIMIT)
+					return;
+			}
+
+			// dupe host
+			if( Source.Address.Host.S_addr == m_WholeList[i].Address.Host.S_addr && 
+				Source.Address.Port == m_WholeList[i].Address.Port )
+				return;
+		}
 
 
 	m_WholeList.push_back(Source);

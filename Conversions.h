@@ -41,5 +41,7 @@ CString InsertDecimal(double);
 CString GetPercentage(DWORD , DWORD );
 CString IncrementName(CString);
 
+IPv4 AltLoctoAddress(CString AltLoc);
+
 } // end gdna namespace
 

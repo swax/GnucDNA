@@ -482,7 +482,7 @@ void CGnuDownload::OnReceive(int nErrorCode)
 					RemoteFileHash = "";
 				}
 
-				// Add this host to our alt-loc list
+				// We're connected, server has file hash, add as alt loc
 				if (!RemoteFileHash.IsEmpty() && !m_Push)
 					m_pShell->AddAltLocation(HostInfo()->Address);						
 			}
@@ -648,14 +648,14 @@ void CGnuDownload::OnReceive(int nErrorCode)
 						Address.Host = StrtoIP(OldFormat.HostPort.Host);
 						Address.Port = OldFormat.HostPort.Port;
 
-						m_pShell->AddAltLocation(Address);
+						AddHosttoMesh(Address);
 					}
 				
 					// X-Alt
 					else if (HeaderName == "x-alt")
 					{
 						// Parse headers breaks up commas
-						m_pShell->AddAltLocation( HeaderValue );
+						AddHosttoMesh( AltLoctoAddress(HeaderValue) );
 					}
 
 					// X-Push-Proxy
@@ -796,14 +796,14 @@ void CGnuDownload::OnReceive(int nErrorCode)
 						Address.Host = StrtoIP(OldFormat.HostPort.Host);
 						Address.Port = OldFormat.HostPort.Port;
 
-						m_pShell->AddAltLocation(Address);
+						AddHosttoMesh(Address);
 					}
 				
 					// X-Alt
 					else if (HeaderName == "x-alt")
 					{
 						// Parse headers breaks up commas
-						m_pShell->AddAltLocation( HeaderValue );
+						AddHosttoMesh( AltLoctoAddress(HeaderValue) );
 					}
 
 					// X-Push-Proxy
@@ -961,6 +961,10 @@ void CGnuDownload::Close()
 	if(HostInfo()->Error == "")
 		HostInfo()->Error = "Closed";
 	
+	
+	if(HostInfo()->Status == FileSource::eFailed)
+		m_pShell->AddNaltLocation(HostInfo()->Address);// add to nalt list
+
 
 	if(m_hSocket != INVALID_SOCKET)
 	{
@@ -1202,6 +1206,8 @@ void CGnuDownload::SendRequest()
 
 		// Alt-Location
 		GetFile += m_pShell->GetAltLocHeader( HostInfo()->Address.Host );
+		// NAlt-Location
+		GetFile += m_pShell->GetNaltLocHeader( HostInfo()->Address.Host );
 	}
 
 	// End header
@@ -1765,4 +1771,14 @@ bool CGnuDownload::LoadTigerTree()
 	}
 
 	return false;
+}
+
+void CGnuDownload::AddHosttoMesh(IPv4 Address)
+{
+	FileSource Info;
+	Info.Address  = Address;
+	Info.Size     = m_pShell->m_FileLength;
+	Info.Sha1Hash = m_pShell->m_Sha1Hash;
+
+	m_pShell->AddHost(Info);
 }

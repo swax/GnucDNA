@@ -14,6 +14,8 @@ class CGnuMeta;
 
 #define BUILD_GNUTELLA 1 // If G1 network activated, packets built and ready to go
 
+#define SUBNET_LIMIT 3
+
 class CGnuSearch
 {
 public:

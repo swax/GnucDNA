@@ -211,8 +211,9 @@ void CGnuDownloadShell::CreatePartList()
 
 void CGnuDownloadShell::AddHost(FileSource HostInfo)
 {
+	// filter for self
 	if((HostInfo.Address.Host.S_addr == m_pNet->m_CurrentIP.S_addr ||
-		StrtoIP("127.0.0.1").S_addr	 == m_pNet->m_CurrentIP.S_addr   ) && 
+		StrtoIP("127.0.0.1").S_addr	 == HostInfo.Address.Host.S_addr  ) && 
 		HostInfo.Address.Port	     == m_pNet->m_CurrentPort)
 		return;
 
@@ -231,8 +232,15 @@ void CGnuDownloadShell::AddHost(FileSource HostInfo)
 	if(m_ShellStatus == eCooling || m_ShellStatus == eWaiting)
 		m_ShellStatus = ePending;
 
+
+	int SubnetLimit = 0;
+
 	// Check for duplicate hosts
 	for(int i = 0; i < m_Queue.size(); i++)
+	{
+		if(memcmp(&HostInfo.Address.Host.S_addr, &m_Queue[i].Address.Host.S_addr, 3) == 0)
+			SubnetLimit++;
+
 		if( HostInfo.Address.Host.S_addr == m_Queue[i].Address.Host.S_addr && HostInfo.Address.Port == m_Queue[i].Address.Port )
 		{
 			m_Queue[i].FileIndex = HostInfo.FileIndex;
@@ -247,7 +255,10 @@ void CGnuDownloadShell::AddHost(FileSource HostInfo)
 
 			return;
 		}
+	}
 
+	if(SubnetLimit > SUBNET_LIMIT)
+		return;
 
 	HostInfo.Handshake = "";
 	HostInfo.Error     = "";
@@ -958,21 +969,6 @@ void CGnuDownloadShell::Erase()
 	DeleteFile(MetaPath);
 }
 
-void CGnuDownloadShell::AddAltLocation(CString strAddr)
-{
-	// Need special function to apply default port
-
-	IPv4 Address;
-	Address.Host = StrtoIP( ParseString(strAddr, ':') );
-	
-	if( !strAddr.IsEmpty() )
-		Address.Port = atoi( strAddr );
-	else
-		Address.Port = 6346; // lime doesnt send port all the time
-
-	AddAltLocation(Address);
-}
-
 void CGnuDownloadShell::AddAltLocation(IPv4 Address)
 {
 	ASSERT(Address.Port);
@@ -985,6 +981,16 @@ void CGnuDownloadShell::AddAltLocation(IPv4 Address)
 	if( !m_pNet->NotLocal( Node( IPtoStr(Address.Host), Address.Port) ) )
 		return;
 
+	// Remove from Nalt list
+	std::deque<IPv4>::iterator itNalt;
+	for(itNalt = m_NaltHosts.begin(); itNalt != m_NaltHosts.end(); itNalt++)
+		if(itNalt->Host.S_addr == Address.Host.S_addr)
+		{
+			m_NaltHosts.erase(itNalt);
+			break;
+		}
+
+	// check for dupe
 	for(int i = 0; i < m_AltHosts.size(); i++)
 		if(Address.Host.S_addr == m_AltHosts[i].Host.S_addr)
 		{
@@ -993,13 +999,6 @@ void CGnuDownloadShell::AddAltLocation(IPv4 Address)
 		}
 
 	m_AltHosts.push_back(Address);
-
-	FileSource Info;
-	Info.Address  = Address;
-	Info.Size     = m_FileLength;
-	Info.Sha1Hash = m_Sha1Hash;
-
-	AddHost(Info);
 }
 
 CString CGnuDownloadShell::GetAltLocHeader(IP ToIP, int HostCount)
@@ -1035,6 +1034,82 @@ CString CGnuDownloadShell::GetAltLocHeader(IP ToIP, int HostCount)
 
 	for(j = 0; j < HostIndexes.size(); j++)
 		Header += IPv4toStr(m_AltHosts[ HostIndexes[j] ]) + ", ";
+
+	if( HostIndexes.size() == 0)
+		return "";
+
+	Header.Trim(", ");
+	
+	Header += "\r\n";
+
+	return Header;
+}
+
+void CGnuDownloadShell::AddNaltLocation(IPv4 Address)
+{
+	ASSERT(Address.Port);
+	if(Address.Port == 0)
+		return;
+
+	if( IsPrivateIP(Address.Host) )
+		return;
+
+	if( !m_pNet->NotLocal( Node( IPtoStr(Address.Host), Address.Port) ) )
+		return;
+
+	// Remove from Alt list
+	std::deque<IPv4>::iterator itAlt;
+	for(itAlt = m_AltHosts.begin(); itAlt != m_AltHosts.end(); itAlt++)
+		if(itAlt->Host.S_addr == Address.Host.S_addr)
+		{
+			m_AltHosts.erase(itAlt);
+			break;
+		}
+
+	// check for dupe
+	for(int i = 0; i < m_NaltHosts.size(); i++)
+		if(Address.Host.S_addr == m_NaltHosts[i].Host.S_addr)
+		{
+			m_NaltHosts[i] = Address; // maybe new port
+			return;
+		}
+
+	m_NaltHosts.push_back(Address);
+}
+
+CString CGnuDownloadShell::GetNaltLocHeader(IP ToIP, int HostCount)
+{
+	CString Header = "X-NAlt: ";
+
+	int j = 0;
+
+	if(m_NaltHosts.size() < HostCount)
+		HostCount = m_NaltHosts.size(); 
+
+	std::vector<int> HostIndexes;
+
+	// Get random indexes to send to host
+	while(HostCount > 0)
+	{
+		HostCount--;
+
+		int NewIndex = rand() % m_NaltHosts.size() + 0;
+
+		if(ToIP.S_addr == m_NaltHosts[NewIndex].Host.S_addr)
+			continue;
+
+		bool found = false;
+
+		for(j = 0; j < HostIndexes.size(); j++)
+			if(HostIndexes[j] == NewIndex)
+				found = true;
+
+		if(!found)
+			HostIndexes.push_back(NewIndex);
+	}
+
+	for(j = 0; j < HostIndexes.size(); j++)
+		Header += IPv4toStr(m_NaltHosts[ HostIndexes[j] ]) + ", ";
 
 	if( HostIndexes.size() == 0)
 		return "";

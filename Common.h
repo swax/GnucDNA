@@ -37,20 +37,6 @@ CString HexDump(byte* buffer, int length);
 
 bool IsPrivateIP(IP Address);
 
-#pragma pack (push, 1)
-struct IPv4
-{
-	IP Host;
-	UINT Port;
-
-	IPv4()
-	{
-		Host.S_addr = 0;
-		Port = 0;
-	};
-};
-#pragma pack (pop)
-
 CString IPv4toStr(IPv4 Address);
 IPv4    StrtoIPv4(CString HostPort);
 
@@ -187,6 +173,13 @@ struct FileSource
 	FileSource() 
 	{	
 		Init();
+	};
+
+	FileSource(IPv4 address, int size, CString hash)
+	{
+		Address  = address;
+		Size     = size;
+		Sha1Hash = hash;
 	};
 
 	FileSource(AltLocation& nAltLoc)

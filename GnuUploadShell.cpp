@@ -431,20 +431,17 @@ void CGnuUploadShell::ParseRequest(CString Handshake)
 		// Alt-Location header
 		else if (HeaderName.Right(12) == "alt-location" || HeaderName.Right(18) == "alternate-location")
 		{
-			AltLocation OldFormat = HeaderValue;
-			
-			IPv4 Location;
-			Location.Host = StrtoIP( OldFormat.HostPort.Host);
-			Location.Port = OldFormat.HostPort.Port;
-
-			if (!m_Sha1Hash.IsEmpty())
-				m_pShare->AddShareAltLocation(m_Sha1Hash, Location);
+			// dont add to local alt list, only hosts uploaded to are added
 		}
 
 		else if (HeaderName  == "x-alt")
 		{
-			if (!m_Sha1Hash.IsEmpty())
-				m_pShare->AddShareAltLocation(m_Sha1Hash, HeaderValue);
+			// dont add to local alt list, only hosts uploaded to are added
+		}
+
+		else if (HeaderName  == "x-nalt")
+		{
+			m_pShare->RemoveShareAltLocation( m_Sha1Hash, AltLoctoAddress(HeaderValue));
 		}
 
 		// X-Queue header (signals that client wants to be queued)

@@ -40,6 +40,18 @@ union IP										// Size 4
 	};
 };
 
+struct IPv4
+{
+	IP Host;
+	UINT Port;
+
+	IPv4()
+	{
+		Host.S_addr = 0;
+		Port = 0;
+	};
+};
+
 struct Node
 {
 	int     Network;

@@ -58,9 +58,10 @@ public:
 	bool  m_BlockUpdate;
 
 	// Alt Locations
-	void    AddShareAltLocation(CString Hash, CString strAddr);
 	void    AddShareAltLocation(CString Hash, IPv4 Location);
 	CString GetShareAltLocHeader(CString Hash, IP ToIP, int HostCount=6);
+
+	void    RemoveShareAltLocation(CString Hash, IPv4 Location);
 
 	// Stats
 	double m_Freq;

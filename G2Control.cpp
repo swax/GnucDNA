@@ -547,7 +547,8 @@ void CG2Control::TryConnect()
 		// If Real list has values
 		if(m_pCache->m_G2Real.size())
 		{
-			int randIndex = ( m_pCache->m_G2Real.size() > 10) ? rand() % m_pCache->m_G2Real.size() : rand() % 10;
+			// try a random host from top 15, x-try adds max 5, reduces one nodes chance of messing with cache
+			int randIndex = ( m_pCache->m_G2Real.size() > 15) ? rand() % 15 : rand() % m_pCache->m_G2Real.size();
 
 			std::list<Node>::iterator itNode = m_pCache->m_G2Real.begin();
 			for(int i = 0; itNode != m_pCache->m_G2Real.end(); itNode++, i++)
@@ -594,7 +595,8 @@ void CG2Control::TryConnect()
 		// Nothing in G2 caches, try G1 nodes for entry to G2
 		if(m_pCache->m_GnuReal.size())
 		{
-			int randIndex = ( m_pCache->m_GnuReal.size() > 10) ? rand() % m_pCache->m_GnuReal.size() : rand() % 10;
+			// try a random host from top 15, x-try adds max 5, reduces one nodes chance of messing with cache
+			int randIndex = ( m_pCache->m_GnuReal.size() > 15) ? rand() % rand() % 15 : m_pCache->m_GnuReal.size();
 
 			std::list<Node>::iterator itNode = m_pCache->m_GnuReal.begin();
 			for(int i = 0; itNode != m_pCache->m_GnuReal.end(); itNode++, i++)

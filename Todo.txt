@@ -1,4 +1,7 @@
 
+force 1.1 ultrapeer, test manual upgrade of child
+
+
 Test
 	Gnutella Leaf Mode / Preferencing / Upgrade Path
 	Gnutella Ultrapeer Mode / Preferencing / Upgrade Path
@@ -21,7 +24,8 @@ G2
 	Q2/NAT
 	
 	If PI/RELAY recved with UDP address of directly connected host (but not from directly	 connected host), disconnect youngest link
-	ASSERT size of udp being sent, make sure QH does not overflow
+	ASSER
+	T size of udp being sent, make sure QH does not overflow
 	
 Now	
 	IPrefs::SetSpeedUp

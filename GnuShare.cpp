@@ -742,19 +742,6 @@ void CGnuShare::Timer()
 		m_Minute = 0; 
 	}*/
 }
- 
-void CGnuShare::AddShareAltLocation(CString Hash, CString strAddr)
-{
-	IPv4 Address;
-	Address.Host = StrtoIP( ParseString(strAddr, ':') );
-	
-	if( !strAddr.IsEmpty() )
-		Address.Port = atoi( strAddr );
-	else
-		Address.Port = 6346; // lime doesnt send port all the time
-
-	AddShareAltLocation(Hash, Address);
-}
 
 void CGnuShare::AddShareAltLocation(CString Hash, IPv4 Location)
 {
@@ -864,6 +851,30 @@ CString CGnuShare::GetShareAltLocHeader(CString Hash, IP ToIP, int HostCount)
 	return Header;
 }
 
+void CGnuShare::RemoveShareAltLocation(CString Hash, IPv4 Location)
+{
+	m_FilesAccess.Lock();
 
+		int FileIndex = 0;
+		std::map<CString, int>::iterator itShare = m_SharedHashMap.find(Hash);
+		if(itShare != m_SharedHashMap.end())
+			FileIndex = itShare->second;
+
+		if(FileIndex == 0)
+		{
+			m_FilesAccess.Unlock();
+			return;
+		}
+
+		std::deque<IPv4>::iterator itAlt;
+		for(itAlt = m_SharedFiles[FileIndex].AltHosts.begin(); itAlt != m_SharedFiles[FileIndex].AltHosts.end(); itAlt++)
+			if (Location.Host.S_addr == itAlt->Host.S_addr)
+				{
+					m_SharedFiles[FileIndex].AltHosts.erase(itAlt);
+					break;
+				}
+
+	m_FilesAccess.Unlock();
+}
 
 	

@@ -14,6 +14,9 @@ class CGnuPrefs;
 #define GWC_VERSION1	1 
 #define	GWC_VERSION2	2
 
+#define RECENT_SIZE 60
+
+
 struct AltWebCache
 {
 	CString URL;
@@ -50,7 +53,7 @@ public:
 	void AddKnown(Node ActiveNode);
 	void AddWorking(Node WorkingNode);
 
-	bool NotRecent(IP);
+	bool IsRecent(IP);
 	void RemoveIP(CString, int);
 
 	// Web Cache funtions

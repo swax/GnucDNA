@@ -38,9 +38,11 @@ public:
 
 	bool CheckCompletion();
 
-	void AddAltLocation(CString strAddr);
 	void AddAltLocation(IPv4 Address);
 	CString GetAltLocHeader(IP ToIP, int HostCount=6);
+
+	void AddNaltLocation(IPv4 Address);
+	CString GetNaltLocHeader(IP ToIP, int HostCount=6);
 
 	void Start();
 	void Stop();
@@ -142,6 +144,7 @@ public:
 	byte m_Packet[255];
 
 	std::deque<IPv4> m_AltHosts;
+	std::deque<IPv4> m_NaltHosts;
 
 	// Proxy
 	bool    m_UseProxy;

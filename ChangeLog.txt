@@ -1,3 +1,14 @@
+GnucDNA 1.1.0.8
+	swabby: X-Try headers always parsed during handshake
+	swabby: Newer hosts to cache attempted first for connections
+	swabby: Put a max on alt hosts that will be used from one source
+	swabby: Fixed outbound ttl for queryhits not being set correctly
+	swabby: ID3-less hashing turned on by default
+	swabby: Limited amount of hosts from a single subnet
+	swabby: X-Alt hosts must be verified first before adding to mesh
+	swabby: X-Nalt suppport added
+	swabby: Banned openext hosts
+
 GnucDNA 1.1.0.7
 	swabby: Added support for X-THEX-URI TigerTree header
 	swabby: Added support for DIME and XML based TigerTrees

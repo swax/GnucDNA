@@ -350,7 +350,7 @@ void CGnuUpload::StartUpload()
 
 		
 		if(!m_ListenIP.IsEmpty() && !m_pShell->m_Sha1Hash.IsEmpty())
-			m_pShare->AddShareAltLocation(m_pShell->m_Sha1Hash, m_ListenIP);
+			m_pShare->AddShareAltLocation(m_pShell->m_Sha1Hash, AltLoctoAddress(m_ListenIP));
 		
 		// Start upload thread
 		GnuEndThread(m_pUploadThread);

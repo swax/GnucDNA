@@ -52,3 +52,23 @@ Math worst case
 	G2 whole network...
 	
 
+
+Connecting
+	Trust 5 alt hosts from remote node
+	Pick random node from top 15 to try next
+	If cache item is added that has been tried in last minute put at bottom of list
+
+Downloading
+	only hosts that transferred put on alt
+	hosts that didnt work put on nalt
+	nalt is used to notify upload side
+
+Subnets
+	Only use 3 hosts per class C subnet to prevent flooding
+	Doesnt apply to private IPs, limewire sends them like crazy
+
+upload
+	only hosts transferred data to put on alt
+	take hosts off if received nalt for it // no rouge is going to know everyone we're transferring to
+	servers dont send or keep nalt list
+

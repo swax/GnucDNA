@@ -568,6 +568,29 @@ void CG2Node::ParseOutboundHandshake(CString Data, byte* Stream, int StreamLengt
 	m_lowHandshake.MakeLower();
 
 
+	// Make sure agent valid before adding hosts from it
+	if( m_RemoteAgent.IsEmpty() )
+		m_RemoteAgent = FindHeader("User-Agent");
+		
+	if( !ValidAgent(m_RemoteAgent) )
+	{
+		CloseWithReason("Client Not Valid");
+		return;
+	}
+
+
+	// Parse X-Try-Hubs header
+	CString HubsToTry = FindHeader("X-Try-Hubs");
+	if( !HubsToTry.IsEmpty() )
+		ParseTryHeader( HubsToTry );
+
+	// Parse X-Try-Ultrapeers
+	if(m_lowHandshake.Find("application/x-gnutella2") != -1)
+		ParseTryHeader( FindHeader("X-Try-Ultrapeers") );
+	else
+		ParseG1TryHeader( FindHeader("X-Try-Ultrapeers") );
+
+
 	// Ok string, GNUTELLA/0.6 200 OK\r\n
 	if(m_Handshake.Find(" 200 OK\r\n") != -1)
 	{
@@ -576,14 +599,10 @@ void CG2Node::ParseOutboundHandshake(CString Data, byte* Stream, int StreamLengt
 		if(!RemoteIP.IsEmpty())
 			m_pNet->m_CurrentIP = StrtoIP(RemoteIP);
 
-		// Parse User-Agent header
-		m_RemoteAgent = FindHeader("User-Agent");
-
 		// Parse Accept header
 		CString AcceptHeader = FindHeader("Accept");
 		if( AcceptHeader.IsEmpty() || AcceptHeader.Find("application/x-gnutella2") == -1)
 		{
-			ParseG1TryHeader( FindHeader("X-Try-Ultrapeers") );
 			Send_ConnectError("503 Required network not accepted");
 			return;
 		}
@@ -592,7 +611,6 @@ void CG2Node::ParseOutboundHandshake(CString Data, byte* Stream, int StreamLengt
 		CString ContentHeader = FindHeader("Content-Type");
 		if( ContentHeader.IsEmpty() || ContentHeader.Find("application/x-gnutella2") == -1)
 		{
-			ParseG1TryHeader( FindHeader("X-Try-Ultrapeers") );
 			Send_ConnectError("503 Required network not provided");
 			return;
 		}
@@ -606,16 +624,6 @@ void CG2Node::ParseOutboundHandshake(CString Data, byte* Stream, int StreamLengt
 		EncodingHeader = FindHeader("Content-Encoding");
 		if(m_dnapressionOn && EncodingHeader == "deflate")
 			m_InflateRecv = true;
-
-		// Parse X-Try-Ultrapeers header
-		CString UltraTryHeader = FindHeader("X-Try-Ultrapeers");
-		if(!UltraTryHeader.IsEmpty())
-			ParseTryHeader( UltraTryHeader );
-
-		// Parse X-Try-Hubs header
-		CString HubsToTry = FindHeader("X-Try-Hubs");
-		if( !HubsToTry.IsEmpty() )
-			ParseTryHeader( HubsToTry );
 
 		// Parse Authentication Response
 		if( !m_Challenge.IsEmpty() )
@@ -709,19 +717,6 @@ void CG2Node::ParseOutboundHandshake(CString Data, byte* Stream, int StreamLengt
 	// Connect failed, 200 OK not received
 	else
 	{
-		// Parse X-Try-Ultrapeers header
-		CString UltraTryHeader = FindHeader("X-Try-Ultrapeers");
-		if(!UltraTryHeader.IsEmpty())
-			ParseTryHeader( UltraTryHeader );
-
-		// Parse X-Try-Hubs header
-		CString HubsToTry = FindHeader("X-Try-Hubs");
-		if( !HubsToTry.IsEmpty() )
-			ParseTryHeader( HubsToTry );
-
-		ParseG1TryHeader( FindHeader("X-Try-Ultrapeers") );
-
-
 		CString StatusLine = m_Handshake.Left( m_Handshake.Find("\r\n") );
 		StatusLine.Replace( "GNUTELLA/0.6 ", "");
 
@@ -737,6 +732,29 @@ void CG2Node::ParseIncomingHandshake(CString Data, byte* Stream, int StreamLengt
 
 	m_lowHandshake = m_Handshake;
 	m_lowHandshake.MakeLower();
+
+
+	// Make sure agent valid before adding hosts from it
+	if( m_RemoteAgent.IsEmpty() )
+		m_RemoteAgent = FindHeader("User-Agent");
+		
+	if( !ValidAgent(m_RemoteAgent) )
+	{
+		CloseWithReason("Client Not Valid");
+		return;
+	}
+
+
+	// Parse X-Try-Hubs header
+	CString HubsToTry = FindHeader("X-Try-Hubs");
+	if( !HubsToTry.IsEmpty() )
+		ParseTryHeader( HubsToTry );
+
+	// Parse X-Try-Ultrapeers
+	if(m_lowHandshake.Find("application/x-gnutella2") != -1)
+		ParseTryHeader( FindHeader("X-Try-Ultrapeers") );
+	else
+		ParseG1TryHeader( FindHeader("X-Try-Ultrapeers") );
 
 
 	// Connect string, GNUTELLA CONNECT/0.6\r\n
@@ -758,15 +776,10 @@ void CG2Node::ParseIncomingHandshake(CString Data, byte* Stream, int StreamLengt
 			m_Address.Port = G2Host.Port;
 		}
 
-		// Parse User-Agent header
-		m_RemoteAgent = FindHeader("User-Agent");
-
-
 		// Parse Accept header
 		CString AcceptHeader = FindHeader("Accept");
 		if( AcceptHeader.IsEmpty() || AcceptHeader.Find("application/x-gnutella2") == -1)
 		{
-			ParseG1TryHeader( FindHeader("X-Try-Ultrapeers") );
 			Send_ConnectError("503 Required network not accepted");
 			return;
 		}
@@ -791,19 +804,7 @@ void CG2Node::ParseIncomingHandshake(CString Data, byte* Stream, int StreamLengt
 		if(m_pCore->m_dnaCore->m_dnaEvents)
 			m_pCore->m_dnaCore->m_dnaEvents->NetworkAuthenticate(m_G2NodeID);
 
-
-
-		// Parse X-Try-Ultrapeers header
-		CString UltraTryHeader = FindHeader("X-Try-Ultrapeers");
-		if(!UltraTryHeader.IsEmpty())
-			ParseTryHeader( UltraTryHeader );
-
-		// Parse X-Try-Hubs header
-		CString HubsToTry = FindHeader("X-Try-Hubs");
-		if( !HubsToTry.IsEmpty() )
-			ParseTryHeader( HubsToTry );
-
-
+		
 		//Parse Ultrapeer header
 		CString UltraHeader = FindHeader("X-Ultrapeer");
 		if(!UltraHeader.IsEmpty())
@@ -886,7 +887,6 @@ void CG2Node::ParseIncomingHandshake(CString Data, byte* Stream, int StreamLengt
 		CString ContentHeader = FindHeader("Content-Type");
 		if( ContentHeader.IsEmpty() || ContentHeader.Find("application/x-gnutella2") == -1)
 		{
-			ParseG1TryHeader( FindHeader("X-Try-Ultrapeers") );
 			Send_ConnectError("503 Required network not provided");
 			return;
 		}
@@ -929,19 +929,6 @@ void CG2Node::ParseIncomingHandshake(CString Data, byte* Stream, int StreamLengt
 	// Error string
 	else
 	{
-		// Parse X-Try-Ultrapeers header
-		CString UltraTryHeader = FindHeader("X-Try-Ultrapeers");
-		if(!UltraTryHeader.IsEmpty())
-			ParseTryHeader( UltraTryHeader );
-
-		// Parse X-Try-Hubs header
-		CString HubsToTry = FindHeader("X-Try-Hubs");
-		if( !HubsToTry.IsEmpty() )
-			ParseTryHeader( HubsToTry );
-
-		ParseG1TryHeader( FindHeader("X-Try-Ultrapeers") );
-
-
 		CString StatusLine = m_Handshake.Left( m_Handshake.Find("\r\n") );
 		StatusLine.Replace( "GNUTELLA/0.6 ", "");
 
@@ -1028,10 +1015,10 @@ void CG2Node::Send_ConnectOK(bool Reply)
 			Handshake += "X-Auth-Challenge: " + m_Challenge + "\r\n";
 
 
-		// X-Try-Ultrapeers header
+		// X-Try-Hubs header
 		CString HubsToTry;
 		if(m_pG2Comm->GetAltHubs(HubsToTry, this))
-			Handshake += "X-Try-Ultrapeers: " + HubsToTry + "\r\n";	
+			Handshake += "X-Try-Hubs: " + HubsToTry + "\r\n";	
 
 		Handshake += "\r\n";
 	}
@@ -1091,10 +1078,12 @@ CString CG2Node::FindHeader(CString Name)
 
 void CG2Node::ParseTryHeader(CString TryHeader)
 {
+	int Added = 0;
+
 	// 1.2.3.4:6346 2003-03-25T23:59Z,
 	CString Address = ParseString(TryHeader, ',');
 
-	while( !Address.IsEmpty() )
+	while( !Address.IsEmpty() && Added < 5)
 	{
 		Node tryNode;
 		tryNode.Network = NETWORK_G2;
@@ -1107,6 +1096,7 @@ void CG2Node::ParseTryHeader(CString TryHeader)
 		tryNode.LastSeen = StrToCTime(Address);
 
 		m_pCache->AddKnown( tryNode);
+		Added++;
 
 		// Add hubs to global cache
 		G2NodeInfo Hub;
@@ -1125,16 +1115,19 @@ void CG2Node::ParseTryHeader(CString TryHeader)
 
 void CG2Node::ParseG1TryHeader(CString TryHeader)
 {
+	int Added = 0;
+
 	// 1.2.3.4:6346,
 	CString Address = ParseString(TryHeader, ',');
 
-	while( !Address.IsEmpty() )
+	while( !Address.IsEmpty() && Added < 5)
 	{
 		Node tryNode;
 		tryNode.Host    = ParseString(Address, ':');
 		tryNode.Port    = atoi(ParseString(Address, ' '));
 
 		m_pCache->AddKnown(tryNode);
+		Added++;
 
 		Address = ParseString(TryHeader, ',');
 	}
@@ -1492,4 +1485,14 @@ void CG2Node::OnSend(int nErrorCode)
 	CAsyncSocket::OnSend(nErrorCode);
 }
 
+bool CG2Node::ValidAgent(CString Agent)
+{
+	CString lowAgent = Agent;
+	lowAgent.MakeLower();
+
+	if(lowAgent.Find("gnucdna") != -1 || lowAgent.Find("shareaza") != -1 )
+		return true;
+
+	return false;
+}
 
