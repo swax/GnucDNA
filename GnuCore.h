@@ -67,7 +67,7 @@ public:
 	CString m_DebugFilename;
 
 	#ifdef _DEBUG
-		uint32 GetVirtualMemUsage();
+		//uint32 GetVirtualMemUsage();
 		
 		CMemoryState m_OldMemState;
 		CMemoryState m_NewMemState;

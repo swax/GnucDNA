@@ -36,8 +36,8 @@
 #include "GnuUpdate.h"
 #include "GnuChat.h"
 
-#include "psapi.h"
-#include "process.h"
+//#include "psapi.h"
+//#include "process.h"
 
 #include "GnuCore.h"
 
@@ -291,7 +291,7 @@ void CGnuCore::DebugLog(CString Section, CString Entry)
 #endif
 }
 
-#ifdef _DEBUG
+/*#ifdef _DEBUG
 uint32 CGnuCore::GetVirtualMemUsage()
 {
 	HANDLE handle = OpenProcess(PROCESS_QUERY_INFORMATION, FALSE, _getpid());
@@ -308,7 +308,7 @@ uint32 CGnuCore::GetVirtualMemUsage()
 
 	return 0;
 }
-#endif
+#endif*/
 
 void CGnuCore::DebugTrigger(bool details)
 {
