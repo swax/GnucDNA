@@ -35,6 +35,7 @@
 #include "GnuControl.h"
 #include "GnuDownloadShell.h"
 #include "GnuPrefs.h"
+#include "Dime.h"
 
 #include "GnuUpload.h"
 #include "GnuUploadQueue.h"
@@ -70,6 +71,7 @@ CGnuUploadShell::CGnuUploadShell(CGnuTransfers* pTrans)
 	m_RequsetPending   = false;
 
 	m_TigerTreeRequest = false;
+	m_TigerThexRequest = false;
 	m_TigerTree	= NULL;
 	m_TreeSize  = 0;
 
@@ -225,6 +227,30 @@ void CGnuUploadShell::ParseRequest(CString Handshake)
 		m_TigerTreeRequest = true;
 	}
 
+	else if (LowRequestURI.Left(34) == "/gnutella/thex/v1?urn:tree:tiger/:")
+	{
+		m_TigerHash = m_RequestURI.Mid(34);
+		m_TigerHash.MakeUpper();
+
+		m_Index = m_pShare->m_pHash->GetHashIndex(HASH_TIGERTREE, m_TigerHash);
+		m_Name  = m_TigerHash;
+
+		m_TigerTreeRequest = true;
+		m_TigerThexRequest = true;
+	}
+
+	else if (LowRequestURI.Left(22) == "/uri-res/N2X?urn:sha1:")
+	{
+		m_Sha1Hash = m_RequestURI.Mid(22);
+		m_Sha1Hash.MakeUpper();
+
+		m_Index = m_pShare->m_pHash->GetHashIndex(HASH_SHA1, m_Sha1Hash);
+		m_Name  = m_Sha1Hash;
+
+		m_TigerTreeRequest = true;
+		m_TigerThexRequest = true;
+	}
+
 	else
 	{
 		m_Socket->Send_HttpNotFound();
@@ -378,6 +404,8 @@ void CGnuUploadShell::ParseRequest(CString Handshake)
 		// User-Agent header
 		else if (HeaderName == "user-agent")
 		{
+			m_RemoteClient = HeaderValue;
+
 			HeaderValue.MakeLower();
 
 			// Block normal browsers
@@ -386,6 +414,11 @@ void CGnuUploadShell::ParseRequest(CString Handshake)
 				m_Socket->Send_BrowserBlock();
 				return;
 			}
+		}
+
+		else if (HeaderName == "server")
+		{
+			m_RemoteClient = HeaderValue;
 		}
 
 		// Listen-IP header
@@ -836,9 +869,39 @@ bool CGnuUploadShell::LoadTigerTree()
 					return false;
 				}
 
-				m_TigerTree = new byte[(*itFile).TreeSize];
-				m_TreeSize  = (*itFile).TreeSize;
-				memcpy(m_TigerTree, (*itFile).TigerTree, m_TreeSize);
+				// if thex 
+				if( m_TigerThexRequest )
+				{
+					int TigerBuffSize = (*itFile).TreeSize + 4096;
+
+					m_TigerTree = new byte[TigerBuffSize]; // extra space for dime
+					
+					// write xml record
+					CString XmlRecordType = "text/xml";
+					CString XmlRecordData;
+					XmlRecordData += "<?xml version=\"1.0\" encoding=\"UTF-8\"?>";
+					XmlRecordData += "<!DOCTYPE hashtree SYSTEM \"http://open-content.net/spec/thex/thex.dtd\">";
+					XmlRecordData += "<hashtree>";
+					XmlRecordData += "<file size='" + NumtoStr((*itFile).Size) + "' segmentsize='1024'/>";
+					XmlRecordData += "<digest algorithm='http://open-content.net/spec/digest/tiger' outputsize='24'/>";
+					XmlRecordData += "<serializedtree depth='" + NumtoStr((*itFile).TreeDepth) + "' type='http://open-content.net/spec/thex/breadthfirst' uri='uuid:29242d8b-0e8e-41f2-a970-aea8e92231d9'/>";
+			
+					DIME TigerDime(m_TigerTree, TigerBuffSize);
+					m_TreeSize = TigerDime.WriteRecord(0x0C, 0x10, "", "text/xml", (LPCSTR) XmlRecordData, XmlRecordData.GetLength());
+				
+					// write binary record
+					CString TigerRecordType = "http://open-content.net/spec/thex/breadthfirst";
+					CString TigerRecordID   = "uuid:29242d8b-0e8e-41f2-a970-aea8e92231d9";
+				
+					m_TreeSize += TigerDime.WriteRecord(0x0A, 0x20, TigerRecordID, TigerRecordType, (*itFile).TigerTree, (*itFile).TreeSize);
+				}	
+
+				// else
+				{
+					m_TigerTree = new byte[(*itFile).TreeSize];
+					m_TreeSize  = (*itFile).TreeSize;
+					memcpy(m_TigerTree, (*itFile).TigerTree, m_TreeSize);
+				}
 
 				m_StopPos    = m_TreeSize;
 				m_FileLength = m_TreeSize;

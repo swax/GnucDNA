@@ -44,6 +44,7 @@
 #include "DnaEvents.h"
 
 #include "hash/TigerTree2.h"
+#include "Dime.h"
 
 #include "GnuDownloadShell.h"
 #include "GnuDownload.h"
@@ -1481,8 +1482,6 @@ void CGnuDownload::DownloadBytes(byte* pBuff, int nSize)
 					if(CurrentRecord.Last)
 						break;
 				}
-
-				
 			}
 
 			// No THEX, content-length is entire tree
@@ -1768,126 +1767,6 @@ bool CGnuDownload::LoadTigerTree()
 	}
 
 	return false;
-}
-
-
-// DIME Stuff
-
-DIME::DIME(byte* pData, int length)
-{
-	m_pData  = pData;
-	m_Length = length;
-
-	m_pNextPos  = pData;
-	m_BytesLeft = length;
-}
-
-DIME::ReadResult DIME::ReadNextRecord(DimeRecord &Record)
-{
-	Record = DimeRecord();
-
-	if(m_BytesLeft < 12)
-		return DIME::READ_INCOMPLETE;
-
-	// byte 0
-	if(*m_pNextPos >> 3 != 1) // version error
-		return DIME::READ_ERROR;
-
-	Record.First   = (*m_pNextPos >> 2) & 0x01;
-	Record.Last    = (*m_pNextPos >> 1) & 0x01;
-	Record.Chunked = *m_pNextPos & 0x01;
-
-	m_pNextPos++;
-	m_BytesLeft--;
-
-	// byte 1
-	Record.tType = *m_pNextPos >> 4;
-	m_pNextPos++;
-	m_BytesLeft--;
-
-	// byte 2 - 3
-	Record.OptionsLength = ( m_pNextPos[0] << 8 ) + m_pNextPos[1];
-	m_pNextPos  += 2;
-	m_BytesLeft -= 2;
-
-	// byte 4 - 5
-	Record.IDLength = ( m_pNextPos[0] << 8 ) + m_pNextPos[1];
-	m_pNextPos  += 2;
-	m_BytesLeft -= 2;
-
-	// byte 6 - 7
-	Record.TypeLength = ( m_pNextPos[0] << 8 ) + m_pNextPos[1];
-	m_pNextPos  += 2;
-	m_BytesLeft -= 2;
-
-	// byte 8 - 11
-	Record.DataLength = ( m_pNextPos[0] << 24 ) + ( m_pNextPos[1] << 16 ) + ( m_pNextPos[2] << 8 ) + m_pNextPos[3];
-	m_pNextPos  += 4;
-	m_BytesLeft -= 4;
-
-	// Get options
-	if(Record.OptionsLength)
-	{
-		while(Record.OptionsLength % 4 != 0)
-			Record.OptionsLength++;
-
-		if(m_BytesLeft < Record.OptionsLength)
-			return DIME::READ_INCOMPLETE;
-
-		Record.Options = CString((char*) m_pNextPos, Record.OptionsLength);
-
-		m_pNextPos  += Record.OptionsLength;
-		m_BytesLeft -= Record.OptionsLength;
-	}
-
-	// Get ID
-	if(Record.IDLength)
-	{
-		while(Record.IDLength % 4 != 0)
-			Record.IDLength++;
-
-		if(m_BytesLeft < Record.IDLength)
-			return DIME::READ_INCOMPLETE;
-
-		Record.ID = CString((char*) m_pNextPos, Record.IDLength);
-
-		m_pNextPos  += Record.IDLength;
-		m_BytesLeft -= Record.IDLength;
-	}
-
-	// Get type
-	if(Record.TypeLength)
-	{
-		while(Record.TypeLength % 4 != 0)
-			Record.TypeLength++;
-
-		if(m_BytesLeft < Record.TypeLength)
-			return DIME::READ_INCOMPLETE;
-
-		Record.Type = CString((char*) m_pNextPos, Record.TypeLength);
-
-		m_pNextPos  += Record.TypeLength;
-		m_BytesLeft -= Record.TypeLength;
-	}
-
-	// Get data
-	if(Record.DataLength)
-	{
-		uint16 PaddedLength = Record.DataLength;
-
-		while(PaddedLength % 4 != 0)
-			PaddedLength++;
-
-		if(m_BytesLeft < PaddedLength)
-			return DIME::READ_INCOMPLETE;
-
-		Record.Data = m_pNextPos;
-
-		m_pNextPos  += PaddedLength;
-		m_BytesLeft -= PaddedLength;
-	}
-
-	return DIME::READ_GOOD;
 }
 
 

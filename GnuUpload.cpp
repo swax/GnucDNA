@@ -277,7 +277,18 @@ void CGnuUpload::Send_HttpOK()
 
 		// X-TigerTree-Path
 		if (!m_pShell->m_TigerHash.IsEmpty())
-			HttpOK += "X-TigerTree-Path: /gnutella/tigertree/v3?urn:tree:tiger/:" + m_pShell->m_TigerHash + "\r\n";
+		{
+			CString Client = m_pShell->m_RemoteClient;
+			Client.MakeLower();
+
+			// handle a million implementations
+			if( Client.Find("dna") != -1)
+				HttpOK += "X-TigerTree-Path: /gnutella/tigertree/v3?urn:tree:tiger/:" + m_pShell->m_TigerHash + "\r\n";
+			else if( Client.Find("bearshare") != -1 || Client.Find("shareaza") != -1)
+				HttpOK += "X-Thex-URI: /gnutella/thex/v1?urn:tree:tiger/:" + m_pShell->m_TigerHash + "\r\n";
+			else
+				HttpOK += "X-Thex-URI: /uri-res/N2X?urn:sha1:" + m_pShell->m_Sha1Hash + ";" + m_pShell->m_TigerHash + "\r\n";
+		}
 
 		// X-Alt
 		if (!m_pShell->m_IsPartial)
@@ -382,8 +393,11 @@ void CGnuUpload::Send_TigerTree()
 	HttpTree += "Server: " + m_pNet->m_pCore->GetUserAgent() + "\r\n";
 	
 	// Content-Type
-	HttpTree += "Content-type: application/tigertree-breadthfirst\r\n";	//I think octet-stream is more correct than binary
-	
+	if(m_pShell->m_TigerThexRequest)
+		HttpTree += "Content-type: application/dime\r\n";
+	else
+		HttpTree += "Content-type: application/tigertree-breadthfirst\r\n";	
+
 	// Accept-Ranges
 	HttpTree += "Accept-Ranges: bytes\r\n";
 

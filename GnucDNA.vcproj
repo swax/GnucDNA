@@ -152,6 +152,9 @@
 					RelativePath="Conversions.cpp">
 				</File>
 				<File
+					RelativePath=".\Dime.cpp">
+				</File>
+				<File
 					RelativePath="FileLock.cpp">
 				</File>
 				<File
@@ -695,6 +698,9 @@
 				</File>
 				<File
 					RelativePath="Conversions.h">
+				</File>
+				<File
+					RelativePath=".\Dime.h">
 				</File>
 				<File
 					RelativePath="FileLock.h">

@@ -42,17 +42,19 @@ public:
 	int		  m_Network;
 	CFileLock m_File;
 	//CFile   m_CheckFile;
-	//CFile	m_MirrorFile;
-	CString m_Sha1Hash;
+	//CFile	  m_MirrorFile;
+	CString   m_Sha1Hash;
 	
 	CString m_TigerHash;
 	bool    m_TigerTreeRequest;
+	bool    m_TigerThexRequest;
 	byte*   m_TigerTree;
 	int     m_TreeSize;
 	
 	CString m_RequestURI;
 	CString m_HTTPMethod;
 	CString m_HTTPVersion;
+	CString m_RemoteClient;
 
 	bool    m_IsPartial;
 	int     m_PartialID;
