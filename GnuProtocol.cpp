@@ -166,6 +166,8 @@ void CGnuProtocol::Receive_Ping(Gnu_RecvdPacket &Packet)
 			ggepBuff  += 1;
 			BytesRead -= 1;
 
+			isBig = true;
+
 			GGEPReadResult Status = BLOCK_GOOD;
 			
 			while(Status == BLOCK_GOOD)
@@ -214,14 +216,15 @@ void CGnuProtocol::Receive_Ping(Gnu_RecvdPacket &Packet)
 			memcpy(IppBlock.Name, "IPP", 3);
 			IppBlock.Last = (isDna == false);
 			
-			int size = (m_pCache->m_GnuReal.size() > 10) ? 10 : m_pCache->m_GnuReal.size();
+			int count = (m_pCache->m_GnuReal.size() > 10) ? 10 : m_pCache->m_GnuReal.size();
+			int size  = count * 6;
 
 			if(size)
 			{
 				byte* pIPs = new byte[size];
 
 				std::list<Node>::iterator itNode = m_pCache->m_GnuReal.begin();
-				for(int i = 0; itNode != m_pCache->m_GnuReal.end(); itNode++, i++)
+				for(int i = 0; itNode != m_pCache->m_GnuReal.end() && i < count; itNode++, i++)
 				{
 					IPv4 address;
 					address.Host = StrtoIP((*itNode).Host);
@@ -236,8 +239,9 @@ void CGnuProtocol::Receive_Ping(Gnu_RecvdPacket &Packet)
 
 		if(isDna)
 		{
-			int size   = (m_pCache->m_GnuDna.size() > 10) ? 10 : m_pCache->m_GnuDna.size();
-			
+			int count = (m_pCache->m_GnuDna.size() > 10) ? 10 : m_pCache->m_GnuDna.size();
+			int size  = count * 6;
+
 			packet_GGEPBlock DnaBlock;
 			memcpy(DnaBlock.Name, "DNA", 3);
 			DnaBlock.Last = (size == 0);
@@ -253,7 +257,7 @@ void CGnuProtocol::Receive_Ping(Gnu_RecvdPacket &Packet)
 				byte* pIPs = new byte[size];
 
 				std::list<Node>::iterator itNode = m_pCache->m_GnuDna.begin();
-				for(int i = 0; itNode != m_pCache->m_GnuDna.end(); itNode++, i++)
+				for(int i = 0; itNode != m_pCache->m_GnuDna.end() && i < count; itNode++, i++)
 				{
 					IPv4 address;
 					address.Host = StrtoIP((*itNode).Host);

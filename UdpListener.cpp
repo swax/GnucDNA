@@ -40,6 +40,10 @@ CUdpListener::CUdpListener(CGnuNetworks* pNet)
 		int error = GetLastError();
 		ASSERT(0);
 	}
+
+	// prevent sending to bad ports from triggering onreceive
+	DWORD bNewBehavior = FALSE;
+	int result = ioctlsocket(m_hSocket, SIO_UDP_CONNRESET, &bNewBehavior);
 }
 
 CUdpListener::~CUdpListener(void)

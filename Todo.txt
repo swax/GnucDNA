@@ -1,5 +1,6 @@
 
-test g2 udp cache - 2 clients, send udp on manual connect
+test search with nat flag
+
 test gnu big pong - send auto
 
 Stop and Start share file
