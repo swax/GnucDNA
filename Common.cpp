@@ -364,6 +364,9 @@ AltLocation& AltLocation::operator=(CString& str)
 	if (HostPort.Host.IsEmpty())
 		return *this;
 
+	if(HostPort.Port == 0)
+		HostPort.Port = 6346;
+
 	temp = ParseString(newStr, '/');
 	if (temp == "get")
 	{
