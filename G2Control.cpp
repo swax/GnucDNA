@@ -1429,7 +1429,7 @@ void CG2Control::Receive_PI(G2_RecvdPacket &PacketPI)
 					PacketPI.pTCP->CloseWithReason("Loopback Connection");
 
 				for(int i = 0; i < m_G2NodeList.size(); i++)
-					if( m_G2NodeList[i]->m_RemoteIdent == Ping.Ident)
+					if( m_G2NodeList[i]->m_RemoteIdent == Ping.Ident && m_G2NodeList[i]->m_Status == SOCK_CONNECTED)
 						PacketPI.pTCP->CloseWithReason("Duplicate Connection");
 
 				if(PacketPI.pTCP->m_Status == SOCK_CLOSED)
