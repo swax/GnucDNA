@@ -330,7 +330,7 @@ void CGnuCache::LoadWebCaches(CString WebHostFile)
 	CString	strGWCVer;
 
 	// Loads the list of cache URLs from the specified file
-	m_AltWebCaches.clear();
+	// m_AltWebCaches.clear(); already checks for duplicates below
 	
 	CStdioFile infile;
 	
@@ -374,11 +374,11 @@ void CGnuCache::LoadWebCaches(CString WebHostFile)
 				} 
 				else
 				{
-					URL = NextLine.Trim();
-					State = UNTESTED;
-					LastRef = CTime::GetCurrentTime();
+					URL      = NextLine.Trim();
+					State    = UNTESTED;
+					LastRef  = 0;
 					ErrCount = 0;
-					GWCVer = GWC_VERSION1;
+					GWCVer   = GWC_VERSION1;
 				}
 
 				for(int i = 0; i < m_AltWebCaches.size(); i++)
@@ -389,6 +389,10 @@ void CGnuCache::LoadWebCaches(CString WebHostFile)
 
 				if(AddHost) 
 				{
+					// set because cache being added for first time 
+					// prevent caches not being tried between runs
+					LastRef  = 0; 
+
 					if (ValidURL(URL)) 
 					{
 						m_AltWebCaches.push_back(AltWebCache(URL,State,LastRef,ErrCount,GWCVer));
@@ -503,7 +507,19 @@ void CGnuCache::WebCacheUpdate()
 	}
 }
 
-bool CGnuCache::WebCacheAddCache(CString NewURL)
+void CGnuCache::WebCacheAddCache(CString NewURL)
+{
+	// Add New Cache to our list
+	bool AddHost = true;
+	for(int i = 0; i < m_AltWebCaches.size(); i++)
+		if(m_AltWebCaches[i].URL == NewURL)
+			AddHost = false;
+
+	if(ValidURL(NewURL) && AddHost)
+		m_AltWebCaches.push_back( AltWebCache(NewURL, ALIVE, 0, 0, GWC_VERSION2) );
+}
+
+bool CGnuCache::WebCacheSeedCache(CString NewURL)
 {
 	//TRACE0("### WebCacheAddCache Called\n"); //DB
 
@@ -734,7 +750,7 @@ UINT WebCacheWorker(LPVOID pVoidCache)
 					AddHost = false;
 
 			if(pCache->ValidURL(pCache->m_NewSite) && AddHost)
-				pCache->m_AltWebCaches.push_back( AltWebCache(pCache->m_NewSite,ALIVE,CTime::GetCurrentTime(),0,GWCVer) );
+				pCache->m_AltWebCaches.push_back( AltWebCache(pCache->m_NewSite,ALIVE,0,0,GWCVer) );
 		}
 		else
 		{
@@ -763,11 +779,8 @@ UINT WebCacheWorker(LPVOID pVoidCache)
 			if(CacheURL.IsEmpty())
 				break;
 
-			if ( pCache->m_WebNetwork.IsEmpty() )
-				strFile = pCache->WebCacheDoRequest(CacheURL + "?get=1");
-			else
-				strFile = pCache->WebCacheDoRequest(CacheURL + "?get=1&net=" + pCache->m_WebNetwork);
-
+			strFile = pCache->WebCacheDoRequest(CacheURL + "?get=1");
+	
 			isGoodCache = pCache->WebCacheParseResponse(CacheURL, strFile);
 
 			if ( isGoodCache )
@@ -807,8 +820,10 @@ CString CGnuCache::WebCacheDoRequest(CString RequestURL)
 {
 	CString strFile;
 		
-	if(!m_pPrefs->m_NetworkName.IsEmpty())
+	if( !m_pPrefs->m_NetworkName.IsEmpty() )
 		RequestURL += "&net=" + m_pPrefs->m_NetworkName;
+	else if( !m_WebNetwork.IsEmpty() )
+		RequestURL += "&net=" + m_WebNetwork;
 
 	RequestURL += "&client=" + m_pCore->m_ClientCode; //TEST";	// Forced to use client=TEST because GWC version 1.0.0.0 has auth list of clients
 	RequestURL += "&version=" + m_pCore->m_DnaVersion;
@@ -819,7 +834,6 @@ CString CGnuCache::WebCacheDoRequest(CString RequestURL)
 	if ( RequestURL.Find("?ip=") != -1 )
 		RequestURL += "&update=1";
 
-	m_WebNetwork = "";
 
 //	m_pCore->DebugLog("---> " + RequestURL);
 
@@ -881,7 +895,7 @@ CString CGnuCache::WebCacheDoRequest(CString RequestURL)
 	if(strFile) 
 	{ 
 		// are there LFs?
-		if( strFile.Find('\n') > -1)
+		if( strFile.Find('\n') != -1)
 			strFile.Remove('\r');
 		// if not, make those CRs into LFs
 		else
@@ -891,6 +905,28 @@ CString CGnuCache::WebCacheDoRequest(CString RequestURL)
 	//TRACE0("### RESPONSE: " + strFile + "\n"); //DB
 
 	return strFile;
+}
+
+CString CGnuCache::FindHeader(CString Handshake, CString Name)
+{	
+	CString Data;
+	
+	Name += ":";
+	Name.MakeLower();
+
+	Handshake.MakeLower();
+	
+	int keyPos = Handshake.Find(Name);
+
+	if (keyPos != -1)
+	{
+		keyPos += Name.GetLength();
+
+		Data = Handshake.Mid(keyPos, Handshake.Find("\n", keyPos) - keyPos);
+		Data.TrimLeft();
+	}
+	
+	return Data;
 }
 
 bool CGnuCache::WebCacheParseResponse(CString CacheURL, CString strResult) {
@@ -905,10 +941,29 @@ bool CGnuCache::WebCacheParseResponse(CString CacheURL, CString strResult) {
 		isGood = false;
 	}
 
+	// break between header and data
+	int breakline = strResult.Find("\n\n");
+	if(breakline != -1)
+	{
+		// header
+		CString Header = strResult.Mid(0, breakline + 1);
+
+		CString RemoteIP = FindHeader(Header, "X-Remote-IP");
+		if(!RemoteIP.IsEmpty())
+			m_pNet->m_CurrentIP = StrtoIP(RemoteIP);
+		
+
+		// data
+		strResult = strResult.Mid(breakline + 2);
+	}
+	
 	CString NextLine = ParseString(strResult, '\n');
 
 	while ( !NextLine.IsEmpty() )
 	{
+		if(NextLine == " ")
+			break;
+
 		total++;
 		// see if this is a GWebCache version 2 response
 		if ( NextLine.Find("|") == 1 ) 
@@ -1108,7 +1163,10 @@ CString CGnuCache::GetRandWebCache(bool MustBeAlive)
 	std::vector<AltWebCache> FoundCaches;
 	CTimeSpan span;
 
-	for(int i = 0; i < m_AltWebCaches.size(); i++) {
+	for(int i = 0; i < m_AltWebCaches.size(); i++) 
+	{
+		AltWebCache testCache = m_AltWebCaches[i];
+		
 		span = CTime::GetCurrentTime() - m_AltWebCaches[i].LastRef;
 		if( ( m_AltWebCaches[i].State == ALIVE || (!MustBeAlive && m_AltWebCaches[i].State != DEAD) ) && 
 			( span.GetTotalSeconds() > 3600 || m_AltWebCaches[i].State == UNTESTED ) &&

@@ -68,7 +68,6 @@ CGnuNetworks::CGnuNetworks(CGnuCore* pCore)
 	
 	// Cache
 	m_pCache = new CGnuCache(this);
-	m_pCache->WebCacheRequest();
 }
 
 CGnuNetworks::~CGnuNetworks(void)

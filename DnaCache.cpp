@@ -73,17 +73,11 @@ void CDnaCache::LoadUltraCache(LPCTSTR FilePath)
 
 void CDnaCache::LoadWebCache(LPCTSTR FilePath)
 {
-	
-
 	m_gnuCache->LoadWebCaches(FilePath);
-
-	m_gnuCache->WebCacheRequest();
 }
 
 void CDnaCache::AddWebCache(LPCTSTR WebAddress)
 {
-	
-
 	m_gnuCache->WebCacheAddCache(WebAddress);
 }
 
@@ -166,4 +160,9 @@ void CDnaCache::AddNode(LPCTSTR HostPort, BOOL SuperNode)
 void CDnaCache::RemoveIP(LPCTSTR Host, int Port)
 {
 	m_gnuCache->RemoveIP( Host, Port );
+}
+
+void CDnaCache::SeedWebCache(LPCTSTR WebAddress)
+{
+	m_gnuCache->WebCacheSeedCache(WebAddress);
 }

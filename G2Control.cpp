@@ -2041,13 +2041,7 @@ void CG2Control::Receive_Q2(G2_RecvdPacket &PacketQ2)
 	G2Query.MinSize = Query.MinSize;
 	G2Query.MaxSize = Query.MaxSize;
 
-	// Put query on process queue and signal thread
-	m_pShare->m_QueueAccess.Lock();
-		m_pShare->m_PendingQueries.push_front(G2Query);	
-	m_pShare->m_QueueAccess.Unlock();
-
-	m_pShare->m_TriggerThread.SetEvent();
-
+	
 	// Insert into route table
 	G2_Route Q2Route;
 	Q2Route.Address = Query.ReturnAddress;
@@ -2062,6 +2056,15 @@ void CG2Control::Receive_Q2(G2_RecvdPacket &PacketQ2)
 		Q2Route.Address = PacketQ2.Source;
 	
 	m_RouteMap[ HashGuid(Query.SearchGuid) ] = Q2Route;
+
+
+	// Put query on process queue and signal thread
+	m_pShare->m_QueueAccess.Lock();
+		m_pShare->m_PendingQueries.push_front(G2Query);	
+	m_pShare->m_QueueAccess.Unlock();
+
+	m_pShare->m_TriggerThread.SetEvent();
+
 }
 
 void CG2Control::Receive_QA(G2_RecvdPacket &PacketQA)

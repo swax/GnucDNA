@@ -26,16 +26,16 @@ struct AltWebCache
 	int		GWCVer;
 
 	AltWebCache(CString nURL = "", 
-		int nState = UNTESTED,
-		CTime nLastRef = CTime::GetCurrentTime(),
-		int nErrCount = 0,
-		int nGWCVer = GWC_VERSION1)
+		int nState		= UNTESTED,
+		CTime nLastRef	= 0,
+		int nErrCount	= 0,
+		int nGWCVer		= GWC_VERSION1)
 	{ 
-		URL   = nURL; 
-		State = nState;
-		LastRef = nLastRef;
+		URL		 = nURL; 
+		State	 = nState;
+		LastRef  = nLastRef;
 		ErrCount = nErrCount;
-		GWCVer = nGWCVer;
+		GWCVer	 = nGWCVer;
 	};
 };
 
@@ -63,7 +63,8 @@ public:
 	void WebCacheRequest(bool HostFileOnly=false);
 	void WebCacheGetRequest(CString network = "gnutella");
 	void WebCacheUpdate();
-	bool WebCacheAddCache(CString);
+	void WebCacheAddCache(CString);
+	bool WebCacheSeedCache(CString);
 
 	CString WebCacheDoRequest(CString);
 	bool	WebCacheParseResponse(CString, CString);
@@ -73,6 +74,7 @@ public:
 	bool    ValidURL(CString);
 	CString EscapeEncode(CString &what);
 	CString GetRandWebCache(bool);
+	CString FindHeader(CString Handshake, CString Name);
 
 	void Timer();
 

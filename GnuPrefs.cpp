@@ -120,53 +120,53 @@ void CGnuPrefs::LoadConfig(CString ConfigFile)
 	char buffer[256];
 
     // Local
-	GetPrivateProfileString("Local",  "ForcedHost",		"0.0.0.0",	buffer, 256, ConfigFile);
+	GetPrivateProfileString("Local",  "ForcedHost",		IPtoStr(m_ForcedHost),	buffer, 256, ConfigFile);
 	CString strIP(buffer);
 	m_ForcedHost = StrtoIP(buffer);
-	GetPrivateProfileString("Local",  "ForcedPort",		"0",		buffer, 256, ConfigFile);
+	GetPrivateProfileString("Local",  "ForcedPort",		NumtoStr(m_ForcedPort),		buffer, 256, ConfigFile);
 	m_ForcedPort = atol(buffer);
 
-	GetPrivateProfileString("Local",  "SpeedStatic",	"0",		buffer, 256, ConfigFile);
+	GetPrivateProfileString("Local",  "SpeedStatic",	NumtoStr(m_SpeedStatic),		buffer, 256, ConfigFile);
 	m_SpeedStatic = atol(buffer); 
-	GetPrivateProfileString("Local",  "SpeedDown",	"0",		buffer, 256, ConfigFile);
+	GetPrivateProfileString("Local",  "SpeedDown",	NumtoStr(m_SpeedDown),		buffer, 256, ConfigFile);
 	m_SpeedDown = atof(buffer); 
-	GetPrivateProfileString("Local",  "SpeedUp",	"0",		buffer, 256, ConfigFile);
+	GetPrivateProfileString("Local",  "SpeedUp",	NumtoStr(m_SpeedUp),		buffer, 256, ConfigFile);
 	m_SpeedUp = atof(buffer); 
 
-	GetPrivateProfileString("Local",  "UpdateMode",		"1",		buffer, 256, ConfigFile);
+	GetPrivateProfileString("Local",  "UpdateMode",		NumtoStr(m_Update),		buffer, 256, ConfigFile);
 	m_Update = atoi(buffer);
 	GetPrivateProfileString("Local", "ClientID", EncodeBase16((byte*) &m_ClientID, 16), buffer, 256, ConfigFile);
 	DecodeBase16( CString(buffer), 16, (byte*) &m_ClientID);
-	GetPrivateProfileString("Local",  "Sp2Override",		"0",		buffer, 256, ConfigFile);
+	GetPrivateProfileString("Local",  "Sp2Override",		NumtoStr(m_Sp2Override),		buffer, 256, ConfigFile);
 	m_Sp2Override = atoi(buffer);
 
-	GetPrivateProfileString("Local", "HighBandwidth",	"0",	buffer, 256, ConfigFile);
+	GetPrivateProfileString("Local", "HighBandwidth",	NumtoStr(m_pCore->m_pNet->m_HighBandwidth),	buffer, 256, ConfigFile);
 	m_pCore->m_pNet->m_HighBandwidth = (0 != atoi(buffer));
 
 	// Local Network
-	GetPrivateProfileString("LocalNetwork", "Lan",				"0",	buffer, 256, ConfigFile);
+	GetPrivateProfileString("LocalNetwork", "Lan",				NumtoStr(m_LanMode),	buffer, 256, ConfigFile);
 	m_LanMode = (0 != atoi(buffer));
-	GetPrivateProfileString("LocalNetwork",	"LanName",			"",		buffer, 256, ConfigFile);
+	GetPrivateProfileString("LocalNetwork",	"LanName",			m_LanName,		buffer, 256, ConfigFile);
 	m_LanName = buffer;
-	GetPrivateProfileString("LocalNetwork",	"NetworkName",			"",		buffer, 256, ConfigFile);
+	GetPrivateProfileString("LocalNetwork",	"NetworkName",			m_NetworkName,		buffer, 256, ConfigFile);
 	m_NetworkName = buffer;
 
-	GetPrivateProfileString("LocalNetwork", "SupernodeAble",	"1",	buffer, 256, ConfigFile);
+	GetPrivateProfileString("LocalNetwork", "SupernodeAble",	NumtoStr(m_SupernodeAble),	buffer, 256, ConfigFile);
 	m_SupernodeAble	 = (0 != atoi(buffer));
-	//GetPrivateProfileString("LocalNetwork", "MaxLeaves",	NumtoStr(CalcMaxLeaves()),	buffer, 256, ConfigFile);
+	//GetPrivateProfileString("LocalNetwork", "MaxLeaves",	m_MaxLeaves,	buffer, 256, ConfigFile);
 	//m_MaxLeaves = atoi(buffer);
 	
 
 	// Local Firewall
-	GetPrivateProfileString("LocalFirewall", "BehindFirewall", "0", buffer, 256, ConfigFile);
+	GetPrivateProfileString("LocalFirewall", "BehindFirewall", NumtoStr(m_BehindFirewall), buffer, 256, ConfigFile);
 	m_BehindFirewall = (0 != atoi(buffer));
 
 	// Connect
-	//GetPrivateProfileString("Connect",  "LeafModeConnects",	"1",		buffer, 256, ConfigFile);
+	//GetPrivateProfileString("Connect",  "LeafModeConnects",	NumtoStr(m_LeafModeConnects),		buffer, 256, ConfigFile);
 	//m_LeafModeConnects = atoi(buffer);
-	//GetPrivateProfileString("Connect",  "MinConnects",	"4",		buffer, 256, ConfigFile);
+	//GetPrivateProfileString("Connect",  "MinConnects",	NumtoStr(m_MinConnects),		buffer, 256, ConfigFile);
 	//m_MinConnects = atoi(buffer);
-	//GetPrivateProfileString("Connect",  "MaxConnects",	"6",		buffer, 256, ConfigFile);
+	//GetPrivateProfileString("Connect",  "MaxConnects",	NumtoStr(m_MaxConnects),		buffer, 256, ConfigFile);
 	//m_MaxConnects = atoi(buffer);
 
 	// Connect Servers
@@ -217,11 +217,11 @@ void CGnuPrefs::LoadConfig(CString ConfigFile)
 
 	
 	// Search
-	GetPrivateProfileString("Search",	"DownloadPath", m_pCore->m_RunPath + "Downloads",	buffer, 256, ConfigFile);
+	GetPrivateProfileString("Search",	"DownloadPath", m_DownloadPath,	buffer, 256, ConfigFile);
 	m_DownloadPath = buffer;
-	GetPrivateProfileString("Search",	"DoubleCheck",	"1",				buffer, 256, ConfigFile);
+	GetPrivateProfileString("Search",	"DoubleCheck",	NumtoStr(m_DoubleCheck),				buffer, 256, ConfigFile);
 	m_DoubleCheck = (0 != atoi(buffer));
-	GetPrivateProfileString("Search",	"ScreenNodes",	"0",				buffer, 256, ConfigFile);
+	GetPrivateProfileString("Search",	"ScreenNodes",	NumtoStr(m_ScreenNodes),				buffer, 256, ConfigFile);
 	m_ScreenNodes = (0 != atoi(buffer));
 
 
@@ -282,39 +282,39 @@ void CGnuPrefs::LoadConfig(CString ConfigFile)
 
 	m_pShare->m_FilesAccess.Unlock();
 
-	GetPrivateProfileString("Share",	"ReplyFilePath",		"0",	buffer, 256, ConfigFile);
+	GetPrivateProfileString("Share",	"ReplyFilePath",		NumtoStr(m_ReplyFilePath),	buffer, 256, ConfigFile);
 	m_ReplyFilePath = (0 != atoi(buffer));
-	GetPrivateProfileString("Share",	"MaxReplies",			"64",	buffer, 256, ConfigFile);
+	GetPrivateProfileString("Share",	"MaxReplies",			NumtoStr(m_MaxReplies),	buffer, 256, ConfigFile);
 	m_MaxReplies = atoi(buffer);
-	GetPrivateProfileString("Share",	"SendOnlyAvail",		"1",	buffer, 256, ConfigFile);
+	GetPrivateProfileString("Share",	"SendOnlyAvail",		NumtoStr(m_SendOnlyAvail),	buffer, 256, ConfigFile);
 	m_SendOnlyAvail = (0 != atoi(buffer));
 
 	// Transfer
 	CString OldPartialDir = m_PartialDir;
 	
-	GetPrivateProfileString("Transfer",	"PartialDir",		m_pCore->m_RunPath + "Partials",	buffer, 256, ConfigFile);
+	GetPrivateProfileString("Transfer",	"PartialDir",		m_PartialDir,	buffer, 256, ConfigFile);
 	m_PartialDir = buffer;
-	GetPrivateProfileString("Transfer",  "MaxDownloads",		"5",	buffer, 256, ConfigFile);
+	GetPrivateProfileString("Transfer",  "MaxDownloads",		NumtoStr(m_MaxDownloads),	buffer, 256, ConfigFile);
 	m_MaxDownloads = atoi(buffer);
-	GetPrivateProfileString("Transfer",  "MaxUploads",			"10",	buffer, 256, ConfigFile);
+	GetPrivateProfileString("Transfer",  "MaxUploads",			NumtoStr(m_MaxUploads),	buffer, 256, ConfigFile);
 	m_MaxUploads = atoi(buffer);
-	GetPrivateProfileString("Transfer",	"Multisource",			"1",	buffer, 256, ConfigFile);
+	GetPrivateProfileString("Transfer",	"Multisource",			NumtoStr(m_Multisource),	buffer, 256, ConfigFile);
 	m_Multisource = (0 != atoi(buffer));
 
-	GetPrivateProfileString("Transfer",	"AntivirusEnabled",		"0",	buffer, 256, ConfigFile);
+	GetPrivateProfileString("Transfer",	"AntivirusEnabled",		NumtoStr(m_AntivirusEnabled),	buffer, 256, ConfigFile);
 	m_AntivirusEnabled = (0 != atoi(buffer));
-	GetPrivateProfileString("Transfer",	"AntivirusPath",		"",		buffer, 256, ConfigFile);
+	GetPrivateProfileString("Transfer",	"AntivirusPath",		m_AntivirusPath,		buffer, 256, ConfigFile);
 	m_AntivirusPath = buffer;
 
 
 	// Bandwidth
-	GetPrivateProfileString("Bandwidth",  "BandwidthUp",		"0",	buffer, 256, ConfigFile);
+	GetPrivateProfileString("Bandwidth",  "BandwidthUp",		NumtoStr(m_BandwidthUp),	buffer, 256, ConfigFile);
 	m_BandwidthUp = atof(buffer);
-	GetPrivateProfileString("Bandwidth",  "BandwidthDown",		"0",	buffer, 256, ConfigFile);
+	GetPrivateProfileString("Bandwidth",  "BandwidthDown",		NumtoStr(m_BandwidthDown),	buffer, 256, ConfigFile);
 	m_BandwidthDown = atof(buffer);
-	GetPrivateProfileString("Bandwidth",  "MinDownloadSpeed",	"0",	buffer, 256, ConfigFile);
+	GetPrivateProfileString("Bandwidth",  "MinDownloadSpeed",	NumtoStr(m_MinDownSpeed),	buffer, 256, ConfigFile);
 	m_MinDownSpeed = atof(buffer);
-	GetPrivateProfileString("Bandwidth",  "MinUploadSpeed",		"0",	buffer, 256, ConfigFile);
+	GetPrivateProfileString("Bandwidth",  "MinUploadSpeed",		NumtoStr(m_MinUpSpeed),	buffer, 256, ConfigFile);
 	m_MinUpSpeed = atof(buffer);
 	
 	if(m_ForcedHost.S_addr)
@@ -324,9 +324,9 @@ void CGnuPrefs::LoadConfig(CString ConfigFile)
 		m_pCore->m_pNet->m_CurrentPort = m_ForcedPort;
 
 	// Geo Location
-	GetPrivateProfileString("Geo",  "Latitude",		"0",	buffer, 256, ConfigFile);
+	GetPrivateProfileString("Geo",  "Latitude",		NumtoStr(m_GeoLatitude),	buffer, 256, ConfigFile);
 	m_GeoLatitude = atoi(buffer);
-	GetPrivateProfileString("Geo",  "Longitude",	"0",	buffer, 256, ConfigFile);
+	GetPrivateProfileString("Geo",  "Longitude",	NumtoStr(m_GeoLongitude),	buffer, 256, ConfigFile);
 	m_GeoLongitude = atoi(buffer);
 
 	// Check loaded
