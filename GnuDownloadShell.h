@@ -133,7 +133,7 @@ public:
 	//CFile m_CheckFile;
 
 	int m_NextHostID;
-	std::map<int, int>  m_HostMap;
+	std::map<int, int>  m_HostMap; // HostID, pos in Queue vector
 	std::vector<FileSource> m_Queue;
 	byte m_Packet[255];
 

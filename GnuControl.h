@@ -35,6 +35,7 @@ public:
 
 
 	void Timer();
+	void MinuteTimer();
 	void HourlyTimer();
 
 	void ManageNodes();
@@ -108,6 +109,7 @@ public:
 	void DynQueryTimer();
 
 	std::map<uint32, DynQuery*> m_DynamicQueries;
+	std::map<uint32, GUID> m_OobtoRealGuid;
 
 	void StopSearch(GUID SearchGuid);
 	
@@ -166,6 +168,7 @@ struct DynQuery
 
 	byte* Packet;
 	int   PacketLength;
+	GUID  RealGuid;
 
 	std::map<int, bool> NodesQueried;
 
@@ -178,8 +181,10 @@ struct DynQuery
 
 		Packet = new byte[length];
 		memcpy(Packet, packet, length);
-
+		
 		PacketLength = length;
+
+		memcpy(&RealGuid, Packet, 16);
 
 		Secs = 0;
 		Hits = 0;
@@ -206,7 +211,7 @@ struct OobHit
 	IPv4 Target;
 	int  TotalHits;
 	int  OriginID;
-
+	
 	int Secs;
 
 	bool SentReplyNum;

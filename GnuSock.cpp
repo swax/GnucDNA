@@ -125,10 +125,10 @@ void CGnuSock::OnReceive(int nErrorCode)
 		if(m_Handshake.Find(" CONNECT/") != -1 )
 			ParseConnectRequest();
 
-#ifdef _DEBUG
+//#ifdef _DEBUG
 		else if(m_Handshake.Left(10) == "GET / HTTP")
 			ParseBrowseRequest();
-#endif
+//#endif
 		else if(m_Handshake.Left(4) == "GET " || m_Handshake.Left(5) == "HEAD ")
 			ParseUploadRequest();
 

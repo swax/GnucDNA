@@ -28,6 +28,10 @@
 #include "GnuNetworks.h"
 #include "GnuControl.h"
 #include "GnuProtocol.h"
+#include "GnuCore.h"
+
+#include "DnaCore.h"
+#include "DnaEvents.h"
 
 #include "GnuDatagram.h"
 
@@ -94,6 +98,9 @@ void CGnuDatagram::OnReceive(int nErrorCode)
 
 void CGnuDatagram::SendPacket(IPv4 Address, byte* packet, uint32 length)
 {
+	if(m_pComm->m_pCore->m_dnaCore->m_dnaEvents)
+		m_pComm->m_pCore->m_dnaCore->m_dnaEvents->NetworkPacketOutgoing(NETWORK_GNUTELLA, false , Address.Host.S_addr, Address.Port, packet, length, false);
+	
 	SOCKADDR_IN sa;
 	sa.sin_family = AF_INET;
 	sa.sin_port   = htons(Address.Port);

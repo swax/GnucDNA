@@ -71,7 +71,7 @@ CGnuControl::CGnuControl(CGnuNetworks* pNet)
 	m_NetworkName		= "GNUTELLA";
 
 //#ifdef _DEBUG
-//	m_GnuClientMode = GNU_LEAF;
+//	m_GnuClientMode = GNU_CHILD;
 //#else
 	m_GnuClientMode = GNU_ULTRAPEER;
 //#endif
@@ -321,25 +321,79 @@ void CGnuControl::Timer()
 		}
 	}
 
-	/*m_Minute++;
+
+	m_Minute++;
 
 	if(m_Minute == 60)
 	{
-		int BufferSize = 0;
-		int BackSize   = 0;
-
-		for(i = 0; i < m_NodeList.size(); i++)
-		{
-			BackSize += m_NodeList[i]->m_BackBuffLength;
-
-			for(int j = 0; j < MAX_TTL; j++)
-				BufferSize += m_NodeList[i]->m_PacketListLength[j];
-		}
-
-		m_pCore->DebugLog( CommaIze(NumtoStr(BufferSize / 1024)) + "KB Packet Buffer," + CommaIze(NumtoStr(BackSize / 1024)) + "KB Back Buffer");
+		MinuteTimer();
 
 		m_Minute = 0; 
-	}*/
+	}
+}
+
+void CGnuControl::MinuteTimer()
+{
+	// Purge old OOB Guids from conversion list
+	std::map<uint32, GUID>::iterator itGuid = m_OobtoRealGuid.begin();
+
+	while(itGuid != m_OobtoRealGuid.end() )
+	{
+		bool Found = false;
+
+		// Find in dyn query list
+		std::map<uint32, DynQuery*>::iterator itDyn;
+		for(itDyn = m_DynamicQueries.begin(); itDyn != m_DynamicQueries.end(); itDyn++)
+			if( memcmp( &itGuid->second, &itDyn->second->RealGuid, 16) == 0)
+				Found = true;
+
+		if(Found)
+			itGuid++;
+		else
+			itGuid = m_OobtoRealGuid.erase(itGuid);
+	}
+
+	// Output buffer size load
+	/*int BufferSize = 0;
+	int BackSize   = 0;
+
+	for(i = 0; i < m_NodeList.size(); i++)
+	{
+		BackSize += m_NodeList[i]->m_BackBuffLength;
+
+		for(int j = 0; j < MAX_TTL; j++)
+			BufferSize += m_NodeList[i]->m_PacketListLength[j];
+	}
+
+	m_pCore->DebugLog( CommaIze(NumtoStr(BufferSize / 1024)) + "KB Packet Buffer," + CommaIze(NumtoStr(BackSize / 1024)) + "KB Back Buffer");
+	*/
+
+	// Trace nodes, percent full of hash vs. bandwidth out
+	TRACE0("\n");
+	TRACE0("Remote Ultrapeer, % Full vs. Out Bandwidth\n");
+
+	int TotalBW = 0;
+	for(int i = 0; i < m_NodeList.size(); i++)
+		if(m_NodeList[i]->m_Status == SOCK_CONNECTED && m_NodeList[i]->m_GnuNodeMode == GNU_ULTRAPEER)
+		{
+			int BitsNotSet = 0;
+
+			for(int x = 0; x < GNU_TABLE_SIZE; x++)
+				for(int y = 0; y < 8; y++)
+					if( m_NodeList[i]->m_RemoteHitTable[x] & (1 << y) )
+						BitsNotSet++;
+
+			CString PrcFull = GetPercentage(GNU_TABLE_SIZE * 8, GNU_TABLE_SIZE * 8 - BitsNotSet);
+			
+			int bwout       = m_NodeList[i]->m_AvgBytes[1].GetAverage();
+			TotalBW += bwout;
+
+			TRACE0( IPtoStr(m_NodeList[i]->m_Address.Host) + ": " + PrcFull + " Full, out " + CommaIze(NumtoStr(bwout)) + " B/s\n");
+		}
+	
+	TRACE0("\nTotal Bandwidth out " + CommaIze(NumtoStr(TotalBW)) + "B/s\n");
+
+	TRACE0("\n");
 }
 
 void CGnuControl::HourlyTimer()
@@ -668,20 +722,33 @@ void CGnuControl::SwitchGnuClientMode(int GnuMode)
 
 void CGnuControl::StopSearch(GUID SearchGuid)
 {
-	if(m_pNet->m_pGnu->m_GnuClientMode != GNU_LEAF)
-		return;
+	if(m_pNet->m_pGnu->m_GnuClientMode == GNU_ULTRAPEER)
+	{
+		std::map<uint32, DynQuery*>::iterator itDyn;
 
-	packet_VendMsg ReplyMsg;
-	ReplyMsg.Header.Guid = SearchGuid;
-	ReplyMsg.Ident = packet_VendIdent("BEAR", 12, 1);
-	
-	uint16 Hits = 0xFFFF;
+		for(itDyn = m_DynamicQueries.begin(); itDyn != m_DynamicQueries.end(); itDyn++)
+			if( memcmp( itDyn->second->Packet, &SearchGuid, 16) == 0)
+			{
+				delete itDyn->second;
+				m_DynamicQueries.erase(itDyn);
+				break;
+			}
+	}
 
-	for(int i = 0; i < m_NodeList.size(); i++)	
-		if(m_NodeList[i]->m_GnuNodeMode == GNU_ULTRAPEER && 
-			m_NodeList[i]->m_Status == SOCK_CONNECTED &&
-			m_NodeList[i]->m_SupportsVendorMsg)
-			m_pProtocol->Send_VendMsg(m_NodeList[i], ReplyMsg, (byte*) &Hits, 2);
+	if(m_pNet->m_pGnu->m_GnuClientMode == GNU_LEAF)
+	{
+		packet_VendMsg ReplyMsg;
+		ReplyMsg.Header.Guid = SearchGuid;
+		ReplyMsg.Ident = packet_VendIdent("BEAR", 12, 1);
+		
+		uint16 Hits = 0xFFFF;
+
+		for(int i = 0; i < m_NodeList.size(); i++)	
+			if(m_NodeList[i]->m_GnuNodeMode == GNU_ULTRAPEER && 
+				m_NodeList[i]->m_Status == SOCK_CONNECTED &&
+				m_NodeList[i]->m_SupportsVendorMsg)
+				m_pProtocol->Send_VendMsg(m_NodeList[i], ReplyMsg, (byte*) &Hits, 2);
+	}
 }
 
 void CGnuControl::AddDynQuery(DynQuery* pQuery)
@@ -733,7 +800,7 @@ void CGnuControl::DynQueryTimer()
 
 		std::map<int, CGnuNode*>::iterator itNode = m_NodeIDMap.find(pQuery->NodeID);
 		
-		if(itNode == m_NodeIDMap.end()   ||   // Leaf disconnected
+		if( (pQuery->NodeID && itNode == m_NodeIDMap.end())   ||   // Leaf disconnected, nodeID 0 if local
 		   pQuery->Hits > DQ_TARGET_HITS ||   // Target hits reached
 		   pQuery->Secs > DQ_QUERY_TIMEOUT )  // Query's time over
 		{
@@ -758,6 +825,26 @@ void CGnuControl::DynQueryTimer()
 				std::map<int, bool>::iterator itQueried = pQuery->NodesQueried.find(pUltra->m_NodeID);
 				if(itQueried == pQuery->NodesQueried.end())
 				{
+					packet_Query* pQueryPacket = (packet_Query*)pQuery->Packet;
+
+					if(pQuery->NodeID)
+						m_TableRouting.Insert(pQueryPacket->Header.Guid, pQuery->NodeID);
+						
+					// If ultrapeer able to receive udp
+					if(m_pNet->m_UdpFirewall == UDP_FULL)
+						// If query not using OOB or doesnt support OOB
+						if( (pQueryPacket->Flags.Set && pQueryPacket->Flags.OobHits == false) ||
+							pQueryPacket->Flags.Set == false)
+						{
+							memcpy((byte*)pQueryPacket, &m_pNet->m_CurrentIP.S_addr, 4);
+							memcpy(((byte*)pQueryPacket) + 13, &m_pNet->m_pGnu->m_UdpPort, 2);
+							
+							pQueryPacket->Flags.Set     = true;
+							pQueryPacket->Flags.OobHits = true;
+
+							m_OobtoRealGuid[ HashGuid(pQueryPacket->Header.Guid) ] = pQuery->RealGuid;
+						}
+
 					pUltra->SendPacket(pQuery->Packet, pQuery->PacketLength, PACKET_QUERY, MAX_TTL);
 
 					pQuery->NodesQueried[pUltra->m_NodeID] = true;

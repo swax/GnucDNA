@@ -93,6 +93,9 @@ CGnuDownload::CGnuDownload(CGnuDownloadShell* pShell, int HostID)
 	m_dwSecBytes   = 0;
 
 	//m_BytesRecvd = 0;
+
+	// Proxy
+	m_PushProxy = false;
 }
 
 CGnuDownload::~CGnuDownload()
@@ -129,12 +132,13 @@ void CGnuDownload::OnConnect(int nErrorCode)
 {
 	if(nErrorCode)
 	{
-		SendPushRequest();
-
 		SetError("Push Sent (OnConnect Error " + NumtoStr(nErrorCode) + ")");	
-
 		StatusUpdate(TRANSFER_CLOSED);
+		
+		SendPushRequest();
+		
 		Close();
+		
 		return;
 	}
 
@@ -348,7 +352,28 @@ void CGnuDownload::OnReceive(int nErrorCode)
 				return;
 			}
 	
-			
+			// Response from push proxy server
+			if(m_PushProxy)
+			{
+				// If good, add as alt source
+				if(200 <= Code && Code < 300)
+				{
+					SetError("Push Proxy Success");
+
+					HostInfo()->DirectHubs.push_back(m_ProxyAddress);
+				}
+
+				// If bad erase
+				else
+				{
+					SetError("Push Proxy Old");	
+					SendPushRequest();
+				}
+				
+				Close();
+				return;
+			}
+
 			CParsedHeaders ParsedHeaders (m_Header);
 
 
@@ -507,6 +532,26 @@ void CGnuDownload::OnReceive(int nErrorCode)
 					{
 						if (!RemoteFileHash.IsEmpty())
 							m_pShell->AddAltLocation(HeaderValue);
+					}
+
+					// X-Push-Proxy
+					else if (HeaderName == "x-push-proxy" && HostInfo()->Network == NETWORK_GNUTELLA)
+					{
+						HostInfo()->DirectHubs.clear();
+
+						CString strAddr = ParseString(HeaderName, ',');
+
+						while( !strAddr.IsEmpty() )
+						{
+							IPv4 PushProxy;
+							PushProxy.Host = StrtoIP( ParseString(strAddr, ':') );
+							PushProxy.Port = atoi(strAddr);
+
+							HostInfo()->DirectHubs.push_back(PushProxy);
+
+							strAddr = ParseString(HeaderName, ',');
+						}
+
 					}
 
 					// Location header (redirected)
@@ -928,6 +973,11 @@ void CGnuDownload::SendRequest()
 	m_DoHead = false;	//For GetStartPosPartial (GetStartPos would set this to true)
 	m_TigerRequest = false;
 
+	if(m_PushProxy)
+	{
+		SendPushProxyRequest();
+		return;
+	}
 
 	// Check if host marked as corrupt
 	if( HostInfo()->Status == FileSource::eCorrupt )
@@ -1077,6 +1127,31 @@ void CGnuDownload::SendRequest()
 		StatusUpdate(TRANSFER_CONNECTED);
 }
 
+void CGnuDownload::SendPushProxyRequest()
+{
+	// /gnet/push-proxy?guid=<ServentIdAsGivenInTheQueryHitAsABase16UrlEncodedString>
+	// X-Node: <IP>:<PORT>
+
+	FileSource* pSource = HostInfo();
+
+	CString GetProxy;
+
+	GetProxy += "/gnet/push-proxy?guid=" + EncodeBase16((byte*) &pSource->PushID, 16) + "\r\n";
+	GetProxy += "X-Node: " + IPtoStr(pSource->Address.Host) + ":" + NumtoStr(pSource->Address.Port) + "\r\n";
+	GetProxy += "User-Agent: LimeWire 4.0.3\r\n";
+	GetProxy += "\r\n";
+
+	Send(GetProxy, GetProxy.GetLength());
+
+	m_nSecsDead = 0;
+	m_Request = GetProxy;
+	
+	pSource->PushSent   = true;
+	pSource->Handshake += GetProxy;
+
+	StatusUpdate(TRANSFER_CONNECTED);
+}
+
 void CGnuDownload::SendTigerRequest()
 {
 	m_PartActive = false;
@@ -1162,6 +1237,15 @@ bool CGnuDownload::StartDownload()
 	CString TargetHost = m_pShell->m_UseProxy ? m_LocalProxy.host : IPtoStr(HostInfo()->Address.Host);
 	uint16	TargetPort = m_pShell->m_UseProxy ? m_LocalProxy.port : HostInfo()->Address.Port;
 
+	if(m_PushProxy)
+	{
+		CString TargetHost = IPtoStr( m_ProxyAddress.Host );
+		uint16	TargetPort = m_ProxyAddress.Port;
+
+		SetError("Push Proxy " + TargetHost + ":" + NumtoStr(TargetPort) + "...");
+		StatusUpdate(TRANSFER_CONNECTING);
+	}
+
 	// Attempt connect
 	if( !Connect(TargetHost, TargetPort) )
 	{
@@ -1170,9 +1254,10 @@ bool CGnuDownload::StartDownload()
 		if(ErrorCode != WSAEWOULDBLOCK)
 		{
 			// Get error code
-			SendPushRequest();
 			SetError("Push Sent (Connect Error " + NumtoStr(ErrorCode) + ")" );
-
+			
+			SendPushRequest();
+			
 			return false;
 		}
 	}
@@ -1184,13 +1269,49 @@ void CGnuDownload::SendPushRequest()
 {
 	FileSource* HostSource = HostInfo();
 
-	if( m_pNet->m_pGnu && HostSource->Network == NETWORK_GNUTELLA )
-		m_pNet->m_pGnu->m_pProtocol->Send_Push( *HostSource );
+	if( HostSource->Network == NETWORK_GNUTELLA )
+	{
+		if(HostSource->DirectHubs.size())
+			DoPushProxy();
+		else if( m_pNet->m_pGnu ) 
+			m_pNet->m_pGnu->m_pProtocol->Send_Push( *HostSource );
+	}
 
 	if( m_pNet->m_pG2 && HostSource->Network == NETWORK_G2 )
 		m_pNet->m_pG2->Send_PUSH(HostSource);
 
 	HostSource->PushSent = true;
+}
+
+void CGnuDownload::DoPushProxy()
+{
+	TRACE0( "SOCKET LIST SIZE " + NumtoStr(m_pShell->m_Sockets.size()) + "\n");
+
+	FileSource* pSource = HostInfo();
+	
+	// Create new download to talk with proxy server
+	CGnuDownload* pSock = new CGnuDownload(m_pShell, m_HostID);
+
+	pSock->m_PushProxy = true;
+
+	// Get random push proxy ultrapeer
+	int index = rand() % pSource->DirectHubs.size();
+	pSock->m_ProxyAddress = pSource->DirectHubs[index];
+		
+	// Erase selected ultrapeer so it isnt retried again
+	std::vector<IPv4>::iterator itProxy = pSource->DirectHubs.begin();
+	while( itProxy != pSource->DirectHubs.end() )
+		if( (*itProxy).Host.S_addr == pSock->m_ProxyAddress.Host.S_addr && (*itProxy).Port == pSock->m_ProxyAddress.Port)
+			itProxy = pSource->DirectHubs.erase(itProxy);
+		else
+			itProxy++;
+
+	if(pSock->StartDownload())
+		m_pShell->m_Sockets.push_back(pSock);
+	else
+		delete pSock;
+
+TRACE0( "SOCKET LIST SIZE " + NumtoStr(m_pShell->m_Sockets.size()) + "\n\n");
 }
 
 void CGnuDownload::StopDownload()
@@ -1378,10 +1499,11 @@ void CGnuDownload::Timer()
 
 		if(m_nSecsDead > TRANSFER_TIMEOUT)
 		{
-			SendPushRequest();
-
 			SetError("Connect Timed Out (push sent)");
 			HostInfo()->Status = FileSource::eFailed;
+			
+			SendPushRequest();	
+			
 			Close();
 		}	
 	}
@@ -1392,9 +1514,9 @@ void CGnuDownload::Timer()
 
 		if(m_nSecsDead > TRANSFER_TIMEOUT)
 		{
-			SendPushRequest();
-		
 			SetError("No Response (push sent)");
+			SendPushRequest();
+			
 			Close();
 		}
 	}

@@ -315,16 +315,8 @@ void CGnuSearch::SendBrowseRequest(CString Host, int Port)
 	}
 }
 
-void CGnuSearch::IncomingSource(FileSource &Source)
+void CGnuSearch::IncomingHost(FileSource &Source)
 {
-	// Send to connected downloads
-	if( !Source.Sha1Hash.IsEmpty() )
-	{
-		std::map<CString, CGnuDownloadShell*>::iterator itDown = m_pTrans->m_DownloadHashMap.find( Source.Sha1Hash );
-		if(itDown != m_pTrans->m_DownloadHashMap.end())
-			itDown->second->AddHost(Source);
-	}
-
 	// Check for duplicates in master list
 	for(int i = 0; i < m_WholeList.size(); i++)
 		if(Source.Address.Host.S_addr == m_WholeList[i].Address.Host.S_addr && 

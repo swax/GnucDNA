@@ -53,15 +53,35 @@ struct packet_Push			// Size 49
 	WORD Port;					// 47 - 48
 };
 
+struct packet_QueryFlags	    // Size 1
+{
+	byte None		: 2;
+	byte OobHits	: 1;
+	byte GGEP_H		: 1;
+	byte Guidance	: 1;
+	byte XML		: 1;
+	byte Firewalled	: 1;
+	byte Set		: 1;
+	
+	packet_QueryFlags()
+	{
+		None		= 0;
+		OobHits		= 0;
+		GGEP_H		= 0;
+		Guidance	= 0;
+		XML			= 0;
+		Firewalled	= 0;
+		Set			= 0;
+	};
+};
 
 struct packet_Query			// Size 26+
 {		
 	packet_Header Header;		// 0  - 22						
-	byte Flags;					// 23	
+	packet_QueryFlags Flags;	// 23	
 	byte Reserved;				// 24 
 	// Search					// 25+
 };
-
 
 struct packet_QueryHit		// Size 35+
 {
@@ -102,14 +122,16 @@ struct packet_QueryHitEx	    // Size 6+
 	byte FlagBusy	 : 1;
 	byte FlagStable  : 1;
 	byte FlagSpeed	 : 1;
-	byte FlagTrash   : 3;
+	byte FlagGGEP    : 1;
+	byte FlagTrash   : 2;
 
 	byte FlagPush	 : 1; // 6
 	byte Bad		 : 1;
 	byte Busy		 : 1;
 	byte Stable  	 : 1;
 	byte Speed		 : 1;
-	byte Trash		 : 3;
+	byte GGEP		 : 1;
+	byte Trash		 : 2;
 
 	WORD MetaSize;
 
@@ -155,6 +177,16 @@ struct packet_VendIdent // Size 8
 		Type    = type;
 		Version = version;
 	};
+
+	bool operator == (packet_VendIdent &Compare)
+	{
+		if( memcmp(Compare.VendorID, VendorID, 4) == 0 && 
+			Compare.Type    == Type  && 
+			Compare.Version == Version  )
+			return true;
+
+		return false;
+	};
 };
 
 struct packet_VendMsg // Size 31+
@@ -166,6 +198,49 @@ struct packet_VendMsg // Size 31+
 	// Message Payload...
 };
 
+struct packet_GGEPHeaderFlags
+{
+	byte NameLength	 : 4;
+	byte Reserved	 : 1;
+	byte Compression : 1;
+	byte Encoding	 : 1;
+	byte Last		 : 1;
 
+	packet_GGEPHeaderFlags()
+	{
+		NameLength	= 0;
+		Reserved	= 0;
+		Compression = 0;
+		Encoding	= 0;
+		Last		= 0;
+	}
+};
+
+
+enum GGEPReadResult { BLOCK_GOOD, BLOCK_INCOMPLETE, BLOCK_ERROR };
+
+struct packet_GGEPBlock
+{
+	char Name[15];
+
+	bool Compression;
+	bool Encoded;
+	bool Last;
+
+	byte* Payload;
+	int   PayloadSize;
+
+	packet_GGEPBlock()
+	{
+		memset(Name, 0, 15);
+
+		Compression = false;
+		Encoded		= false;
+		Last		= false;
+
+		Payload     = NULL;
+		PayloadSize = 0;
+	};
+};
 
 #pragma pack (pop)

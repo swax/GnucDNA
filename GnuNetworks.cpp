@@ -368,3 +368,22 @@ bool CGnuNetworks::NotLocal(Node TestNode)
 
 	return true;
 }
+
+void CGnuNetworks::IncomingSource(GUID &SearchGuid, FileSource &Source)
+{
+	// Find Requesting Searches
+	CGnuSearch* pSearch = NULL;
+
+	for(int i = 0; i < m_SearchList.size(); i++)
+		if(SearchGuid == m_SearchList[i]->m_QueryID)// || (pNode && pNode->m_BrowseID == m_pNet->m_SearchList[i]->m_SearchID))
+			m_SearchList[i]->IncomingHost(Source);
+		
+
+	// Find Matching Downloads
+	if( !Source.Sha1Hash.IsEmpty() )
+	{
+		std::map<CString, CGnuDownloadShell*>::iterator itDown = m_pCore->m_pTrans->m_DownloadHashMap.find( Source.Sha1Hash );
+		if(itDown != m_pCore->m_pTrans->m_DownloadHashMap.end())
+			itDown->second->AddHost(Source);
+	}
+}

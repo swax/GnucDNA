@@ -135,6 +135,7 @@ public:
 	int		m_GnuNodeMode;
 	CString m_NetworkName;
 	bool    m_Inbound;
+	bool	m_ConnectBack;
 	CString m_InitData;
 
 	CString m_WholeHandshake;
@@ -144,6 +145,9 @@ public:
 
 	bool m_SupportsVendorMsg;
 	bool m_SupportsLeafGuidance;
+	bool m_SupportsDynQuerying;
+	
+	IPv4 m_PushProxy;
 
 	int  m_RemoteMaxTTL;
 	

@@ -38,7 +38,7 @@ public:
 	void Receive_RouteTablePatch(Gnu_RecvdPacket &Packet);
 
 	// Sending
-	void Send_Ping(CGnuNode* pTCP, int TTL);
+	void Send_Ping(CGnuNode* pTCP, int TTL, GUID* pGuid=NULL, IPv4 Target=IPv4());
 	void Send_Pong(CGnuNode* pTCP, packet_Pong &Pong);
 	void Send_PatchReset(CGnuNode* pTCP);
 	void Send_PatchTable(CGnuNode* pTCP);
@@ -53,6 +53,9 @@ public:
 	void Decode_QueryHit( std::vector<FileSource> &Sources, Gnu_RecvdPacket &QHPacket);
 	void Encode_QueryHit(GnuQuery &FileQuery, std::list<UINT> &MatchingIndexes, byte* QueryReply);
 	
+	GGEPReadResult Decode_GGEPBlock(packet_GGEPBlock &Block, byte* &stream, uint32 &length);
+
+
 	CGnuControl*   m_pComm;
 	CGnuCore*      m_pCore;
 	CGnuNetworks*  m_pNet;

@@ -63,7 +63,10 @@ CGnuNode::CGnuNode(CGnuControl* pComm, CString Host, UINT Port)
 	m_NodeID = m_pNet->GetNextNodeID();
 	m_pComm->m_NodeIDMap[m_NodeID] = this;
 
-	m_pComm->m_GnuNodeAddrMap[StrtoIP(Host).S_addr] = this;
+	// Duplicate can arise when doing tcp connect back test, make sure entry in map isnt replaced
+	std::map<uint32, CGnuNode*>::iterator itAddr = m_pComm->m_GnuNodeAddrMap.find( StrtoIP(Host).S_addr);
+	if(itAddr == m_pComm->m_GnuNodeAddrMap.end())
+		m_pComm->m_GnuNodeAddrMap[StrtoIP(Host).S_addr] = this;
 
 	m_Status = SOCK_CONNECTING;	
 	m_StatusText = "Connecting";
@@ -84,11 +87,13 @@ CGnuNode::CGnuNode(CGnuControl* pComm, CString Host, UINT Port)
 	
 	m_GnuNodeMode		= 0;
 	m_Inbound			= false;
+	m_ConnectBack		= false;
 	m_ConnectTime		= CTime::GetCurrentTime();
 
-	m_SupportsVendorMsg = false;
+	m_SupportsVendorMsg    = false;
 	m_SupportsLeafGuidance = false;
-	
+	m_SupportsDynQuerying  = false;
+
 	m_RemoteMaxTTL = 0;
 
 	// Compression
@@ -285,6 +290,17 @@ void CGnuNode::OnConnect(int nErrorCode)
 	GetPeerName(HostIP, m_Address.Port);
 	m_Address.Host = StrtoIP(HostIP);
 
+
+	// Connected node requested we connect back to test their firewall
+	if(m_ConnectBack)
+	{
+		Send("\n\n", 2);
+		CloseWithReason("TCP Connect Back");
+		m_WholeHandshake += "\r\n\r\n";
+		return;
+	}
+
+
 	// If node created to browse remote host
 	if(m_BrowseID)
 	{
@@ -350,6 +366,9 @@ void CGnuNode::OnConnect(int nErrorCode)
 
 		// Vendor-Message
 		Handshake += "Vendor-Message: 0.1\r\n";
+
+		// GGEP
+		Handshake += "GGEP: 0.5\r\n";
 
 		// Accept-Encoding Header
 		if(m_dnapressionOn)
@@ -512,14 +531,18 @@ void CGnuNode::ParseIncomingHandshake06(CString Data, byte* Stream, int StreamLe
 		if( !MaxTTL.IsEmpty() )
 			m_RemoteMaxTTL = atoi(MaxTTL);
 
-		// Parse Accept-Encoding
-		CString EncodingHeader = FindHeader("Accept-Encoding");
-		if(m_dnapressionOn && EncodingHeader == "deflate")
-			m_DeflateSend = true;
+		// Parse X-Dynamic-Querying header
+		if( FindHeader("X-Dynamic-Querying") == "0.1")
+			m_SupportsDynQuerying = true;
 
 		// Parse Vendor-Message header
 		if( FindHeader("Vendor-Message") == "0.1")
 			m_SupportsVendorMsg = true;
+		
+		// Parse Accept-Encoding
+		CString EncodingHeader = FindHeader("Accept-Encoding");
+		if(m_dnapressionOn && EncodingHeader == "deflate")
+			m_DeflateSend = true;
 
 		// Parse Uptime
 		int days = 0, hours = 0, minutes = 0;
@@ -805,6 +828,10 @@ void CGnuNode::ParseOutboundHandshake06(CString Data, byte* Stream, int StreamLe
 		// Parse Vendor-Message header
 		if( FindHeader("Vendor-Message") == "0.1")
 			m_SupportsVendorMsg = true;
+
+		// Parse X-Dynamic-Querying header
+		if( FindHeader("X-Dynamic-Querying") == "0.1")
+			m_SupportsDynQuerying = true;
 
 		// Parse Accept-Encoding
 		CString EncodingHeader = FindHeader("Accept-Encoding");
@@ -1196,6 +1223,9 @@ void CGnuNode::Send_ConnectOK(bool Reply)
 		// Vendor-Message
 		Handshake += "Vendor-Message: 0.1\r\n";
 
+		// GGEP
+		Handshake += "GGEP: 0.5\r\n";
+
 		// Compression headers
 		Handshake += "Accept-Encoding: deflate\r\n";
 
@@ -1523,6 +1553,12 @@ void CGnuNode::SetConnected()
 	//		return;
 	//	}
 
+	if(!m_SupportsDynQuerying)
+	{
+		CloseWithReason("No Dyn Q");
+		return;
+	}
+
 	// Setup inflate if remote host supports it
 	if(m_InflateRecv)
 	{
@@ -1570,10 +1606,13 @@ void CGnuNode::SetConnected()
 	{
 		// Put together vector of support message types
 		std::vector<packet_VendIdent> SupportedMessages;
-		SupportedMessages.push_back( packet_VendIdent("BEAR", 11, 1) );
+		SupportedMessages.push_back( packet_VendIdent("BEAR", 7, 1) );
+		//SupportedMessages.push_back( packet_VendIdent("BEAR", 11, 1) );
 		SupportedMessages.push_back( packet_VendIdent("BEAR", 12, 1) );
-		SupportedMessages.push_back( packet_VendIdent("LIME", 11, 2) );
-		SupportedMessages.push_back( packet_VendIdent("LIME", 12, 1) );
+		SupportedMessages.push_back( packet_VendIdent("GTKG", 7, 2) );
+		//SupportedMessages.push_back( packet_VendIdent("LIME", 11, 2) );
+		//SupportedMessages.push_back( packet_VendIdent("LIME", 12, 1) );
+		//SupportedMessages.push_back( packet_VendIdent("LIME", 21, 1) );
 
 		uint16 VectorSize = SupportedMessages.size();
 
@@ -1592,6 +1631,15 @@ void CGnuNode::SetConnected()
 		m_pProtocol->Send_VendMsg( this, SupportedMsg, payload, length );
 
 		delete [] payload;
+
+		// Send PushProxy Request
+		/*if(m_pComm->m_GnuClientMode == GNU_LEAF && m_pNet->m_TcpFirewall)
+		{
+			packet_VendMsg PushProxyRequest;
+			PushProxyRequest.Header.Guid = m_pPrefs->m_ClientID;
+			PushProxyRequest.Ident = packet_VendIdent("LIME", 21, 2);
+			m_pProtocol->Send_VendMsg( this, PushProxyRequest);
+		}*/
 	}
 }
 
@@ -1947,7 +1995,7 @@ void CGnuNode::SplitBundle(byte* bundle, DWORD length)
 
 
 	UINT Payload = 0;
-	UINT nextPos = 0;
+	int  nextPos = 0;
 
 	packet_Header* packet;
 
@@ -1997,14 +2045,10 @@ void CGnuNode::SplitBundle(byte* bundle, DWORD length)
 	// Take extra length and save it for next receive
 	m_ExtraLength = length - nextPos;
 
-	if (0 != m_ExtraLength)
-	{
-		if(m_ExtraLength < PACKET_BUFF)
-			memmove(m_pBuff, &m_pBuff[length - m_ExtraLength], m_ExtraLength);
-		else
-			m_ExtraLength = 0;
-			//ASSERT(0); // Shouldnt happen
-	}
+	if (0 < m_ExtraLength && m_ExtraLength < PACKET_BUFF)
+		memmove(m_pBuff, &m_pBuff[length - m_ExtraLength], m_ExtraLength);
+	else if(m_ExtraLength != 0)
+		ASSERT(0); // Shouldnt happen
 }
 
 void CGnuNode::ApplyPatchTable()

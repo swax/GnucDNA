@@ -68,6 +68,8 @@ public:
 	std::vector<CGnuSearch*>   m_SearchList;
 	std::map<int, CGnuSearch*> m_SearchIDMap;
 
+	void IncomingSource(GUID &SearchGuid, FileSource &Source);
+
 
 	CGnuCore* m_pCore;
 };

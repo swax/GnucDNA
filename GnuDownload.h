@@ -29,6 +29,9 @@ public:
 	void SendTigerRequest();
 	void SendPushRequest();
 	
+	void DoPushProxy();
+	void SendPushProxyRequest();
+	
 	void DownloadBytes(byte*, int);
 
 	void StatusUpdate(DWORD);
@@ -84,7 +87,9 @@ public:
 	CRangeAvg m_AvgRecvBytes;
 	DWORD     m_dwSecBytes;      // Bytes sent in second
 
-	//int m_BytesRecvd;
+	// Proxy
+	bool m_PushProxy;
+	IPv4 m_ProxyAddress;
 
 	//{{AFX_VIRTUAL(CGnuDownload)
 	public:

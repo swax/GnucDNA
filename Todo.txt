@@ -1,18 +1,21 @@
 
-Record UDP bandwidth
-
-Proxy OOB for leaves?
-
-Push Proxy 
+receiving results when search not open
 
 
-Test
-    Download re-search, stop and start
-
-Gnutella
-    No upgrade to ultrapeer
-    Download Researching at interval
     
+Paragraph on main test changes
+
+Ultrapeer up/downgrade path
+
+Download
+	x-alt
+	Using push proxy
+	Sending push proxy with hits
+	Serving push proxy
+	save direct hubs
+	Dont send push proxy header when x-features g2
+	Make sure G1/G2 download sources dont conflict
+
 G2
 	Q2/NAT
 	QH2/FW
@@ -20,11 +23,9 @@ G2
 	add ips from udp send and sock connects
 	If PI/RELAY recved with UDP address of directly connected host (but not from directly	 connected host), disconnect youngest link
 
-	Gnutella-->Networks::IncomingSource-->IncomingResult
-		G2-/                         \->AddHost
-
 	15 minute upgrade only if setconnected never called
 	ASSERT size of udp being sent, make sure QH does not overflow
+	
 Now	
 	IPrefs::SetSpeedUp
 	IPrefs::SetSpeedDown
@@ -45,18 +46,10 @@ G2 Questions
 	Kill BE before it gets off ground, bad idea from G1 devs
 	Screw bitprints
 	Send null qka on qkr to child, signal remove from global cache
-	Discussed - CLOSE packet
-	Discussed - Connect to 1 hub - Purpose of connecting to more than one hub
 	Fixing - network disable still being sent when header is same
-	Fixing - Bug Sharaza sending QHT Patch to hubs with infinity set to 4, actually 4 bit tables!
-
-
-G2 w/ DNA notes
-	x-ultrapeer-needed not used
 
 
 Rainy Day
-	20 bit G1 QRP tables
 	Unicode / UTF-8 support
 	Advanced Query matching
 	Advance error logging

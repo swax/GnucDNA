@@ -25,7 +25,7 @@ public:
 	void SendHashQuery(CString Query, int HashID, CString Hash);
 	void SendBrowseRequest(CString Node, int Port);
 
-	void IncomingSource(FileSource &Source);
+	void IncomingHost(FileSource &Source);
 	bool Inspect(FileSource &);
 	bool ResultDoubleCheck(CString, CString);
 	bool ResultDoubleCheckMeta(FileSource &);
