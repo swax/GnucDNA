@@ -28,6 +28,7 @@
 
 #include "GnuCore.h"
 #include "GnuControl.h"
+#include "GnuDatagram.h"
 #include "GnuCache.h"
 #include "GnuNode.h"
 #include "GnuSock.h"
@@ -288,6 +289,10 @@ bool CGnuNetworks::StartListening()
 			if( m_pG2 )
 				m_pG2->m_pDispatch->Init();
 
+			// Not same port, when protocols broken out tcp/udp will be same per protocol
+			if( m_pGnu)
+				m_pGnu->m_pDatagram->Init();
+		
 			return true;	
 		}
 		else

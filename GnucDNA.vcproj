@@ -212,10 +212,16 @@
 						RelativePath="GnuControl.cpp">
 					</File>
 					<File
+						RelativePath=".\GnuDatagram.cpp">
+					</File>
+					<File
 						RelativePath="GnuLocal.cpp">
 					</File>
 					<File
 						RelativePath="GnuNode.cpp">
+					</File>
+					<File
+						RelativePath=".\GnuProtocol.cpp">
 					</File>
 					<File
 						RelativePath="GnuRouting.cpp">
@@ -742,6 +748,9 @@
 						RelativePath="GnuControl.h">
 					</File>
 					<File
+						RelativePath=".\GnuDatagram.h">
+					</File>
+					<File
 						RelativePath="GnuLocal.h">
 					</File>
 					<File
@@ -749,6 +758,9 @@
 					</File>
 					<File
 						RelativePath=".\GnuPackets.h">
+					</File>
+					<File
+						RelativePath=".\GnuProtocol.h">
 					</File>
 					<File
 						RelativePath="GnuRouting.h">

@@ -173,7 +173,7 @@ ULONG CDnaNetwork::GetNodeIP(LONG NodeID)
 		std::map<int, CGnuNode*>::iterator itNode = m_gnuNetwork->m_pGnu->m_NodeIDMap.find(NodeID);
 
 		if(itNode != m_gnuNetwork->m_pGnu->m_NodeIDMap.end())
-			return StrtoIP(itNode->second->m_HostIP).S_addr;
+			return itNode->second->m_Address.Host.S_addr;
 	}
 
 	if( m_gnuNetwork->m_pG2 )
@@ -196,7 +196,7 @@ LONG CDnaNetwork::GetNodePort(LONG NodeID)
 		std::map<int, CGnuNode*>::iterator itNode = m_gnuNetwork->m_pGnu->m_NodeIDMap.find(NodeID);
 
 		if(itNode != m_gnuNetwork->m_pGnu->m_NodeIDMap.end())
-			return itNode->second->m_Port;
+			return itNode->second->m_Address.Port;
 	}
 
 	if( m_gnuNetwork->m_pG2 )

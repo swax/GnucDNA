@@ -163,7 +163,6 @@ struct GnuQuery
 	bool Forward;
 
 	bool UltraForward;
-	CGnuNode* Source;
 
 	int   OriginID;
 	IPv4  DirectAddress;
@@ -183,7 +182,6 @@ struct GnuQuery
 		Forward  = false;
 
 		UltraForward = false;
-		Source = NULL;
 
 		OriginID = 0;
 

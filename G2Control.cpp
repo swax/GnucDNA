@@ -2420,8 +2420,7 @@ void CG2Control::Receive_CRAWLR(G2_RecvdPacket &PacketCRAWLR)
 			if(m_pNet->m_pGnu->m_NodeList[i]->m_Status == SOCK_CONNECTED)
 			{
 				GnuNodeInfo GnuNode;
-				GnuNode.Address.Host = StrtoIP(m_pNet->m_pGnu->m_NodeList[i]->m_HostIP);
-				GnuNode.Address.Port = m_pNet->m_pGnu->m_NodeList[i]->m_Port;
+				GnuNode.Address      = m_pNet->m_pGnu->m_NodeList[i]->m_Address;
 				GnuNode.Client       = m_pNet->m_pGnu->m_NodeList[i]->m_RemoteAgent;
 				GnuNode.LeafMax      = m_pNet->m_pGnu->m_NodeList[i]->m_NodeLeafMax;
 				GnuNode.LibraryCount = m_pNet->m_pGnu->m_NodeList[i]->m_NodeFileCount;

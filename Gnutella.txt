@@ -1,6 +1,17 @@
 
+Ping Received
+   If from 1 hop away reply with pong
+   Else Ignoe
+   
+Pong Receive
+   If meant for local read
+   Else ignore
+   
+Timer
+   Send UltraPong to random child
 
-Hops setup at gathered from LW
+
+Hops setup as gathered from LW
 
 	Leaf Query T:3, H:0 -> Ultrapeer
 	Ultrapeer Query T:3, H:1 -> Ultrapeer

@@ -7,6 +7,7 @@
 
 struct key_Value;
 struct DynQuery;
+struct Gnu_RecvdPacket;
 
 class CGnuNetworks;
 class CGnuLocal;
@@ -17,6 +18,8 @@ class CGnuNode;
 class CGnuCache;
 class CGnuTransfers;
 class CGnuShare;
+class CGnuDatagram;
+class CGnuProtocol;
 
 #define GNU_ULTRAPEER 1
 #define GNU_LEAF	  2
@@ -30,69 +33,46 @@ public:
 	~CGnuControl();
 
 
-	// Other threads always have to lock before touching list
-	CCriticalSection m_NodeAccess;
-	
-	std::vector<CGnuNode*>	 m_NodeList;
-	std::map<int, CGnuNode*> m_NodeIDMap;
-
-	std::map<uint32, CGnuNode*> m_GnuNodeAddrMap;
-
-	std::vector<CGnuNode*>	m_NodesBrowsing;
-
-	CGnuLocal* m_LanSock;
-
-
-	// Traffic control
-	void Broadcast_Ping(packet_Ping*,   int, CGnuNode*);
-	void Broadcast_Query(packet_Query*, int, CGnuNode*);
-	void Broadcast_LocalQuery(byte*, int);
-
-	void Route_Pong(packet_Pong*, int, int);
-	void Route_UltraPong(packet_Pong*, int, int);
-	void Route_QueryHit(packet_QueryHit *, DWORD, int);
-	void Route_LocalQueryHit(GnuQuery &FileQuery, byte* pQueryHit, DWORD ReplyLength, byte ReplyCount, CString &MetaTail);
-	void Route_Push(packet_Push*, int, int);
-	void Route_LocalPush(FileSource);
-
-	void Encode_QueryHit(GnuQuery &FileQuery, std::list<UINT> &MatchingIndexes, byte* QueryReply);
-	void Forward_Query(GnuQuery &FileQuery, std::list<int> &MatchingNodes);
-
-	// Node control
-	void AddNode(CString, UINT);
-	void RemoveNode(CGnuNode*);
-	CGnuNode* FindNode(CString, UINT);
-
-	CGnuNode* GetRandUltrapeer();
-
-	// Socket Counts
-	int	 CountSuperConnects();
-	int  CountNormalConnects();
-	int  CountLeafConnects();
-
-	bool UltrapeerAble();
-	void DowngradeClient();
-
-
-	// Communications
-	void NodeUpdate(CGnuNode* pNode);
-	void PacketIncoming(int NodeID, byte* packet, int size, int ErrorCode, bool Local);
-	void PacketOutgoing(int NodeID, byte* packet, int size, bool Local);
-
-	// Searching
-	void StopSearch(GUID SearchGuid);
-
 	void Timer();
 	void HourlyTimer();
 
 	void ManageNodes();
 	void CleanDeadSocks();
+
+
+	// Other threads always have to lock before touching list
+	CCriticalSection m_NodeAccess;
 	
+	std::vector<CGnuNode*>	    m_NodeList;
+	std::map<int, CGnuNode*>    m_NodeIDMap;
+	std::map<uint32, CGnuNode*> m_GnuNodeAddrMap;
+	std::vector<CGnuNode*>	    m_NodesBrowsing;
+
+	CGnuLocal* m_LanSock;
+
+	void AddNode(CString, UINT);
+	void RemoveNode(CGnuNode*);
+	CGnuNode* FindNode(CString, UINT);
+
+	CGnuNode* GetRandNode(int Type);
+
 	void AddConnect();
 	void DropNode();
 	void DropLeaf();
+
+	int	 CountSuperConnects();
+	int  CountNormalConnects();
+	int  CountLeafConnects();
 	
+	void NodeUpdate(CGnuNode* pNode);
+
+
+	// Other
+	bool UltrapeerAble();
+	void DowngradeClient();	
 	void ShareUpdate();
+	DWORD GetSpeed();
+
 
 	// Dynamic Queries
 	void AddDynQuery(DynQuery* pQuery);
@@ -100,9 +80,14 @@ public:
 
 	std::map<uint32, DynQuery*> m_DynamicQueries;
 
+	void StopSearch(GUID SearchGuid);
+	
+	
 	// Network
 	CString  m_NetworkName;
 	
+	int m_UdpPort;
+
 
 	// Local Client Data
 	CTime   m_ClientUptime;
@@ -119,10 +104,6 @@ public:
 
 	int m_NormalConnectsApprox;
 
-	int	m_ExtPongBytes;
-	int m_UltraPongBytes;
-	int m_SecCount;
-
 
 	// Hash tables
 	CGnuRouting m_TableRouting;
@@ -136,12 +117,32 @@ public:
 
 	int m_Minute;
 
+
 	CGnuNetworks*  m_pNet;
 	CGnuCore*	   m_pCore;
 	CGnuPrefs*	   m_pPrefs;
 	CGnuCache*     m_pCache;
 	CGnuTransfers* m_pTrans;
 	CGnuShare*	   m_pShare;
+	CGnuDatagram*  m_pDatagram;
+	CGnuProtocol*  m_pProtocol;
+};
+
+
+struct Gnu_RecvdPacket
+{
+	IPv4		   Source;
+	packet_Header* Header;
+	int			   Length;
+	CGnuNode*	   pTCP;
+
+	Gnu_RecvdPacket(IPv4 Address, packet_Header* header, int length, CGnuNode* pNode=NULL)
+	{
+		Source = Address;
+		Header = header;
+		Length = length;
+		pTCP   = pNode;
+	};
 };
 
 

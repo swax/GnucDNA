@@ -488,7 +488,7 @@ void CGnuSock::SendGetGnucleus()
 
 			CString ClientMode = "Normal Node";
 			
-			Host = pNode->m_HostIP + ":" + NumtoStr(pNode->m_Port);
+			Host = IPtoStr(pNode->m_Address.Host) + ":" + NumtoStr(pNode->m_Address.Port);
 				
 			if(pNode->m_GnuNodeMode == GNU_ULTRAPEER)
 				ClientMode = "Ultrapeer";
@@ -534,7 +534,7 @@ void CGnuSock::SendGetGnucleus()
 
 				ConnectCount++;
 
-				Host = pNode->m_HostIP + ":" + NumtoStr(pNode->m_Port);
+				Host = IPtoStr(pNode->m_Address.Host) + ":" + NumtoStr(pNode->m_Address.Port);
 
 				CTimeSpan Uptime(CTime::GetCurrentTime() - pNode->m_ConnectTime);
 

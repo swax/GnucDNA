@@ -38,6 +38,7 @@ class CGnuCore;
 class CGnuCache;
 class CGnuShare;
 class CGnuControl;
+class CGnuProtocol;
 
 class  PriorityPacket;
 struct MapNode;
@@ -50,7 +51,7 @@ public:
 	virtual ~CGnuNode();
 
 
-	// New connections
+	// Connecting
 	void	ParseIncomingHandshake06(CString, byte*, int);
 	void	ParseOutboundHandshake06(CString, byte*, int);
 	
@@ -60,54 +61,25 @@ public:
 	CString FindHeader(CString);
 	void	ParseTryHeader(CString TryHeader);
 	void    ParseHubsHeader(CString HubsHeader);
-
-	void SetConnected();
+	
 	void Send_ConnectOK(bool);
 	void Send_ConnectError(CString Reason);
 
-	// Receiving packets
-	void Receive_Ping(packet_Ping*,   int);
-	void Receive_Pong(packet_Pong*,   int);
-	void Receive_Push(packet_Push*,   int);
-	void Receive_Query(packet_Query*, int);
-	void Receive_QueryHit(packet_QueryHit*, DWORD);
-	void Receive_Bye(packet_Bye*,	  int);
-	void Receive_VendMsg(packet_VendMsg*,	  int);
+	void SetConnected();
 
-	void Decode_QueryHit( std::vector<FileSource> &Sources, packet_QueryHit* QueryHit, uint32 length);
 
-	void Receive_RouteTableReset(packet_RouteTableReset*, UINT);
-	void Receive_RouteTablePatch(packet_RouteTablePatch*, UINT);
-	void ApplyPatchTable();
-	void SetPatchBit(int &remotePos, double &Factor, byte value);
-
-	void Receive_Unknown(byte*, DWORD);
-
-	void PacketError(CString Type, CString Error, byte* packet, int length);
+	// Receiving
+	void  FinishReceive(int BuffLength);
+	void  SplitBundle(byte*, DWORD);
 
 	byte  m_pBuff[PACKET_BUFF];
 	int   m_ExtraLength;
 
-	// Packet handlers
-	void  FinishReceive(int BuffLength);
-	void  SplitBundle(byte*, DWORD);
-	void  HandlePacket(packet_Header*, DWORD);
-	bool  InspectPacket(packet_Header*);
 
 	// Sending packets
 	void SendPacket(void*, int, int, int, bool thread=false);
 	void SendPacket(PriorityPacket* OutPacket);
 
-	void Send_Ping(int);
-	void Send_Pong(GUID, int);
-	void Send_QueryHit(GnuQuery &, byte*, DWORD, byte, CString &);
-	void Send_ForwardQuery(GnuQuery &);
-	void Send_Bye(CString Reason);
-	void Send_PatchReset();
-	void Send_PatchTable();
-	void Send_VendMsg(packet_VendMsg VendMsg, byte* payload=NULL, int length=0);
-	
-	// Sending data, packet prioritization
 	CCriticalSection m_TransferPacketAccess;
 	std::vector<PriorityPacket*> m_TransferPackets;
 	void FlushSendBuffer(bool FullFlush=false);
@@ -115,28 +87,28 @@ public:
 	std::list<PriorityPacket*> m_PacketList[MAX_TTL];
 	int m_PacketListLength[MAX_TTL];
 
-	//bool m_SendReady;
 	byte m_BackBuff[PACKET_BUFF];
 	int  m_BackBuffLength;
+
 
 	// CAsyncSocket Overrides
 	virtual void OnConnect(int nErrorCode);
 	virtual void OnReceive(int nErrorCode);
 	virtual void OnSend(int nErrorCode);
 	virtual void OnClose(int nErrorCode);
-	
-	virtual int Send(const void* lpBuf, int nBufLen, int nFlags = 0);
+	virtual int  Send(const void* lpBuf, int nBufLen, int nFlags = 0);
 	virtual void Close();
 
 	void CloseWithReason(CString Reason, bool RemoteClosed=false);
 
 
-	// Misc functions
+	// Other
 	bool GetAlternateHostList(CString &);
 	bool GetAlternateSuperList(CString &);
 
-	void Refresh();
-	void Timer();
+	void  Timer();
+	void  NodeManagement();
+	void  CompressionStats();
 
 	int  UpdateStats(int type);
 	void AddGoodStat(int type);
@@ -144,12 +116,8 @@ public:
 
 	bool ValidAgent(CString Agent);
 
-	DWORD GetSpeed();
-	void  NodeManagement();
-	void  CompressionStats();
-
 	
-	// Socket vars
+	// Node vars
 	int m_NodeID;
 	int	m_Status;
 	
@@ -158,16 +126,13 @@ public:
 	int	m_SecsDead;
 	int m_CloseWait;
 
-	int m_IntervalPing;
 	int m_NextRequeryWait;
 
 
 	// Connection vars
 	CString m_StatusText;
-	CString m_HostIP;
-	CString m_HostName;
+	IPv4    m_Address;
 	int		m_GnuNodeMode;
-	UINT	m_Port;
 	CString m_NetworkName;
 	bool    m_Inbound;
 	CString m_InitData;
@@ -213,9 +178,10 @@ public:
 
 	bool m_DowngradeRequest; // Is true if we request node to become child, or remote node requests us to become a child node
 	
-	bool m_UltraPongSent;
-
 	// QRP - Recv
+	void ApplyPatchTable();
+	void SetPatchBit(int &remotePos, double &Factor, byte value);
+
 	UINT	m_CurrentSeq;
 
 	byte* m_PatchBuffer;
@@ -267,11 +233,6 @@ public:
 	DWORD m_dwSecBytes[3];
 
 
-	// Bandwidth 
-	int m_LeafBytesIn;
-	int m_LeafBytesOut;
-
-
 	CGnuNetworks*  m_pNet;
 	CGnuPrefs*     m_pPrefs;
 	CGnuCore*	   m_pCore;
@@ -279,6 +240,7 @@ public:
 	CGnuCache*	   m_pCache;
 	CGnuShare*	   m_pShare;
 	CGnuTransfers* m_pTrans;
+	CGnuProtocol*  m_pProtocol;
 };
 
 class PriorityPacket
@@ -310,30 +272,5 @@ public:
 			m_Packet = NULL;
 		}
 	};
-};
-
-struct MapNode
-{
-	UINT Age;
-
-	IP		Host;
-	WORD    Port;
-	DWORD	FileCount;
-	DWORD	FileSize;	
-	char    Client[4];
-};
-
-struct RecentQuery
-{
-	GUID Guid; 
-	int  SecsOld;
-	
-	RecentQuery();
-
-	RecentQuery(GUID cGuid)
-	{
-		Guid    = cGuid;
-		SecsOld = 0;
-	}
 };
 

@@ -43,6 +43,8 @@
 #include "GnuDownload.h"
 #include "GnuSearch.h"
 #include "G2Control.h"
+#include "GnuDatagram.h"
+#include "GnuProtocol.h"
 
 #include "DnaCore.h"
 #include "DnaNetwork.h"
@@ -83,19 +85,17 @@ CGnuControl::CGnuControl(CGnuNetworks* pNet)
 	m_NetSecBytesDown	= 0;
 	m_NetSecBytesUp		= 0;
 
-	m_ExtPongBytes		= 0;
-	m_UltraPongBytes	= 0;
-	m_SecCount			= 0;
-
 	m_Minute = 0;
+
+	m_UdpPort = 0;
+
+	m_pDatagram = new CGnuDatagram(this);
+	m_pProtocol = new CGnuProtocol(this);
 }
 
 CGnuControl::~CGnuControl()
 {
 	TRACE0("*** CGnuControl Deconstructing\n");
-
-	CGnuNode *deadNode = NULL;
-
 
 	if( m_LanSock )
 	{
@@ -128,419 +128,13 @@ CGnuControl::~CGnuControl()
 		delete itDyn->second;
 		itDyn = m_DynamicQueries.erase(itDyn);
 	}
+
+	delete m_pDatagram;
+	m_pDatagram = NULL;
+
+	delete m_pProtocol;
+	m_pProtocol = NULL;
 }
-
-
-/////////////////////////////////////////////////////////////////////////////
-// TRAFFIC CONTROL
-
-void CGnuControl::Broadcast_Ping(packet_Ping* Ping, int length, CGnuNode* exception)
-{
-	if(m_GnuClientMode == GNU_LEAF)
-		return;
-
-	for(int i = 0; i < m_NodeList.size(); i++)	
-	{
-		CGnuNode *p = m_NodeList[i];
-	
-		if(m_GnuClientMode == GNU_ULTRAPEER && p->m_GnuNodeMode == GNU_LEAF)
-			continue;
-			
-		if(p != exception && p->m_Status == SOCK_CONNECTED)
-			p->SendPacket(Ping, length, PACKET_PING, Ping->Header.Hops);
-	}
-}
-
-void CGnuControl::Broadcast_Query(packet_Query* Query, int length, CGnuNode* exception)
-{
-	if(m_GnuClientMode == GNU_LEAF)
-		return;
-
-	for(int i = 0; i < m_NodeList.size(); i++)	
-	{
-		CGnuNode *p = m_NodeList[i];
-
-		if(m_GnuClientMode == GNU_ULTRAPEER && p->m_GnuNodeMode == GNU_LEAF)
-			continue;
-
-		if(Query->Header.TTL == 1 && p->m_SupportInterQRP)
-			continue;
-
-		if(p != exception && p->m_Status == SOCK_CONNECTED)
-			p->SendPacket(Query, length, PACKET_QUERY, Query->Header.Hops);
-	}
-}
-
-void CGnuControl::Broadcast_LocalQuery(byte* Packet, int length)
-{
-	packet_Query* Query = (packet_Query*) Packet;
-	
-	//Query->Header.Guid	= // Already added before this is called
-	Query->Header.Function	= 0x80;
-	Query->Header.Hops		= 0;
-	Query->Header.TTL		= 7; // Reset before sent
-	Query->Header.Payload	= length - 23;
-
-
-	// New MinSpeed Field
-	Query->Speed = 0;				// bit 0 to 8, Was reserved to indicate the number of max query hits expected, 0 if no maximum   
-	
-	//if(m_pNet->m_UdpFirewall == UDP_FULL)
-	//	Query->Speed |= 1 << 10;	// bit 10, I understand and desire Out Of Band queryhits via UDP   
-	
-	//Query->Speed |= 1 << 11;		// bit 11 I understand the H GGEP extension in queryhits
-	Query->Speed |= 1 << 12;		// bit 12 Leaf guided dynamic querying   
-	Query->Speed |= 1 << 13;		// bit 13, I understand and want XML metadata in query hits   
-		
-	//if(m_pNet->m_TcpFirewall)
-	//	Query->Speed |= 1 << 14;	// bit 14, I am firewalled, please reply only if not firewalled 
-
-	Query->Speed |= 1 << 15;		// bit 15, Special meaning of the minspeed field, has to be always set.  
-
-
-	m_TableLocal.Insert(Query->Header.Guid, 0);
-
-	// Send Query
-	for(int i = 0; i < m_NodeList.size(); i++)	
-	{
-		CGnuNode *p = m_NodeList[i];
-	
-		if(p->m_Status == SOCK_CONNECTED)
-		{
-			if(p->m_RemoteMaxTTL)
-				Query->Header.TTL = p->m_RemoteMaxTTL;
-
-			p->SendPacket(Packet, length, PACKET_QUERY, Query->Header.Hops);
-		}
-	}
-
-// Test sending query to leaf based on hash table
-// Make sure debug in UP mode, above uncommented
-/*#ifdef _DEBUG
-	
-	// Inspect
-	int QuerySize  = Query->Header.Payload - 2;
-	int TextSize   = strlen((char*) Query + 25) + 1;
-
-	CString ExtendedQuery;
-
-	if (TextSize < QuerySize)
-	{
-		int ExtendedSize = strlen((char*) Query + 25 + TextSize);
-	
-		if(ExtendedSize)
-			ExtendedQuery = CString((char*) Query + 25 + TextSize, ExtendedSize);
-	}
-
-	// Queue to be compared with local files
-	GnuQuery G1Query;
-	G1Query.Network    = NETWORK_GNUTELLA;
-	G1Query.OriginID   = 0;
-	G1Query.SearchGuid = Query->Header.Guid;
-
-	if(m_GnuClientMode == GNU_ULTRAPEER)
-	{
-		G1Query.Forward = true;
-
-		memcpy(G1Query.Packet, (byte*) Query, length);
-		G1Query.PacketSize = length;
-	}
-
-	G1Query.Terms.push_back( CString((char*) Query + 25, TextSize) );
-
-	while(!ExtendedQuery.IsEmpty())
-		G1Query.Terms.push_back( ParseString(ExtendedQuery, 0x1C) );
-
-
-	m_pShare->m_QueueAccess.Lock();
-		m_pShare->m_PendingQueries.push_front(G1Query);	
-	m_pShare->m_QueueAccess.Unlock();
-
-
-	m_pShare->m_TriggerThread.SetEvent();
-
-#endif*/
-
-}
-
-
-void CGnuControl::Route_Pong(packet_Pong* Pong, int length, int RouteID)
-{
-	std::map<int, CGnuNode*>::iterator itNode = m_NodeIDMap.find(RouteID);
-
-	if(itNode != m_NodeIDMap.end())
-		if(itNode->second->m_Status == SOCK_CONNECTED)
-			itNode->second->SendPacket(Pong, length, PACKET_PONG, Pong->Header.TTL - 1);
-}
-
-void CGnuControl::Route_UltraPong(packet_Pong* Pong, int length, int RouteID)
-{	
-	if(m_GnuClientMode == GNU_LEAF)
-		return;
-
-	// Send a max of 2KB in pongs a sec to children
-	if(m_UltraPongBytes > 2048)
-		return;
-
-	bool HostsFound = false;
-
-	// Send pongs to children
-	std::map<int, CGnuNode*>::iterator itNode = m_NodeIDMap.find(RouteID);
-
-	if(itNode != m_NodeIDMap.end())
-	{
-		CGnuNode* p = itNode->second;
-
-		if(m_GnuClientMode == GNU_ULTRAPEER && p->m_GnuNodeMode == GNU_LEAF)
-			if(p->m_Status == SOCK_CONNECTED && !p->m_UltraPongSent)
-			{
-				p->SendPacket(Pong, length, PACKET_PONG, Pong->Header.TTL - 1);
-				m_UltraPongBytes += 37;
-
-				p->m_UltraPongSent = true;
-				HostsFound = true;
-				
-			}
-	}
-
-	// If all children sent ultra-pongs, reset list
-	if(!HostsFound)
-		for(int i = 0; i < m_NodeList.size(); i++)
-			m_NodeList[i]->m_UltraPongSent = false;
-
-}
-
-void CGnuControl::Route_QueryHit(packet_QueryHit* QueryHit, DWORD length, int RouteID)
-{
-	std::map<int, CGnuNode*>::iterator itNode = m_NodeIDMap.find(RouteID);
-
-	if(itNode != m_NodeIDMap.end())
-		if(itNode->second->m_Status == SOCK_CONNECTED)
-			itNode->second->SendPacket(QueryHit, length, PACKET_QUERYHIT, QueryHit->Header.TTL - 1, false);
-}
-
-// Called from share thread
-void CGnuControl::Route_LocalQueryHit(GnuQuery &FileQuery, byte* pQueryHit, DWORD ReplyLength, byte ReplyCount, CString &MetaTail)
-{	
-	// FilesAccess must be unlocked before calling this
-
-	m_NodeAccess.Lock();
-
-		std::map<int, CGnuNode*>::iterator itNode = m_NodeIDMap.find(FileQuery.OriginID);
-
-		if(itNode != m_NodeIDMap.end())
-			if(itNode->second->m_Status == SOCK_CONNECTED)
-			{
-				itNode->second->Send_QueryHit(FileQuery, pQueryHit, ReplyLength, ReplyCount, MetaTail);
-				m_NodeAccess.Unlock();
-				return;
-			}
-
-	m_NodeAccess.Unlock();
-
-	// Node not found, check if its a node browsing files
-	for(int i = 0; i < m_NodesBrowsing.size(); i++)
-		if(m_NodesBrowsing[i]->m_NodeID == FileQuery.OriginID)
-		{
-			m_NodesBrowsing[i]->Send_QueryHit(FileQuery, pQueryHit, ReplyLength, ReplyCount, MetaTail);
-			break;
-		}
-}
-
-void CGnuControl::Route_Push(packet_Push* Push, int length, int RouteID)
-{
-	std::map<int, CGnuNode*>::iterator itNode = m_NodeIDMap.find(RouteID);
-
-	if(itNode != m_NodeIDMap.end())
-		if(itNode->second->m_Status == SOCK_CONNECTED)
-			itNode->second->SendPacket(Push, length, PACKET_PUSH, Push->Header.TTL - 1);
-}
-
-void CGnuControl::Route_LocalPush(FileSource Download)
-{
-	GUID Guid = GUID_NULL;
-	GnuCreateGuid(&Guid);
-	if (Guid == GUID_NULL)
-	{
-		//m_pCore->LogError("Failed to create a GUID to send.");
-		return;
-	}
-
-	// Create packet
-	packet_Push Push;
-
-	Push.Header.Guid		= Guid;
-	Push.Header.Function	= 0x40;
-	Push.Header.TTL			= Download.Distance;
-	Push.Header.Hops		= 0;
-	Push.Header.Payload		= 26;
-	Push.ServerID			= Download.PushID;
-	Push.Index				= Download.FileIndex;
-	Push.Host				= m_pNet->m_CurrentIP;
-	Push.Port				= m_pNet->m_CurrentPort;
-
-	if(m_pPrefs->m_ForcedHost.S_addr)
-		Push.Host = m_pPrefs->m_ForcedHost;
-
-	// Send Push
-	for(int i = 0; i < m_NodeList.size(); i++)	
-	{
-		CGnuNode *p = m_NodeList[i];
-
-		if(p->m_NodeID == Download.GnuRouteID && p->m_Status == SOCK_CONNECTED)
-		{
-			m_TableLocal.Insert(Guid, p->m_NodeID);
-
-			p->SendPacket(&Push, 49, PACKET_PUSH, Push.Header.TTL - 1);
-		}
-	}
-}
-
-// Called from share thread
-void CGnuControl::Encode_QueryHit(GnuQuery &FileQuery, std::list<UINT> &MatchingIndexes, byte* QueryReply)
-{	
-	byte*	 QueryReplyNext		= &QueryReply[34];
-	DWORD	 QueryReplyLength	= 0;
-	UINT	 TotalReplyCount	= 0;
-	byte	 ReplyCount			= 0;
-	int		 MaxReplies			= m_pPrefs->m_MaxReplies;
-	CString  MetaTail			= "";
-
-	m_pShare->m_FilesAccess.Lock();
-
-	std::list<UINT>::iterator itIndex;
-	for(itIndex = MatchingIndexes.begin(); itIndex != MatchingIndexes.end(); itIndex++)
-	{	
-		// Add to Search Reply
-		int pos = *itIndex;
-
-		if(m_pShare->m_SharedFiles[pos].Name.size() == 0)
-			continue;
-
-		if(MaxReplies && MaxReplies <= TotalReplyCount)	
-			break;
-
-		m_pShare->m_SharedFiles[pos].Matches++;
-
-		// File Index
-		* (UINT*) QueryReplyNext = m_pShare->m_SharedFiles[pos].Index;
-		QueryReplyNext   += 4;
-		QueryReplyLength += 4;
-
-		// File Size
-		* (UINT*) QueryReplyNext = m_pShare->m_SharedFiles[pos].Size;
-		QueryReplyNext   += 4;
-		QueryReplyLength += 4;
-		
-		// File Name
-		strcpy ((char*) QueryReplyNext, m_pShare->m_SharedFiles[pos].Name.c_str());
-		QueryReplyNext   += m_pShare->m_SharedFiles[pos].Name.size() + 1;
-		QueryReplyLength += m_pShare->m_SharedFiles[pos].Name.size() + 1;
-
-		// File Hash
-		if( !m_pShare->m_SharedFiles[pos].HashValues[HASH_SHA1].empty() )
-		{
-			strcpy ((char*) QueryReplyNext, "urn:sha1:");
-			QueryReplyNext   += 9;
-			QueryReplyLength += 9;
-
-			strcpy ((char*) QueryReplyNext, m_pShare->m_SharedFiles[pos].HashValues[HASH_SHA1].c_str());
-			QueryReplyNext   += m_pShare->m_SharedFiles[pos].HashValues[HASH_SHA1].size() + 1;
-			QueryReplyLength += m_pShare->m_SharedFiles[pos].HashValues[HASH_SHA1].size() + 1;
-		}
-		else
-		{
-			*QueryReplyNext = '\0';
-
-			QueryReplyNext++;
-			QueryReplyLength++;
-		}
-
-		// File Meta
-		if(m_pShare->m_SharedFiles[pos].MetaID)
-		{
-			std::map<int, CGnuSchema*>::iterator itMeta = m_pCore->m_pMeta->m_MetaIDMap.find(m_pShare->m_SharedFiles[pos].MetaID);
-			if(itMeta != m_pCore->m_pMeta->m_MetaIDMap.end())
-			{
-				int InsertPos = MetaTail.Find("</" + itMeta->second->m_NamePlural + ">");
-
-				if(InsertPos == -1)
-				{
-					MetaTail += "<" + itMeta->second->m_NamePlural + "></" + itMeta->second->m_NamePlural + ">";
-					InsertPos = MetaTail.Find("</" + itMeta->second->m_NamePlural + ">");
-				}
-			
-				MetaTail.Insert(InsertPos, itMeta->second->AttrMaptoNetXML(m_pShare->m_SharedFiles[pos].AttributeMap, ReplyCount));
-			}
-		}
-
-		ReplyCount++;
-		TotalReplyCount++;
-
-		if(QueryReplyLength > 2048 || ReplyCount == 255)
-		{
-			//m_pShare->m_FilesAccess.Unlock();
-			Route_LocalQueryHit(FileQuery, QueryReply, QueryReplyLength, ReplyCount, MetaTail);
-			//m_pShare->m_FilesAccess.Lock();
-
-			QueryReplyNext	 = &QueryReply[34];
-			QueryReplyLength = 0;
-			ReplyCount		 = 0;
-			MetaTail		 = "";
-		}
-	}
-
-
-	if(ReplyCount > 0)
-	{
-		//m_pShare->m_FilesAccess.Unlock();
-		Route_LocalQueryHit(FileQuery, QueryReply, QueryReplyLength, ReplyCount, MetaTail);
-		//m_pShare->m_FilesAccess.Lock();
-	}
-
-	m_pShare->m_FilesAccess.Unlock();
-}
-
-// Called from share thread
-void CGnuControl::Forward_Query(GnuQuery &FileQuery, std::list<int> &MatchingNodes)
-{
-	// Forward query to child nodes that match the query
-
-	packet_Query* pQuery = (packet_Query*) FileQuery.Packet;
-	if(pQuery->Header.TTL == 0)
-		pQuery->Header.TTL++;
-	
-	// Hops already increased in packet handling
-
-	std::list<int>::iterator  itNodeID;
-
-	for(itNodeID = MatchingNodes.begin(); itNodeID != MatchingNodes.end(); itNodeID++)
-		if(*itNodeID != FileQuery.OriginID)
-		{
-			m_NodeAccess.Lock();
-
-				std::map<int, CGnuNode*>::iterator itNode = m_NodeIDMap.find(*itNodeID);
-
-				if(itNode != m_NodeIDMap.end())
-				{
-					CGnuNode* pNode = itNode->second;
-
-					if(pNode->m_Status == SOCK_CONNECTED)
-					{
-						if( pNode->m_GnuNodeMode == GNU_LEAF)
-							pNode->Send_ForwardQuery( FileQuery );
-
-						if( pNode->m_GnuNodeMode == GNU_ULTRAPEER && pNode->m_SupportInterQRP)
-							pNode->Send_ForwardQuery( FileQuery );
-					}
-				}
-
-			m_NodeAccess.Unlock();
-		}
-}
-
-////////////////////////////////////////////////////////////////////////////
-// Node control
 
 void CGnuControl::AddNode(CString Host, UINT Port)
 {
@@ -684,23 +278,6 @@ void CGnuControl::NodeUpdate(CGnuNode* pNode)
 		m_pNet->m_SearchList[i]->SockUpdate();
 }
 
-void CGnuControl::PacketIncoming(int NodeID, byte* packet, int size, int ErrorCode, bool Local)
-{
-	std::map<int, CGnuNode*>::iterator itNode = m_NodeIDMap.find(NodeID);
-
-	if(itNode != m_NodeIDMap.end() && m_pCore->m_dnaCore->m_dnaEvents)
-		m_pCore->m_dnaCore->m_dnaEvents->NetworkPacketIncoming(NETWORK_GNUTELLA, true, StrtoIP(itNode->second->m_HostIP).S_addr, itNode->second->m_Port, packet, size, Local, ErrorCode );
-}
-
-void CGnuControl::PacketOutgoing(int NodeID, byte* packet, int size, bool Local)
-{
-	std::map<int, CGnuNode*>::iterator itNode = m_NodeIDMap.find(NodeID);
-
-	if(itNode != m_NodeIDMap.end() && m_pCore->m_dnaCore->m_dnaEvents)
-		m_pCore->m_dnaCore->m_dnaEvents->NetworkPacketOutgoing(NETWORK_GNUTELLA, true, StrtoIP(itNode->second->m_HostIP).S_addr, itNode->second->m_Port, packet, size, Local );
-}
-
-
 void CGnuControl::Timer()
 {
 	CleanDeadSocks();
@@ -708,6 +285,28 @@ void CGnuControl::Timer()
 	ManageNodes();
 
 	DynQueryTimer();
+
+	m_pDatagram->Timer();
+
+	// Send random pong to random child
+	if(m_GnuClientMode == GNU_ULTRAPEER)
+	{
+		CGnuNode* pUltra = GetRandNode(GNU_ULTRAPEER);
+		CGnuNode* pLeaf  = GetRandNode(GNU_LEAF);
+
+		if(pUltra && pLeaf)
+		{
+			// Build a pong
+			packet_Pong Pong;
+			GnuCreateGuid(&Pong.Header.Guid);
+			Pong.Port			= pUltra->m_Address.Port;
+			Pong.Host			= pUltra->m_Address.Host;
+			Pong.FileCount		= 0;
+			Pong.FileSize		= 1024;
+
+			m_pProtocol->Send_Pong(pLeaf, Pong);
+		}
+	}
 
 	/*m_Minute++;
 
@@ -791,18 +390,6 @@ void CGnuControl::ManageNodes()
 	}
 
 	m_NormalConnectsApprox = NormalConnects;
-
-
-	// Minute counter
-	if(m_SecCount < 60)
-		m_SecCount++;
-	if(m_SecCount == 60)
-	{
-		m_UltraPongBytes = 0;
-		m_SecCount = 0;
-	}
-
-	m_ExtPongBytes = 0;
 
 
 	// Maybe go to ultrapeer after an amount of time?
@@ -1081,7 +668,7 @@ void CGnuControl::StopSearch(GUID SearchGuid)
 		if(m_NodeList[i]->m_GnuNodeMode == GNU_ULTRAPEER && 
 			m_NodeList[i]->m_Status == SOCK_CONNECTED &&
 			m_NodeList[i]->m_SupportsVendorMsg)
-			m_NodeList[i]->Send_VendMsg( ReplyMsg, (byte*) &Hits, 2 );
+			m_pProtocol->Send_VendMsg(m_NodeList[i], ReplyMsg, (byte*) &Hits, 2);
 }
 
 void CGnuControl::AddDynQuery(DynQuery* pQuery)
@@ -1153,7 +740,7 @@ void CGnuControl::DynQueryTimer()
 			while(Attempts < 10)
 			{
 				// Pick random ultrapeer to query next
-				CGnuNode* pUltra = GetRandUltrapeer();
+				CGnuNode* pUltra = GetRandNode(GNU_ULTRAPEER);
 
 				std::map<int, bool>::iterator itQueried = pQuery->NodesQueried.find(pUltra->m_NodeID);
 				if(itQueried == pQuery->NodesQueried.end())
@@ -1177,7 +764,7 @@ void CGnuControl::DynQueryTimer()
 			packet_VendMsg StatusReq;
 			memcpy(&StatusReq.Header.Guid, pQuery->Packet, 16);
 			StatusReq.Ident = packet_VendIdent("BEAR", 11, 1);
-			pLeaf->Send_VendMsg( StatusReq );
+			m_pProtocol->Send_VendMsg( pLeaf, StatusReq );
 		}
 
 
@@ -1186,23 +773,23 @@ void CGnuControl::DynQueryTimer()
 }
 
 
-CGnuNode* CGnuControl::GetRandUltrapeer()
+CGnuNode* CGnuControl::GetRandNode(int Type)
 {
-	int Ultrapeers = 0;
+	int Nodes = 0;
 
 	for(int i = 0; i < m_NodeList.size(); i++)
 		if(m_NodeList[i]->m_Status == SOCK_CONNECTED)
-			if(m_NodeList[i]->m_GnuNodeMode == GNU_ULTRAPEER)
-				Ultrapeers++;
+			if(m_NodeList[i]->m_GnuNodeMode == Type)
+				Nodes++;
 
-	if(Ultrapeers)
+	if(Nodes)
 	{
-		int upReturn = rand() % Ultrapeers;
+		int upReturn = rand() % Nodes;
 		int upCurrent = 0;
 
 		for(int i = 0; i < m_NodeList.size(); i++)
 			if(m_NodeList[i]->m_Status == SOCK_CONNECTED)
-				if(m_NodeList[i]->m_GnuNodeMode == GNU_ULTRAPEER)
+				if(m_NodeList[i]->m_GnuNodeMode == Type)
 				{
 					if( upCurrent == upReturn)
 						return m_NodeList[i];
@@ -1212,4 +799,19 @@ CGnuNode* CGnuControl::GetRandUltrapeer()
 	}
 
 	return NULL;
+}
+
+DWORD CGnuControl::GetSpeed()
+{	
+	if(m_pNet->m_RealSpeedUp)
+		return m_pNet->m_RealSpeedUp * 8 / 1024;
+	else
+	{
+		if(m_pPrefs->m_SpeedStatic)
+			return m_pPrefs->m_SpeedStatic;
+		else
+			return m_pNet->m_RealSpeedDown * 8 / 1024;
+	}
+
+	return 0;
 }

@@ -1,12 +1,14 @@
 
+Set UDP check before oob bit set
+
 Recv/Send Out of band hits
 Push Proxy 
+
 
 Test
     Download re-search, stop and start
 	Verify 'Supported Messages' correctly formatted
 
-	
 Gnutella
     No upgrade to ultrapeer
     Download Researching at interval

@@ -43,6 +43,7 @@
 #include "GnuAltLoc.h"
 #include "GnuMeta.h"
 #include "GnuSchema.h"
+#include "GnuProtocol.h"
 
 #include "GnuShare.h"
 
@@ -685,10 +686,10 @@ UINT ShareWorker(LPVOID pVoidShare)
 			if( FileQuery.Network == NETWORK_GNUTELLA && pNet->m_pGnu )
 			{
 				if( MatchingIndexes.size() )
-					pNet->m_pGnu->Encode_QueryHit(FileQuery, MatchingIndexes, QueryReply);
+					pNet->m_pGnu->m_pProtocol->Encode_QueryHit(FileQuery, MatchingIndexes, QueryReply);
 
 				if( FileQuery.Forward && MatchingNodes.size() )
-					pNet->m_pGnu->Forward_Query(FileQuery, MatchingNodes);
+					pNet->m_pGnu->m_pProtocol->Send_Query(FileQuery, MatchingNodes);
 			}
 	
 

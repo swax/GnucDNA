@@ -39,6 +39,7 @@
 #include "GnuDownloadShell.h"
 #include "GnuMeta.h"
 #include "GnuSchema.h"
+#include "GnuProtocol.h"
 
 #include "DnaCore.h"
 #include "DnaEvents.h"
@@ -63,6 +64,12 @@ CGnuSearch::CGnuSearch(CGnuNetworks* pNet)
 	pNet->m_SearchIDMap[m_SearchID] = this;
 
 	GnuCreateGuid(&m_QueryID);
+	// Setup Guid for out-of-band hits delivery
+	if(m_pNet->m_pGnu)
+	{
+		memcpy(&m_QueryID, &m_pNet->m_CurrentIP.S_addr, 4);
+		memcpy(&m_QueryID + 13, &m_pNet->m_pGnu->m_UdpPort, 2);
+	}
 
 	m_BrowseNode = NULL;
 	m_BrowseWaiting = 0;
@@ -124,7 +131,7 @@ void CGnuSearch::SendQuery(CString Query)
 		memcpy(&m_GnuPacket, &m_QueryID, 16);
 
 		if(m_pNet->m_pGnu)
-			m_pNet->m_pGnu->Broadcast_LocalQuery(m_GnuPacket, m_GnuPacketLength);
+			m_pNet->m_pGnu->m_pProtocol->Send_Query(m_GnuPacket, m_GnuPacketLength);
 	}
 
 	if( m_pNet->m_pG2 )
@@ -211,7 +218,7 @@ void CGnuSearch::SendMetaQuery(CString Query, int MetaID, std::vector<CString> M
 		memcpy(&m_GnuPacket, &m_QueryID, 16);
 		
 		if(m_pNet->m_pGnu)
-			m_pNet->m_pGnu->Broadcast_LocalQuery(m_GnuPacket, m_GnuPacketLength);
+			m_pNet->m_pGnu->m_pProtocol->Send_Query(m_GnuPacket, m_GnuPacketLength);
 	}
 
 	if( m_pNet->m_pG2 )
@@ -264,7 +271,7 @@ void CGnuSearch::SendHashQuery(CString Query, int HashID, CString Hash)
 		memcpy(&m_GnuPacket, &m_QueryID, 16);
 		
 		if( m_pNet->m_pGnu )
-			m_pNet->m_pGnu->Broadcast_LocalQuery(m_GnuPacket, m_GnuPacketLength);
+			m_pNet->m_pGnu->m_pProtocol->Send_Query(m_GnuPacket, m_GnuPacketLength);
 	}
 
 	if( m_pNet->m_pG2 )

@@ -39,9 +39,7 @@
 #include "GnuCache.h"
 #include "GnuRouting.h"
 #include "G2Control.h"
-#include "GnuWordHash.h"
-#include "GnuMeta.h"
-#include "GnuSchema.h"
+#include "GnuProtocol.h"
 
 #include "DnaCore.h"
 #include "DnaNetwork.h"
@@ -52,13 +50,14 @@
 
 CGnuNode::CGnuNode(CGnuControl* pComm, CString Host, UINT Port)
 {		
-	m_pComm  = pComm;
-	m_pNet   = pComm->m_pNet;
-	m_pCore  = m_pNet->m_pCore;
-	m_pTrans = m_pCore->m_pTrans;
-	m_pPrefs = m_pCore->m_pPrefs;
-	m_pCache = pComm->m_pCache;
-	m_pShare = m_pCore->m_pShare;
+	m_pComm     = pComm;
+	m_pNet      = pComm->m_pNet;
+	m_pCore     = m_pNet->m_pCore;
+	m_pTrans    = m_pCore->m_pTrans;
+	m_pPrefs    = m_pCore->m_pPrefs;
+	m_pCache    = pComm->m_pCache;
+	m_pShare    = m_pCore->m_pShare;
+	m_pProtocol = pComm->m_pProtocol;
 
 	// Socket 
 	m_NodeID = m_pNet->GetNextNodeID();
@@ -74,18 +73,16 @@ CGnuNode::CGnuNode(CGnuControl* pComm, CString Host, UINT Port)
 	m_SecsDead			= 0;
 	m_CloseWait			= 0;
 	
-	m_IntervalPing		= 0;
 	m_NextRequeryWait   = 0;
 
 
 	// Connection vars
-	m_HostIP	= Host;
-	m_HostName  = Host;
+	m_Address.Host = StrtoIP(Host);
+	m_Address.Port = Port;
 
 	m_NetworkName = m_pComm->m_NetworkName;
 	
 	m_GnuNodeMode		= 0;
-	m_Port				= Port;
 	m_Inbound			= false;
 	m_ConnectTime		= CTime::GetCurrentTime();
 
@@ -118,9 +115,6 @@ CGnuNode::CGnuNode(CGnuControl* pComm, CString Host, UINT Port)
 	m_NodeLeafMax		= 0;
 	
 	m_DowngradeRequest  = false;
-	
-
-	m_UltraPongSent	= false;	
 
 	// QRP
 	m_CurrentSeq = 1;
@@ -161,11 +155,6 @@ CGnuNode::CGnuNode(CGnuControl* pComm, CString Host, UINT Port)
 	for(int i = 0; i < MAX_TTL; i++)
 		m_PacketListLength[i] = 0;
 	m_BackBuffLength = 0;
-
-	
-	// Bandwidth Control
-	m_LeafBytesIn    = 0; 
-	m_LeafBytesOut   = 0; 
 
 
 	// Packet Stats
@@ -209,7 +198,7 @@ CGnuNode::~CGnuNode()
 	if(itNode != m_pComm->m_NodeIDMap.end())
 		m_pComm->m_NodeIDMap.erase(itNode);
 	
-	std::map<uint32, CGnuNode*>::iterator itAddr = m_pComm->m_GnuNodeAddrMap.find( StrtoIP(m_HostIP).S_addr);
+	std::map<uint32, CGnuNode*>::iterator itAddr = m_pComm->m_GnuNodeAddrMap.find( m_Address.Host.S_addr);
 	if(itAddr != m_pComm->m_GnuNodeAddrMap.end())
 		m_pComm->m_GnuNodeAddrMap.erase(itAddr);
 	
@@ -292,8 +281,9 @@ void CGnuNode::OnConnect(int nErrorCode)
 
 
 	// Get Remote host
-	GetPeerName(m_HostIP, m_Port);
-
+	CString HostIP;
+	GetPeerName(HostIP, m_Address.Port);
+	m_Address.Host = StrtoIP(HostIP);
 
 	// If node created to browse remote host
 	if(m_BrowseID)
@@ -303,7 +293,7 @@ void CGnuNode::OnConnect(int nErrorCode)
 		Handshake += "Accept: text/html, application/x-gnutella-packets\r\n";
 		Handshake += "Accept-Encoding: deflate\r\n";
 		Handshake += "Connection: close\r\n";
-		Handshake += "Host:" + m_HostIP + ":" + NumtoStr(m_Port) + "\r\n";
+		Handshake += "Host:" + IPtoStr(m_Address.Host) + ":" + NumtoStr(m_Address.Port) + "\r\n";
 
 		// Authentication
 		if(m_pCore->m_dnaCore->m_dnaEvents)
@@ -324,7 +314,7 @@ void CGnuNode::OnConnect(int nErrorCode)
 		Handshake += "Listen-IP: " + IPtoStr(m_pNet->m_CurrentIP) + ":" + NumtoStr(m_pNet->m_CurrentPort) + "\r\n";
 
 		// Remote-IP header
-		Handshake += "Remote-IP: " + m_HostIP + "\r\n";
+		Handshake += "Remote-IP: " + IPtoStr(m_Address.Host) + "\r\n";
 
 		Handshake += "User-Agent: " + m_pCore->GetUserAgent() + "\r\n";
 
@@ -839,7 +829,7 @@ void CGnuNode::ParseOutboundHandshake06(CString Data, byte* Stream, int StreamLe
 		CString AcceptHeader = FindHeader("Accept");
 		if(!AcceptHeader.IsEmpty())
 			if( AcceptHeader.Find("application/x-gnutella2") != -1 )
-				m_pNet->m_pCache->AddKnown( Node(m_HostIP, m_Port, NETWORK_G2) );
+				m_pNet->m_pCache->AddKnown( Node(IPtoStr(m_Address.Host), m_Address.Port, NETWORK_G2) );
 
 		// Parse X-Try header
 		CString TryHeader = FindHeader("X-Try");
@@ -1053,7 +1043,7 @@ void CGnuNode::ParseTryHeader(CString TryHeader)
 {
 	// This host responds with more hosts, put on Perm list
 	if( !m_Inbound)
-		m_pCache->AddWorking( Node(m_HostIP, m_Port, NETWORK_GNUTELLA, CTime::GetCurrentTime() ) );
+		m_pCache->AddWorking( Node( IPtoStr(m_Address.Host), m_Address.Port, NETWORK_GNUTELLA, CTime::GetCurrentTime() ) );
 
 
 	TryHeader += ",";
@@ -1163,9 +1153,11 @@ void CGnuNode::Send_ConnectOK(bool Reply)
 		Handshake += "Listen-IP: " + IPtoStr(m_pNet->m_CurrentIP) + ":" + NumtoStr(m_pNet->m_CurrentPort) + "\r\n";
 
 		// Remote IP header
+		CString HostIP;
 		UINT nTrash;
-		GetPeerName(m_HostIP, nTrash);
-		Handshake += "Remote-IP: " + m_HostIP + "\r\n";
+		GetPeerName(HostIP, nTrash);
+		m_Address.Host = StrtoIP(HostIP);
+		Handshake += "Remote-IP: " + HostIP + "\r\n";
 		
 		Handshake += "User-Agent: " + m_pCore->GetUserAgent() + "\r\n";
 
@@ -1270,9 +1262,11 @@ void CGnuNode::Send_ConnectError(CString Reason)
 
 
 	// Remote-IP header
+	CString HostIP;
 	UINT nTrash;
-	GetPeerName(m_HostIP, nTrash);
-	Handshake += "Remote-IP: " + m_HostIP + "\r\n";
+	GetPeerName(HostIP, nTrash);
+	m_Address.Host = StrtoIP(HostIP);
+	Handshake += "Remote-IP: " + HostIP + "\r\n";
 
 
 	// X-Try header
@@ -1332,9 +1326,11 @@ void CGnuNode::ParseBrowseHandshakeRequest(CString Data)
 
 	Response += "User-Agent: " + m_pCore->GetUserAgent() + "\r\n";
 
+	CString HostIP;
 	UINT nTrash;
-	GetPeerName(m_HostIP, nTrash);
-	Response += "Remote-IP: " + m_HostIP + "\r\n";
+	GetPeerName(HostIP, nTrash);
+	m_Address.Host = StrtoIP(HostIP);
+	Response += "Remote-IP: " + HostIP + "\r\n";
 
 	Response += "Accept-Ranges: bytes\r\n";
 	Response += "Connection: Close\r\n";
@@ -1361,7 +1357,7 @@ void CGnuNode::ParseBrowseHandshakeRequest(CString Data)
 	m_pShare->m_FilesAccess.Unlock();
 
 	byte ReplyBuffer[4096];
-	m_pComm->Encode_QueryHit(BrowseQuery, FileIndexes, ReplyBuffer);
+	m_pProtocol->Encode_QueryHit(BrowseQuery, FileIndexes, ReplyBuffer);
 
 
 	// Get total size of what we're sending
@@ -1515,11 +1511,6 @@ void CGnuNode::ParseBrowseHandshakeResponse(CString Data, byte* Stream, int Stre
 
 void CGnuNode::SetConnected()
 {
-	// Get Remote host
-	CString HostIP;
-	UINT Port;
-	GetPeerName(m_HostIP, Port);
-
 	m_Status = SOCK_CONNECTED;
 	m_StatusText = "Connected";
 	m_pComm->NodeUpdate(this);
@@ -1567,13 +1558,13 @@ void CGnuNode::SetConnected()
 	if( (m_pComm->m_GnuClientMode == GNU_LEAF && m_GnuNodeMode == GNU_ULTRAPEER) ||
 		(m_GnuNodeMode == GNU_ULTRAPEER && m_SupportInterQRP))
 	{
-		Send_PatchReset(); // Send reset
+		m_pProtocol->Send_PatchReset(this); // Send reset
 
 		m_SendDelayPatch = true; // Set to send patch
 	}
 
 
-	Send_Ping(1);	
+	m_pProtocol->Send_Ping(this, 1);	
 
 	if(m_SupportsVendorMsg)
 	{
@@ -1596,7 +1587,7 @@ void CGnuNode::SetConnected()
 		packet_VendMsg SupportedMsg;
 		GnuCreateGuid(&SupportedMsg.Header.Guid);
 		SupportedMsg.Ident = packet_VendIdent("\0\0\0\0", 0, 0);
-		Send_VendMsg( SupportedMsg, payload, length );
+		m_pProtocol->Send_VendMsg( this, SupportedMsg, payload, length );
 
 		delete [] payload;
 	}
@@ -1730,7 +1721,8 @@ void CGnuNode::FlushSendBuffer(bool FullFlush)
 		{
 			PriorityPacket* FrontPacket = m_PacketList[i].front();
 
-			m_pComm->PacketOutgoing(m_NodeID, FrontPacket->m_Packet, FrontPacket->m_Length, FrontPacket->m_Type == 0);
+			if(m_pCore->m_dnaCore->m_dnaEvents)
+				m_pCore->m_dnaCore->m_dnaEvents->NetworkPacketOutgoing(NETWORK_GNUTELLA, true, m_Address.Host.S_addr, m_Address.Port, FrontPacket->m_Packet, FrontPacket->m_Length, false );
 
 			// Compress Packet
 			if( m_DeflateSend )
@@ -1859,7 +1851,7 @@ void CGnuNode::CloseWithReason(CString Reason, bool RemoteClosed)
 {
 	if(m_Status == SOCK_CONNECTED && !RemoteClosed)
 	{
-		Send_Bye(Reason);
+		m_pProtocol->Send_Bye(this, Reason);
 		FlushSendBuffer(true);
 	}
 
@@ -1874,7 +1866,7 @@ void CGnuNode::CloseWithReason(CString Reason, bool RemoteClosed)
 		//if( m_RemoteAgent.Find("GnucDNA") != -1)
 		//{
 		//	CTimeSpan Uptime = CTime::GetCurrentTime() - m_ConnectTime;
-		//	m_pCore->DebugLog( m_RemoteAgent + " " + m_HostIP + ":" + NumtoStr(m_Port) + ", Uptime " + Uptime.Format("%DD %HH %MM") + " Closed: " + Reason);
+		//	m_pCore->DebugLog( m_RemoteAgent + " " + IPtoStr(m_Address.Host) + ":" + NumtoStr(m_Address.Port) + ", Uptime " + Uptime.Format("%DD %HH %MM") + " Closed: " + Reason);
 		//}
 	}
 
@@ -1912,10 +1904,6 @@ void CGnuNode::Close()
 	m_Status = SOCK_CLOSED;
 	m_pComm->NodeUpdate(this);
 }
-
-
-/////////////////////////////////////////////////////////////////////////////
-// Packet handlers
 
 void CGnuNode::FinishReceive(int BuffLength)
 {
@@ -1978,7 +1966,10 @@ void CGnuNode::SplitBundle(byte* bundle, DWORD length)
 			{
 				if (nextPos + sizeof(packet_Header) + packet->Payload <= length)
 				{
-					HandlePacket(packet, 23 + packet->Payload);
+					m_dwSecPackets[0]++;
+
+					Gnu_RecvdPacket Packet( m_Address, packet, 23 + packet->Payload, this);
+					m_pProtocol->ReceivePacket( Packet );
 					
 					nextPos += 23 + packet->Payload;
 					if (nextPos == length)
@@ -2012,943 +2003,6 @@ void CGnuNode::SplitBundle(byte* bundle, DWORD length)
 			m_ExtraLength = 0;
 			//ASSERT(0); // Shouldnt happen
 	}
-}
-
-void CGnuNode::HandlePacket(packet_Header* packet, DWORD length)
-{
-	m_dwSecPackets[0]++;
-
-	m_pComm->PacketIncoming(m_NodeID, (byte*) packet, length, ERROR_NONE, false);
-
-	switch(packet->Function)
-	{
-	case 0x00:
-		Receive_Ping((packet_Ping*) packet, length);
-		break;
-
-	case 0x01:
-		Receive_Pong((packet_Pong*) packet, length);
-		break;
-
-	case 0x30:
-		if( ((packet_RouteTableReset*) packet)->PacketType == 0x0)
-			Receive_RouteTableReset((packet_RouteTableReset*) packet, length);
-		else if(((packet_RouteTableReset*) packet)->PacketType == 0x1)
-			Receive_RouteTablePatch((packet_RouteTablePatch*) packet, length);
-
-		break;
-
-	case 0x31:
-		Receive_VendMsg((packet_VendMsg*) packet, length);
-		break;
-	case 0x32:
-		Receive_VendMsg((packet_VendMsg*) packet, length);
-		break;
-
-	case 0x40:
-		Receive_Push((packet_Push*) packet, length);
-		break;
-
-	case 0x80:
-		Receive_Query((packet_Query*) packet, length);
-		break;
-
-	case 0x81:
-		Receive_QueryHit((packet_QueryHit*) packet, length);
-		break;
-
-	case 0x02:
-		Receive_Bye((packet_Bye*) packet, length);
-		break;
-
-	default:
-		// Disable unknowns
-		// Receive_Unknown((byte *) packet, length);
-		break;
-	}
-}
-
-bool CGnuNode::InspectPacket(packet_Header* packet)
-{
-	if(packet->TTL == 0 || packet->Hops >= MAX_TTL)
-		return false;
-
-
-	packet->Hops++; 
-	packet->TTL--;
-
-
-	// Reset TTL if too high
-	if(packet->TTL >= MAX_TTL)
-		packet->TTL = MAX_TTL - packet->Hops;
-
-	return true;
-}
-
-
-/////////////////////////////////////////////////////////////////////////////
-// Receiving packets
-
-
-void CGnuNode::Receive_Ping(packet_Ping* Ping, int nLength)
-{
-	// Packet stats
-	int StatPos = UpdateStats(Ping->Header.Function);
-
-	// Inspect
-	if(!InspectPacket(&Ping->Header))
-		return;
-
-	// Ping not useful anymore except for keep alives
-	if(Ping->Header.Hops > 1)
-	{
-		PacketError("Ping", "Hops", (byte*) Ping, nLength);
-		return;
-	}
-
-	int RouteID	     = m_pComm->m_TableRouting.FindValue(Ping->Header.Guid);
-	int LocalRouteID = m_pComm->m_TableLocal.FindValue(Ping->Header.Guid);
-
-	if(LocalRouteID != -1)
-	{
-		PacketError("Ping", "Loopback", (byte*) Ping, nLength);
-		return;
-	}
-
-	// Fresh Ping?
-	if(RouteID == -1)
-	{
-		m_pComm->m_TableRouting.Insert(Ping->Header.Guid, m_NodeID);
-		
-		// Ping from child node
-		if(m_pComm->m_GnuClientMode == GNU_ULTRAPEER && m_GnuNodeMode == GNU_LEAF)
-		{
-			if(Ping->Header.Hops == 1)
-			{
-				Send_Pong(Ping->Header.Guid, Ping->Header.Hops);
-				Ping->Header.TTL = 0;
-			}
-			else
-			{
-				PacketError("Ping", "Routing", (byte*) Ping, nLength);
-				return;
-			}
-		}
-
-		// if network is private 
-		else if(m_pPrefs->m_LanMode)
-			Send_Pong(Ping->Header.Guid, Ping->Header.Hops);
-
-		// else if connections below min or hops below 3
-		else if(Ping->Header.Hops < 3 || (m_pPrefs->m_MinConnects != -1 && m_pComm->m_NormalConnectsApprox < m_pPrefs->m_MinConnects))
-			Send_Pong(Ping->Header.Guid, Ping->Header.Hops);
-
-		// Send 1kb of extended pongs a minute (advertise our ultrapeer)
-		else if(m_pComm->m_ExtPongBytes < 22 && m_pComm->m_GnuClientMode == GNU_ULTRAPEER)
-		{
-			Send_Pong(Ping->Header.Guid, Ping->Header.Hops);
-			m_pComm->m_ExtPongBytes += 23;
-		}
-
-		// Broadcast if still alive
-		//if(Ping->Header.Hops < MAX_TTL && Ping->Header.TTL > 0)
-		//	m_pComm->Broadcast_Ping(Ping, nLength, this);
-
-		AddGoodStat(Ping->Header.Function);	
-
-		return;
-	}
-	else
-	{
-		if(RouteID == m_NodeID)
-		{
-			PacketError("Ping", "Duplicate", (byte*) Ping, nLength);
-			return;
-		}
-		else
-		{
-			PacketError("Ping", "Routing", (byte*) Ping, nLength);
-			return;
-		}
-	}
-}
-
-
-void CGnuNode::Receive_Pong(packet_Pong* Pong, int nLength)
-{
-	if(Pong->Header.Payload < 14)		   		 
-	{
-		m_pCore->DebugLog("Gnutella", "Bad Pong, Length " + NumtoStr(Pong->Header.Payload));
-		return;
-	}
-
-	// Packet stats
-	int StatPos = UpdateStats(Pong->Header.Function);
-
-	// Inspect
-	if(!InspectPacket(&Pong->Header))
-	{
-		PacketError("Pong", "Hops", (byte*) Pong, nLength);
-		return;
-	}
-
-	// Detect if this pong is from an ultrapeer
-	bool Ultranode = false;
-
-	UINT Marker = 8;
-	while(Marker <= Pong->FileSize && Marker)
-	{
-		if(Marker == Pong->FileSize)
-		{
-			Ultranode = true;
-			break;
-		}
-		else
-		{
-			Marker *= 2;
-		}
-	}
-
-	// Add to host cache
-	if(Pong->Header.Hops)
-	{
-		m_pCache->AddKnown( Node(IPtoStr(Pong->Host), Pong->Port ) );
-	}
-
-	int RouteID		 = m_pComm->m_TableRouting.FindValue(Pong->Header.Guid);
-	int LocalRouteID = m_pComm->m_TableLocal.FindValue(Pong->Header.Guid);
-
-
-	// Pong for us, or Pong coming in from same path we sent one out
-	if(LocalRouteID == 0 || LocalRouteID == m_NodeID)
-	{
-		// If this pong is one we sent out
-		if(LocalRouteID == m_NodeID)
-		{
-			PacketError("Pong", "Loopback", (byte*) Pong, nLength);
-			return;
-		}
-		else
-		{
-			// Nodes file count
-			if(Pong->Header.Hops == 1)
-				m_NodeFileCount = Pong->FileCount;
-
-
-			// If node a leaf and we are ultrapeer
-			//   Give this pong to other leaves so if we die they can find each other
-			if(m_pComm->m_GnuClientMode == GNU_ULTRAPEER && m_GnuNodeMode == GNU_LEAF)
-				m_pComm->Route_UltraPong(Pong, nLength, LocalRouteID);
-					
-
-			AddGoodStat(Pong->Header.Function);
-			
-			return;
-		}
-	}
-
-	if(RouteID != -1)
-	{	
-		// Send it out	
-		if(Pong->Header.Hops < MAX_TTL && Pong->Header.TTL > 0)
-		{
-			m_pComm->Route_Pong(Pong, nLength, RouteID);
-
-			if(Ultranode && m_GnuNodeMode != GNU_LEAF)
-				m_pComm->Route_UltraPong(Pong, nLength, RouteID);
-		}
-
-		AddGoodStat(Pong->Header.Function);
-		
-		return;
-	}
-	else
-	{
-		// If pong advertising ultrapeer it is good
-		if(m_pComm->m_GnuClientMode == GNU_LEAF && Ultranode)
-		{
-			AddGoodStat(Pong->Header.Function);
-
-			return;
-		}
-
-		PacketError("Pong", "Routing", (byte*) Pong, nLength);
-		
-		return;
-	}  
-}
-
-void CGnuNode::Receive_Push(packet_Push* Push, int nLength)
-{
-	if(Push->Header.Payload < 26)		   		 
-	{
-		m_pCore->DebugLog("Gnutella", "Bad Push, Length " + NumtoStr(Push->Header.Payload));
-		return;
-	}
-
-
-	// Packet stats
-	int StatPos = UpdateStats(Push->Header.Function);
-	
-	// Host Cache
-	m_pCache->AddKnown( Node(IPtoStr(Push->Host), Push->Port) );
-
-
-	// Find packet in hash tables
-	int RouteID		 = m_pComm->m_TableRouting.FindValue(Push->Header.Guid);
-	int LocalRouteID = m_pComm->m_TableLocal.FindValue(Push->Header.Guid);
-	int PushRouteID  = m_pComm->m_TablePush.FindValue(Push->ServerID);
-
-	if(LocalRouteID != -1)
-	{
-		PacketError("Push", "Loopback", (byte*) Push, nLength);
-		return;
-	}
-
-	int i = 0;
-
-	// Check ServerID of Push with ClientID of the client
-	if(m_pPrefs->m_ClientID == Push->ServerID)
-	{
-		GnuPush G1Push;
-		G1Push.Network		= NETWORK_GNUTELLA;
-		G1Push.Address.Host = Push->Host;
-		G1Push.Address.Port	= Push->Port;
-		G1Push.FileID		= Push->Index;
-
-		m_pTrans->DoPush( G1Push );
-
-		AddGoodStat(Push->Header.Function);
-		
-		return;
-	}
-
-	if(RouteID == -1)
-	{
-		m_pComm->m_TableRouting.Insert(Push->Header.Guid, m_NodeID);
-	}
-	else
-	{
-		if(RouteID == m_NodeID)
-		{
-			PacketError("Push", "Duplicate", (byte*) Push, nLength);
-			return;
-		}
-		else
-		{
-			PacketError("Push", "Routing", (byte*) Push, nLength);
-			return;
-		}
-	}
-
-	if(PushRouteID != -1)
-	{	
-		Push->Header.Hops++;
-		if(Push->Header.TTL != 0)
-			Push->Header.TTL--;
-
-		if(Push->Header.TTL > 0)
-			m_pComm->Route_Push(Push, nLength, PushRouteID);
-		
-		AddGoodStat(Push->Header.Function);
-		
-		return;	
-	}
-	else
-	{
-		PacketError("Push", "Routing", (byte*) Push, nLength);
-		return;
-	}
-}
-
-void CGnuNode::Receive_Query(packet_Query* Query, int nLength)
-{
-	if(Query->Header.Payload < 2)		   		 
-	{
-		m_pCore->DebugLog("Gnutella", "Bad Query, Length " + NumtoStr(Query->Header.Payload));
-		return;
-	}
-	
-	// Packet stats
-	int StatPos = UpdateStats(Query->Header.Function);
-
-
-	// Inspect
-	int QuerySize  = Query->Header.Payload - 2;
-	int TextSize   = strlen((char*) Query + 25) + 1;
-
-	// Bad packet, text bigger than payload
-	if (TextSize > QuerySize)
-	{
-		PacketError("Query", "Routing", (byte*) Query, nLength);
-		//TRACE0("Text Query too big " + CString((char*) Query + 25) + "\n");
-		return;
-	}
-	
-	int RouteID = m_pComm->m_TableRouting.FindValue(Query->Header.Guid);
-	int LocalRouteID = m_pComm->m_TableLocal.FindValue(Query->Header.Guid);
-
-	if(LocalRouteID != -1)
-	{
-		PacketError("Query", "Loopback", (byte*) Query, nLength);
-		return;
-	}
-
-	// Fresh Query?
-	if(RouteID == -1)
-	{
-		m_pComm->m_TableRouting.Insert(Query->Header.Guid, m_NodeID);
-
-		AddGoodStat(Query->Header.Function);
-
-		if(*((char*) Query + 25) == '\\')
-			return;
-
-		// Client in Ultrapeer Mode
-		if(m_pComm->m_GnuClientMode == GNU_ULTRAPEER)
-		{
-			Query->Header.Hops++;
-			
-			if(Query->Header.TTL > MAX_TTL) 
-				Query->Header.TTL = MAX_TTL;   
-
-			// Received from Leaf
-			if( m_GnuNodeMode == GNU_LEAF )
-			{
-				// Keep TTL the Same from leaf to UP to dyn query list
-				m_pComm->AddDynQuery( new DynQuery(m_NodeID, (byte*) Query, nLength) );
-				
-		
-				// Change ttl after its added to dyn query list
-				// So query initially sent to other chilren and immediate UPs based on QRTs
-				Query->Header.TTL = 1;
-			}
-
-			// Received from Ultrapeer
-			if( m_GnuNodeMode == GNU_ULTRAPEER)
-			{
-				if(Query->Header.TTL != 0)
-					Query->Header.TTL--;
-
-				if(Query->Header.TTL > 1)
-					m_pComm->Broadcast_Query(Query, nLength, this);
-			}
-		}
-
-		// Test too see routed last hop queries are correct
-/*#ifdef _DEBUG
-		if(Query->Header.TTL == 0 && m_SupportInterQRP)
-		{
-			CString Text((char*) Query + 25);
-			TRACE0("INTER-QRP:" + Text + "\n");
-		}
-#endif*/
-
-		// Queue to be compared with local files
-		GnuQuery G1Query;
-		G1Query.Network    = NETWORK_GNUTELLA;
-		G1Query.OriginID   = m_NodeID;
-		G1Query.SearchGuid = Query->Header.Guid;
-
-		if(m_pComm->m_GnuClientMode == GNU_ULTRAPEER)
-		{
-			G1Query.Forward = true;
-			G1Query.Source  = this;
-
-			if(Query->Header.TTL == 1)
-				G1Query.UltraForward = true;
-
-			memcpy(G1Query.Packet, (byte*) Query, nLength);
-			G1Query.PacketSize = nLength;
-		}
-
-		G1Query.Terms.push_back( CString((char*) Query + 25, TextSize) );
-
-		
-		CString ExtendedQuery;
-
-		if (TextSize < QuerySize)
-		{
-			int ExtendedSize = strlen((char*) Query + 25 + TextSize);
-		
-			if(ExtendedSize)
-			{
-				ExtendedQuery = CString((char*) Query + 25 + TextSize, ExtendedSize);
-		
-				/*int WholeSize = TextSize + HugeSize + 1;
-				
-				TRACE0("Huge Query, " + NumtoStr(WholeSize) + " bytes\n");
-				TRACE0("     " + CString((char*)Query + 25 + TextSize) + "\n");
-
-				if(WholeSize > QuerySize)
-					TRACE0("   Huge Query too big " + CString((char*) Query + 25 + TextSize) + "\n");
-
-				if(WholeSize < QuerySize)
-				{
-					TRACE0("   Huge Query too small " + CString((char*) Query + 25 + TextSize) + "\n");
-
-					byte* j = 0;
-					for(int i = WholeSize; i < QuerySize; i++)
-						j = (byte*) Query + 25 + i;
-				}*/
-			}
-			else
-			{
-				// Query with double nulls, wtf
-			}
-		}
-
-		while(!ExtendedQuery.IsEmpty())
-			G1Query.Terms.push_back( ParseString(ExtendedQuery, 0x1C) );
-
-
-		m_pShare->m_QueueAccess.Lock();
-			m_pShare->m_PendingQueries.push_front(G1Query);	
-		m_pShare->m_QueueAccess.Unlock();
-
-
-		m_pShare->m_TriggerThread.SetEvent();
-		
-		return;
-	}
-	else
-	{
-		if(RouteID == m_NodeID)
-		{
-			PacketError("Query", "Duplicate", (byte*) Query, nLength);
-			return;
-		}
-		else
-		{
-			PacketError("Query", "Routing", (byte*) Query, nLength);
-			return;
-		}
-	}
-}
-
-
-void CGnuNode::Receive_QueryHit(packet_QueryHit* QueryHit, DWORD nLength)
-{
-	if(QueryHit->Header.Payload < 27)		   		 
-	{
-		m_pCore->DebugLog("Gnutella", "Bad Query Hit, Length " + NumtoStr(QueryHit->Header.Payload));
-		return;
-	}
-
-	// Packet stats
-	int StatPos = UpdateStats(QueryHit->Header.Function);
-
-	// Host Cache
-	m_pCache->AddKnown( Node(IPtoStr(QueryHit->Host), QueryHit->Port) );
-	
-	// Inspect
-	//if(!InspectPacket(&QueryHit->Header))
-	//{
-	//	PacketError("QueryHit", "Hops", (byte*) QueryHit, nLength);
-	//	return;
-	//}
-
-
-	int RouteID		 = m_pComm->m_TableRouting.FindValue(QueryHit->Header.Guid);
-	int LocalRouteID = m_pComm->m_TableLocal.FindValue(QueryHit->Header.Guid);
-
-	if(m_BrowseID)
-		LocalRouteID = 0;
-
-
-	// Queryhit for us, or Queryhit coming in from same path we sent one out
-	if(LocalRouteID == 0 || LocalRouteID == m_NodeID)
-	{
-		// Check for query hits we sent out
-		if(LocalRouteID == m_NodeID)
-		{
-			PacketError("QueryHit", "Loopback", (byte*) QueryHit, nLength);
-			return;
-		}
-
-		else
-		{	
-			AddGoodStat(QueryHit->Header.Function);
-
-			CGnuSearch* pSearch = NULL;
-
-			// Check for query hit meant for client
-			for(int i = 0; i < m_pNet->m_SearchList.size(); i++)
-				if(QueryHit->Header.Guid == m_pNet->m_SearchList[i]->m_QueryID || m_BrowseID == m_pNet->m_SearchList[i]->m_SearchID)
-				{
-					pSearch = m_pNet->m_SearchList[i];
-					break;
-				}
-
-			if( pSearch == NULL)
-				return;
-
-			// Extract file sources from query hit and pass to search and download interfaces
-			std::vector<FileSource> Sources;
-			Decode_QueryHit(Sources, QueryHit, nLength);
-
-			for(int i = 0; i < Sources.size(); i++)
-				if(pSearch)
-					pSearch->IncomingSource(Sources[i]);
-			
-		
-			return;
-		}
-	}
-
-	if(RouteID != -1)
-	{	
-		if(m_pComm->m_GnuClientMode != GNU_ULTRAPEER) // only ultrapeers can route
-			return;
-
-		// Add ClientID of packet to push table
-		if(m_pComm->m_TablePush.FindValue( *((GUID*) ((byte*)QueryHit + (nLength - 16)))) == -1)
-			m_pComm->m_TablePush.Insert( *((GUID*) ((byte*)QueryHit + (nLength - 16))) , m_NodeID);
-		
-		QueryHit->Header.Hops++;
-		if(QueryHit->Header.TTL != 0)
-			QueryHit->Header.TTL--;
-
-		// Route to another ultrapeer
-		if(QueryHit->Header.TTL > 0)
-			m_pComm->Route_QueryHit(QueryHit, nLength, RouteID);
-
-		// Send if meant for child
-		std::map<int, CGnuNode*>::iterator itNode = m_pComm->m_NodeIDMap.find(RouteID);
-		if(itNode != m_pComm->m_NodeIDMap.end())
-			if(itNode->second->m_Status == SOCK_CONNECTED && itNode->second->m_GnuNodeMode == GNU_LEAF)
-			{	
-				if(QueryHit->Header.TTL == 0)
-					QueryHit->Header.TTL++;
-
-				m_pComm->Route_QueryHit(QueryHit, nLength, RouteID);
-
-				// Update dyn query
-				std::map<uint32, DynQuery*>::iterator itDyn = m_pComm->m_DynamicQueries.find( HashGuid(QueryHit->Header.Guid) );
-				if( itDyn != m_pComm->m_DynamicQueries.end() )
-					itDyn->second->Hits += QueryHit->TotalHits;
-			}
-
-		AddGoodStat(QueryHit->Header.Function);
-
-		return;
-	}
-	else
-	{
-		PacketError("QueryHit", "Routing", (byte*) QueryHit, nLength);
-		return;
-	}  
-}
-
-void CGnuNode::Decode_QueryHit( std::vector<FileSource> &Sources, packet_QueryHit* QueryHit, uint32 length)
-{
-	byte* Packet   = (byte*) QueryHit;
-
-	bool ExtendedPacket = false;
-	bool Firewall		= false;
-	bool Busy			= false;
-	bool Stable			= false;
-	bool ActualSpeed	= false;
-
-	int   pos = 0;
-	int   i   = 0;
-	int   HitsLeft    = QueryHit->TotalHits;
-	UINT  NextPos     = 34;
-	UINT  Length      = QueryHit->Header.Payload + 23;
-	int   ClientIDPos = Length - 16;
-	
-	// Find start of QHD
-	int ItemCount = 0;
-	for(i = 42; i < ClientIDPos; i++)
-		if(Packet[i] == 0)
-		{
-			while(Packet[++i] != 0)
-				if(i > Length - 16)
-					break;
-
-			ItemCount++;
-		
-			if(ItemCount != QueryHit->TotalHits)
-				i += 9;
-			else
-				break;
-		}
-
-
-	// i should either now be at front of ClientID or QHD
-	CString Vendor;
-	std::map<int, int>     MetaIDMap;
-	std::map<int, CString> MetaValueMap;
-	
-	if(i < ClientIDPos)
-	{
-		packet_QueryHitEx* QHD = (packet_QueryHitEx*) &Packet[i + 1];
-	
-		Vendor = CString((char*) QHD->VendorID, 4);
-	
-		ExtendedPacket = true;
-
-		if(QHD->Length == 1)
-			if(QHD->Push == 1)
-				Firewall = true;
-
-		if(QHD->Length > 1)
-		{
-			if(QHD->FlagPush)
-				Firewall = QHD->Push;
-
-			if(QHD->FlagBusy)
-				Busy = QHD->Busy;
-			
-			if(QHD->FlagStable)
-				Stable = QHD->Stable;
-
-			if(QHD->FlagSpeed)
-				ActualSpeed = QHD->Speed;
-		}
-
-		// Check for XML Metadata
-		if(QHD->Length == 4&& QHD->MetaSize > 1)
-			if(QHD->MetaSize < (ClientIDPos - 34))
-			{
-				CString MetaLoad = CString((char*) &Packet[ClientIDPos - QHD->MetaSize], QHD->MetaSize);
-
-				// Decompress, returns pure xml response
-				if(m_pShare->m_pMeta->DecompressMeta(MetaLoad, (byte*) &Packet[ClientIDPos - QHD->MetaSize], QHD->MetaSize))
-					m_pShare->m_pMeta->ParseMeta(MetaLoad, MetaIDMap, MetaValueMap);
-			}
-		
-	}
-
-	// Extract results from the packet
-	while(HitsLeft > 0 && NextPos < ClientIDPos)
-	{	
-		FileSource Item;
-		
-		memcpy(&Item.FileIndex, &Packet[NextPos], 4);
-		memcpy(&Item.Size, &Packet[NextPos + 4], 4);
-
-		Item.Address.Host = QueryHit->Host;
-		Item.Address.Port = QueryHit->Port;
-		Item.Network	  = NETWORK_GNUTELLA;
-		Item.Speed        = QueryHit->Speed;
-
-		Item.Firewall	 = Firewall;
-		Item.Busy		 = Busy;
-		Item.Stable		 = Stable;
-		Item.ActualSpeed = ActualSpeed;
-		
-		if(ExtendedPacket)
-			Item.Vendor = GetVendor( Vendor );
-
-		Item.GnuRouteID = m_NodeID;
-		memcpy(&Item.PushID, &Packet[ClientIDPos], 16);
-		Item.Distance = QueryHit->Header.Hops;
-
-
-		// Get Filename
-		Item.Name = (char*) &Packet[NextPos + 8];
-		
-		Item.NameLower = Item.Name;
-		Item.NameLower.MakeLower();
-		//Item.Icon = m_pDoc->GetIconIndex(Item.NameLower);
-		
-		pos = NextPos + 8 + Item.Name.GetLength();
-
-
-		// Add extracted metadata from end of packet
-		Item.MetaID = 0;
-		std::map<int, int>::iterator itMetaID = MetaIDMap.find(QueryHit->TotalHits - HitsLeft);
-
-		if(itMetaID != MetaIDMap.end())
-		{
-			Item.MetaID = itMetaID->second;
-
-			std::map<int, CGnuSchema*>::iterator itSchema = m_pShare->m_pMeta->m_MetaIDMap.find(Item.MetaID);
-			std::map<int, CString>::iterator itMetaValue = MetaValueMap.find(QueryHit->TotalHits - HitsLeft);
-			
-			if(itSchema != m_pShare->m_pMeta->m_MetaIDMap.end() && itMetaValue != MetaValueMap.end())
-			{
-				itSchema->second->SetResultAttributes(Item.AttributeMap, itMetaValue->second);
-
-				itMetaValue->second.Replace("&apos;", "'");
-				Item.GnuExtraInfo.push_back(itMetaValue->second);
-			}
-		}
-
-
-		// Get Extended file info
-		if(Packet + pos + 1 != NULL)
-		{
-			CString ExInfo = (char*) (Packet + pos + 1);
-			int ExLength = ExInfo.GetLength();
-
-			while(!ExInfo.IsEmpty())
-			{
-				CString SubExInfo = ParseString(ExInfo, 0x1C);
-
-				Item.GnuExtraInfo.push_back(SubExInfo);
-			}
-
-			pos += ExLength + 1;
-		}
-
-		// Add Hash info
-		for(int i = 0; i < Item.GnuExtraInfo.size(); i++)
-		{
-			// Sha1
-			int hashpos = Item.GnuExtraInfo[i].Find("urn:sha1:");
-
-			if(hashpos != -1 && Item.GnuExtraInfo[i].GetLength() == 9 + 32)
-				Item.Sha1Hash = Item.GnuExtraInfo[i].Right(32);
-
-			// Bitprint
-			hashpos = Item.GnuExtraInfo[i].Find("urn:bitprint:");
-
-			if(hashpos != -1 && Item.GnuExtraInfo[i].GetLength() == 13 + 32 + 1 + 39)
-			{
-				Item.Sha1Hash  = Item.GnuExtraInfo[i].Mid(13, 32);
-				Item.TigerHash = Item.GnuExtraInfo[i].Right(39);
-			}
-		}
-		
-		// Add to source list
-		Sources.push_back(Item);
-
-
-		// Check for end of reply packet
-		if(pos + 1 >= Length - 16)
-			HitsLeft = 0;
-		else
-		{
-			HitsLeft--;
-			NextPos = pos + 1;
-		}
-	}
-}
-
-void CGnuNode::Receive_Bye(packet_Bye* Bye, int nLength)
-{
-	byte* ByeData = (byte*) Bye;
-
-	CloseWithReason( CString( (char*) &ByeData[23]), true );
-}
-
-void CGnuNode::Receive_RouteTableReset(packet_RouteTableReset* TableReset, UINT Length)
-{	
-	if(TableReset->Header.Payload < 6)		   		 
-	{
-		m_pCore->DebugLog("Gnutella", "Bad Table Reset, Length " + NumtoStr(TableReset->Header.Payload));
-		return;
-	}
-
-	if(m_pComm->m_GnuClientMode != GNU_ULTRAPEER)	   		 
-	{
-		m_pCore->DebugLog("Gnutella", "Table Reset Received while in Leaf Mode");
-		return;
-	}
-
-	if(TableReset->Header.Hops > 0)
-	{
-		m_pCore->DebugLog("Gnutella", "Table Reset Hops > 0");
-		return;
-	}
-
-	m_RemoteTableInfinity = TableReset->Infinity;
-	m_RemoteTableSize     = TableReset->TableLength / 8;
-	memset( m_RemoteHitTable, 0xFF, GNU_TABLE_SIZE );
-
-	m_CurrentSeq = 1;
-}
-
-void CGnuNode::Receive_RouteTablePatch(packet_RouteTablePatch* TablePatch, UINT Length)
-{
-	if(TablePatch->Header.Payload < 5)		   		 
-	{
-		m_pCore->DebugLog("Gnutella", "Bad Table Patch, Length " + NumtoStr(TablePatch->Header.Payload));
-		return;
-	}
-
-	if(m_pComm->m_GnuClientMode != GNU_ULTRAPEER)		   		 
-	{
-		m_pCore->DebugLog("Gnutella", "Table Patch Received while in Leaf Mode");
-		return;
-	}
-
-	if(TablePatch->Header.Hops > 0)
-	{
-		m_pCore->DebugLog("Gnutella", "Table Patch Hops > 0");
-		return;
-	}
-
-	if( TablePatch->SeqNum == 0 || TablePatch->SeqNum > TablePatch->SeqSize || m_CurrentSeq != TablePatch->SeqNum)
-	{
-		CloseWithReason("Table Patch Sequence Error");
-		return;
-	}
-
-	if(TablePatch->EntryBits != 4 && TablePatch->EntryBits != 8)
-	{
-		CloseWithReason("Table Patch Invalid Entry Bits");
-		return;
-	}
-
-	// Make sure table length and infinity have been set
-	if(m_RemoteTableSize == 0 || m_RemoteTableInfinity == 0)
-	{
-		m_pCore->DebugLog("Gnutella", "Table Patch Received Before Reset");
-		return;
-	}
-
-	// If first patch in sequence, reset table
-	if(TablePatch->SeqNum == 1)
-	{
-		if(m_PatchBuffer)
-			delete [] m_PatchBuffer;
-
-		m_PatchSize   = m_RemoteTableSize * TablePatch->EntryBits;
-		m_PatchBuffer  = new byte[m_PatchSize];
-		m_PatchOffset = 0;
-	}
-	
-	// Check patch not received out of sync and buff not created
-	if(m_PatchBuffer == NULL)
-	{
-		m_pCore->DebugLog("Gnutella", "Table Patch Received Out of Sync");
-		return;
-	}
-
-
-	if(TablePatch->SeqNum <= TablePatch->SeqSize)
-	{
-		int PartSize = TablePatch->Header.Payload - 5;
-
-		// As patches come in, build buffer of data
-		if(m_PatchOffset + PartSize <= m_PatchSize)
-		{
-			memcpy(m_PatchBuffer + m_PatchOffset, (byte*) TablePatch + 28, PartSize);
-			m_PatchOffset += PartSize;
-		}
-		else
-		{
-			CloseWithReason("Patch Exceeded Specified Size");
-			m_pCore->DebugLog("Gnutella", "Table Patch Too Large");
-		}
-	}
-
-	// Final patch received
-	if(TablePatch->SeqNum == TablePatch->SeqSize)
-	{
-		if(TablePatch->Compression == 0x1)
-			m_PatchCompressed = true;
-
-		m_PatchBits = TablePatch->EntryBits;
-
-		m_PatchReady = true;
-	}
-	else
-		m_CurrentSeq++;
-	
 }
 
 void CGnuNode::ApplyPatchTable()
@@ -3049,480 +2103,6 @@ void CGnuNode::SetPatchBit(int &remotePos, double &Factor, byte value)
 	}
 }
 
-void CGnuNode::Receive_VendMsg(packet_VendMsg* VendMsg, int nLength)
-{
-	if(VendMsg->Header.Payload < 8)		   		 
-	{
-		m_pCore->DebugLog("Gnutella", "Bad VendMsg, Length " + NumtoStr(VendMsg->Header.Payload));
-		return;
-	}
-
-	// Check if a 'Messages Supported' message
-	if( memcmp(VendMsg->Ident.VendorID, "\0\0\0\0", 4) == 0 && VendMsg->Ident.Type == 0 && VendMsg->Ident.Version == 0)
-	{
-		byte* message   = ((byte*) VendMsg) + 31;
-		int	  sublength = nLength - 31;
-
-		uint16 VectorSize = 0;
-		if(sublength >= 2)
-			memcpy(&VectorSize, message, 2);
-
-		if( sublength == 2 + VectorSize * 8)
-		{
-			// VMS Gnucleus 12.33.43.13: BEAR/11v1 
-			//TRACE0("VMS " + m_RemoteAgent + " " + m_HostIP + ": ");
-
-			for(int i = 2; i < sublength; i += 8)
-			{
-				packet_VendIdent* MsgSupported = (packet_VendIdent*) (message + i);
-
-				CString Msg =  CString(MsgSupported->VendorID, 4) + "/" + NumtoStr(MsgSupported->Type) + "v" + NumtoStr(MsgSupported->Version);
-				
-				if(Msg == "BEAR/11v1")
-					m_SupportsLeafGuidance = true;
-
-				//TRACE0(Msg + " ");
-			}
-
-			//TRACE0("\n");
-		}
-		else
-			m_pCore->DebugLog("Gnutella", "Vendor Msg, Messages Support, VS:" + NumtoStr(VectorSize) + ", SL:" + NumtoStr(sublength));
-			
-	}
-
-	// Leaf Guided Dyanic Query: Query Status Request
-	if( memcmp(VendMsg->Ident.VendorID, "BEAR", 4) == 0 && VendMsg->Ident.Type == 11 && VendMsg->Ident.Version <= 1)
-	{
-		if(m_pComm->m_GnuClientMode != GNU_LEAF)
-		{
-			m_pCore->DebugLog("Gnutella", "Query Status Request Received from " + m_RemoteAgent + " while in Ultrapeer Mode");
-			return;
-		}
-
-		// Find right search by using the GUID
-		for(int i = 0; i < m_pNet->m_SearchList.size(); i++)
-			if(VendMsg->Header.Guid == m_pNet->m_SearchList[i]->m_QueryID)
-			{
-				TRACE0("VMS " + m_RemoteAgent + " " + m_HostIP + ": Query Status Request");
-				CGnuSearch* pSearch = m_pNet->m_SearchList[i];
-				
-				packet_VendMsg ReplyMsg;
-				ReplyMsg.Header.Guid = VendMsg->Header.Guid;
-				ReplyMsg.Ident = packet_VendIdent("BEAR", 12, 1);
-				
-				uint16 Hits = pSearch->m_WholeList.size();
-
-				Send_VendMsg( ReplyMsg, (byte*) &Hits, 2 );
-			}
-	}
-
-	// Leaf Guided Dyanic Query: Query Status Response
-	if( memcmp(VendMsg->Ident.VendorID, "BEAR", 4) == 0 && VendMsg->Ident.Type == 12 && VendMsg->Ident.Version <= 1)
-	{
-		byte* message   = ((byte*) VendMsg) + 31;
-		int	  sublength = nLength - 31;
-
-		if(sublength != 2)
-			return;
-
-		uint16 HitCount = 0;
-		memcpy(&HitCount, message, 2);
-
-		std::map<uint32, DynQuery*>::iterator itDyn = m_pComm->m_DynamicQueries.find( HashGuid(VendMsg->Header.Guid) );
-		if( itDyn != m_pComm->m_DynamicQueries.end() )
-		{
-			// End Query if 0xFFFF received
-			if(HitCount == 0xFFFF)
-			{
-				delete itDyn->second;
-				m_pComm->m_DynamicQueries.erase(itDyn);
-			}
-
-			// Otherwise update hit count if its greater than what we've seen
-			else if(HitCount > itDyn->second->Hits)
-				itDyn->second->Hits = HitCount;
-		}
-	}
-
-}
-void CGnuNode::Receive_Unknown(byte* UnkownPacket, DWORD dwLength)
-{
-}
-
-void CGnuNode::PacketError(CString Type, CString Error, byte* packet, int length)
-{
-	//m_pCore->DebugLog("Gnutella", Type + " Packet " + Error + " Error");
-}
-
-/////////////////////////////////////////////////////////////////////////////
-// Sending packets
-
-void CGnuNode::Send_Ping(int TTL)
-{
-	GUID Guid = GUID_NULL;
-	GnuCreateGuid(&Guid);
-	if (Guid == GUID_NULL)
-		return;
-
-	packet_Ping Ping;
-	
-	Ping.Header.Guid	 = Guid;
-	Ping.Header.Function = 0;
-	Ping.Header.Hops	 = 0;
-	Ping.Header.TTL		 = TTL;
-	Ping.Header.Payload  = 0;
-
-	
-	m_pComm->m_TableLocal.Insert(Guid, 0);
-
-	SendPacket(&Ping, 23, PACKET_PING, Ping.Header.Hops);
-}
-
-void CGnuNode::Send_Pong(GUID Guid, int nHops)
-{
-	// Build the packet
-	packet_Pong Pong;
-
-	Pong.Header.Guid		= Guid;
-	Pong.Header.Function	= 0x01;
-	Pong.Header.TTL			= nHops;
-	Pong.Header.Hops		= 0;
-	Pong.Header.Payload		= 14;
-	Pong.Port				= (WORD) m_pNet->m_CurrentPort;
-	Pong.Host				=  m_pNet->m_CurrentIP;
-	Pong.FileCount			= m_pShare->m_TotalLocalFiles;
-
-	if(m_pPrefs->m_ForcedHost.S_addr)
-		Pong.Host = m_pPrefs->m_ForcedHost;
-
-
-	// If we are an ultrapeer, the size field is used as a marker send that info
-	if(m_pComm->m_GnuClientMode == GNU_ULTRAPEER)
-		Pong.FileSize = m_pShare->m_UltrapeerSizeMarker;
-	else
-		Pong.FileSize = m_pShare->m_TotalLocalSize;
-
-	m_pComm->m_TableLocal.Insert(Guid, m_NodeID);
-
-	SendPacket(&Pong, 37, PACKET_PONG, Pong.Header.TTL - 1);
-}
-
-void CGnuNode::Send_QueryHit(GnuQuery &FileQuery, byte* pQueryHit, DWORD ReplyLength, byte ReplyCount, CString &MetaTail)
-{
-	packet_QueryHit*    QueryHit = (packet_QueryHit*)   pQueryHit;
-	packet_QueryHitEx*  QHD      = (packet_QueryHitEx*) (pQueryHit + 34 + ReplyLength);
-
-
-	// Build Query Packet
-	int packetLength = 34 + ReplyLength;
-
-	QueryHit->Header.Guid = FileQuery.SearchGuid;
-	m_pComm->m_TableLocal.Insert(FileQuery.SearchGuid, m_NodeID);
-
-	packet_Query* pQuery = (packet_Query*) FileQuery.Packet;
-
-	QueryHit->Header.Function = 0x81;
-	QueryHit->Header.TTL	  = pQuery->Header.Hops;
-	QueryHit->Header.Hops	  = 0;
-
-	QueryHit->TotalHits	= ReplyCount;
-	QueryHit->Port		= (WORD) m_pNet->m_CurrentPort;
-	QueryHit->Speed		= GetSpeed();
-	QueryHit->Host		= m_pNet->m_CurrentIP;
-
-	if(m_pPrefs->m_ForcedHost.S_addr)
-		QueryHit->Host = m_pPrefs->m_ForcedHost;
-
-
-	// Add Query Hit Descriptor
-	packetLength += sizeof(packet_QueryHitEx);
-
-	bool Busy = false;
-	if(m_pPrefs->m_MaxUploads)
-		if(m_pTrans->CountUploading() >= m_pPrefs->m_MaxUploads)
-			Busy = true;
-
-	memcpy( QHD->VendorID, (LPCSTR) m_pCore->m_ClientCode, 4);
-	QHD->Length		= 4;
-	QHD->FlagPush	= true;
-	QHD->FlagBad	= true;
-	QHD->FlagBusy	= true;
-	QHD->FlagStable	= true;
-	QHD->FlagSpeed	= true;
-	QHD->FlagTrash  = 0;
-
-	QHD->Push	= m_pNet->m_TcpFirewall;
-	QHD->Bad	= 0;
-	QHD->Busy	= Busy;
-	QHD->Stable	= m_pNet->m_HaveUploaded;
-	QHD->Speed	= m_pNet->m_RealSpeedUp ? true : false;
-	QHD->Trash	= 0;
-	
-
-	// Add Metadata to packet
-	strcpy((char*) pQueryHit + packetLength, "{deflate}");
-	packetLength += 9;
-
-	DWORD MetaSize  = MetaTail.GetLength() + 1; // Plus one for null
-	DWORD CompSize	= MetaSize * 1.2 + 12;
-
-	if(compress(pQueryHit + packetLength, &CompSize, (byte*) MetaTail.GetBuffer(), MetaSize) == Z_OK)
-	{
-		packetLength += CompSize;
-
-		QHD->MetaSize = 9 + CompSize;
-	}
-	MetaTail.ReleaseBuffer();
-
-	// Add ClientID of this node
-	memcpy(pQueryHit + packetLength, &m_pPrefs->m_ClientID, 16);
-
-	packetLength += 16;
-
-	
-	// Send the packet
-	QueryHit->Header.Payload  = packetLength - 23;
-
-	
-	// If we are browseing a remote host, send packet to custom buffer
-	if(m_BrowseID)
-	{
-		byte* BrowsePacket = new byte[packetLength];
-		memcpy(BrowsePacket, pQueryHit, packetLength);
-		
-		m_BrowseHits.push_back(BrowsePacket);
-		m_BrowseHitSizes.push_back(packetLength);
-	}
-	else
-		SendPacket(pQueryHit, packetLength, PACKET_QUERYHIT, QueryHit->Header.TTL - 1, true);
-
-}
-
-void CGnuNode::Send_ForwardQuery(GnuQuery &FileQuery)
-{
-	packet_Query* pQuery = (packet_Query*) FileQuery.Packet;
-	SendPacket(pQuery, FileQuery.PacketSize, PACKET_QUERY, pQuery->Header.Hops, true);
-}
-
-void CGnuNode::Send_Bye(CString Reason)
-{
-	GUID Guid = GUID_NULL;
-	GnuCreateGuid(&Guid);
-	if (Guid == GUID_NULL)
-		return;
-	
-	int PacketSize = 23 + Reason.GetLength() + 1;
-	byte* PacketData = new byte[PacketSize];
-	
-	packet_Bye* Bye =  (packet_Bye*) PacketData;
-	Bye->Header.Guid		= Guid;
-	Bye->Header.Function	= 0x02;
-	Bye->Header.TTL			= 1;
-	Bye->Header.Hops		= 0;
-	Bye->Header.Payload		= PacketSize - 23;
-
-	strcpy((char*) &PacketData[23], (LPCSTR) Reason);
-
-	byte test[255];
-	memcpy(test, PacketData, PacketSize);
-
-	PacketData[PacketSize - 1] = NULL;
-
-	SendPacket(PacketData, PacketSize, PACKET_BYE, Bye->Header.Hops);
-
-	delete [] PacketData;
-}
-
-void CGnuNode::Send_PatchReset()
-{
-	GUID Guid = GUID_NULL;
-	GnuCreateGuid(&Guid);
-	if (Guid == GUID_NULL)
-		return;
-
-
-	// Build the packet
-	packet_RouteTableReset Reset;
-
-	Reset.Header.Guid		= Guid;
-	Reset.Header.Function	= 0x30;
-	Reset.Header.TTL		= 1;
-	Reset.Header.Hops		= 0;
-	Reset.Header.Payload	= 6;
-
-	Reset.PacketType	= 0x0;
-	Reset.TableLength	= 1 << GNU_TABLE_BITS;
-	Reset.Infinity		= TABLE_INFINITY;
-
-	SendPacket(&Reset, 29, PACKET_QUERY, Reset.Header.Hops);
-}
-
-void CGnuNode::Send_PatchTable()
-{
-	byte PatchTable[GNU_TABLE_SIZE];
-
-	// Get local table
-	memcpy(PatchTable, m_pShare->m_pWordTable->m_GnutellaHitTable, GNU_TABLE_SIZE);
-	
-
-	// Sending inter-ultrapeer qrp table
-	if( m_pComm->m_GnuClientMode == GNU_ULTRAPEER )
-	{
-		// Build aggregate table of leaves
-		for(int i = 0; i < m_pComm->m_NodeList.size(); i++)
-			if(m_pComm->m_NodeList[i]->m_Status == SOCK_CONNECTED && m_pComm->m_NodeList[i]->m_GnuNodeMode == GNU_LEAF)
-			{
-				for(int k = 0; k < GNU_TABLE_SIZE; k++)
-					PatchTable[k] &= m_pComm->m_NodeList[i]->m_RemoteHitTable[k];
-			}
-	}
-
-	// Create local table if not created yet (needed to save qht info if needed to send again)
-	if( m_LocalHitTable == NULL)
-	{
-		m_LocalHitTable = new byte [GNU_TABLE_SIZE];
-		memset( m_LocalHitTable,  0xFF, GNU_TABLE_SIZE );
-	}
-
-	// create 4 bit patch table to send to remote host
-	byte* FourBitPatch = new byte [GNU_TABLE_SIZE * 4];
-	memset(FourBitPatch, 0, GNU_TABLE_SIZE * 4);
-
-	int pos = 0;
-	for(int i = 0; i < GNU_TABLE_SIZE; i++)
-	{
-		// Find what changed and build a 4 bit patch table for it
-		for(byte mask = 1; mask != 0; mask *= 2)
-		{ 
-			
-			// No change
-			if( (PatchTable[i] & mask) == (m_LocalHitTable[i] & mask) )
-			{
-				
-			}
-			// Patch turning on ( set negetive value)
-			else if( (PatchTable[i] & mask) == 0 && (m_LocalHitTable[i] & mask) > 0)
-			{
-				if(pos % 2 == 0) 
-					//FourBitPatch[pos / 2] = 15 << 4; // high -1
-					FourBitPatch[pos / 2] = 10 << 4; // high -6 works with LW
-				else
-					//FourBitPatch[pos / 2] |= 15;  // low -1
-					FourBitPatch[pos / 2] = 10 << 4; // low -6 works with LW
-			}
-			// Patch turning off ( set positive value)
-			else if( (PatchTable[i] & mask) > 0 && (m_LocalHitTable[i] & mask) == 0)
-			{
-				if(pos % 2 == 0)
-					//FourBitPatch[pos / 2] = 1 << 4;// high 1
-					FourBitPatch[pos / 2] = 6 << 4;// high 6 works with LW
-				else
-					//FourBitPatch[pos / 2] |= 1;  // low 1
-					FourBitPatch[pos / 2] = 6 << 4;// low 6 works with LW
-			}
-			
-			pos++;
-		}
-
-		m_LocalHitTable[i] = PatchTable[i];
-	}
-
-	// Compress patch table
-	DWORD CompSize	= GNU_TABLE_SIZE * 4 * 1.2;
-	byte* CompBuff	= new byte[CompSize];
-	
-	if(compress(CompBuff, &CompSize, FourBitPatch, GNU_TABLE_SIZE * 4) != Z_OK)
-	{
-		delete [] FourBitPatch;
-		FourBitPatch = NULL;
-
-		m_pCore->LogError("Patch Compression Error");
-		return;
-	}
-
-	delete [] FourBitPatch;
-	FourBitPatch = NULL;
-
-	 // Determine how many 2048 byte packets to send 
-	int SeqSize = (CompSize + (PATCH_PART_MAXSIZE - 1)) >> 11; 
-	
-	int CopyPos  = 0;
-	int CopySize = 0;
-
-	byte* RawPacket = new byte[PATCH_PART_MAXSIZE + 28];
-	packet_RouteTablePatch* PatchPacket = (packet_RouteTablePatch*) RawPacket;	
-
-	byte* PacketBuff   = new byte[GNU_TABLE_SIZE * 4 + 896]; // Used so everything is sent in the correct order enough space for packet headers
-	UINT  NextPos	   = 0;
-
-	for(int SeqNum = 1; SeqNum <= SeqSize; SeqNum++)
-	{
-		if(CompSize - CopyPos < PATCH_PART_MAXSIZE)
-			CopySize = CompSize - CopyPos;
-		else
-			CopySize = PATCH_PART_MAXSIZE;
-
-		// Build packet
-		GUID Guid = GUID_NULL;
-		GnuCreateGuid(&Guid);
-
-		PatchPacket->Header.Guid		= Guid;
-		PatchPacket->Header.Function	= 0x30;
-		PatchPacket->Header.TTL			= 1;
-		PatchPacket->Header.Hops		= 0;
-		PatchPacket->Header.Payload		= 5 + CopySize;
-		
-		PatchPacket->PacketType = 0x1;
-		PatchPacket->SeqNum		= SeqNum;
-		PatchPacket->SeqSize	= SeqSize;
-
-		PatchPacket->Compression = 0x1;
-		PatchPacket->EntryBits	 = 4;
-
-		memcpy(RawPacket + 28, CompBuff + CopyPos, CopySize);
-		CopyPos += PATCH_PART_MAXSIZE;
-	
-		memcpy(PacketBuff + NextPos, RawPacket, 28 + CopySize);
-		NextPos += 28 + CopySize;
-	}
-
-	// This mega packet includes the reset and all patches
-	SendPacket(PacketBuff, NextPos, PACKET_QUERY, PatchPacket->Header.Hops);
-
-	delete [] PacketBuff;
-	delete [] CompBuff;
-	delete [] RawPacket;
-}
-
-void CGnuNode::Send_VendMsg(packet_VendMsg VendMsg, byte* payload, int length)
-{
-	ASSERT(m_SupportsVendorMsg);
-
-	byte* FinalPacket = NULL;
-	int   FinalLength = 0;
-
-	// Build the packet
-	//VendMsg.Header.Guid		= Guid; // Should be created before function is called
-	VendMsg.Header.Function	= 0x31;
-	VendMsg.Header.TTL		= 1;
-	VendMsg.Header.Hops		= 0;
-	VendMsg.Header.Payload	= 8 + length;
-
-	// Build packet
-	FinalLength = 31 + length;
-	FinalPacket = new byte[FinalLength];
-
-	memcpy(FinalPacket, &VendMsg, 31);
-
-	if(payload)
-		memcpy(FinalPacket + 31, payload, length);
-
-	SendPacket(FinalPacket, FinalLength, PACKET_VENDMSG, VendMsg.Header.Hops);
-	
-	delete [] FinalPacket;
-	FinalPacket = NULL;
-}
 
 bool CGnuNode::GetAlternateHostList(CString &HostList)
 {
@@ -3562,7 +2142,7 @@ bool CGnuNode::GetAlternateSuperList(CString &HostList)
 	for(int i = 0; i < m_pComm->m_NodeList.size() && Hosts < 10; i++)
 		if(m_pComm->m_NodeList[i] != this && m_pComm->m_NodeList[i]->m_GnuNodeMode == GNU_ULTRAPEER)
 		{
-			HostList += m_pComm->m_NodeList[i]->m_HostIP + ":" + NumtoStr(m_pComm->m_NodeList[i]->m_Port) + ",";	
+			HostList += IPtoStr(m_pComm->m_NodeList[i]->m_Address.Host) + ":" + NumtoStr(m_pComm->m_NodeList[i]->m_Address.Port) + ",";	
 			Hosts++;
 		}
 	
@@ -3580,28 +2160,6 @@ bool CGnuNode::GetAlternateSuperList(CString &HostList)
 
 /////////////////////////////////////////////////////////////////////////////
 // Misc functions
-
-void CGnuNode::Refresh()
-{
-	m_pComm->NodeUpdate(this);
-
-	Send_Ping(MAX_TTL);
-}
-
-DWORD CGnuNode::GetSpeed()
-{	
-	if(m_pNet->m_RealSpeedUp)
-		return m_pNet->m_RealSpeedUp * 8 / 1024;
-	else
-	{
-		if(m_pPrefs->m_SpeedStatic)
-			return m_pPrefs->m_SpeedStatic;
-		else
-			return m_pNet->m_RealSpeedDown * 8 / 1024;
-	}
-
-	return 0;
-}
 
 void CGnuNode::Timer()
 {
@@ -3677,7 +2235,7 @@ void CGnuNode::NodeManagement()
 		{
 			if( (m_pComm->m_GnuClientMode == GNU_LEAF && m_GnuNodeMode == GNU_ULTRAPEER) ||
 				(m_GnuNodeMode == GNU_ULTRAPEER && m_SupportInterQRP))
-				Send_PatchTable();
+				m_pProtocol->Send_PatchTable(this);
 
 			m_SendDelayPatch  = false;
 			m_PatchWait       = PATCH_TIMEOUT;
@@ -3702,7 +2260,7 @@ void CGnuNode::NodeManagement()
 			m_SecsDead++;
 
 			if(m_SecsDead == 30)
-				Send_Ping(1);
+				m_pProtocol->Send_Ping(this, 1);
 
 			if(m_SecsDead > 60)
 			{
@@ -3718,7 +2276,7 @@ void CGnuNode::NodeManagement()
 		// Re-Search on new connect after 30 seconds
 		if(m_SecsAlive == 15 && m_GnuNodeMode == GNU_ULTRAPEER)
 		{
-			Send_Ping(MAX_TTL);
+			m_pProtocol->Send_Ping(this, MAX_TTL);
 
 			for(i = 0; i < m_pNet->m_SearchList.size(); i++)
 				m_pNet->m_SearchList[i]->IncomingGnuNode(this);
@@ -3733,11 +2291,6 @@ void CGnuNode::NodeManagement()
 		if(m_BrowseID)
 			if(m_BrowseRecvBytes == m_BrowseSize)
 				CloseWithReason("Browse Completed");
-
-
-		// Reset trottle for host if it is a leaf
-		m_LeafBytesIn    = 0; 
-		m_LeafBytesOut   = 0; 
 	}
 
 	else if(SOCK_CLOSED == m_Status)
@@ -3756,7 +2309,7 @@ void CGnuNode::CompressionStats()
 	if(m_ZipStat == 60)
 	{
 		// 2.3.5.4 -> 2,000 bytes sent compressed at 1,000 bytes
-		//m_pCore->DebugLog( m_HostIP + " -> " + CommaIze( NumtoStr(DeflateStream.total_in) ) + " bytes sent compressed at " + CommaIze( NumtoStr(DeflateStream.total_out) ) + " bytes");
+		//m_pCore->DebugLog( IPtoStr(m_Address.Host) + " -> " + CommaIze( NumtoStr(DeflateStream.total_in) ) + " bytes sent compressed at " + CommaIze( NumtoStr(DeflateStream.total_out) ) + " bytes");
 
 		m_ZipStat = 0;
 	}
@@ -3885,5 +2438,3 @@ bool CGnuNode::ValidAgent(CString Agent)
 
 	return true;
 }
-
-

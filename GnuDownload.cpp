@@ -35,6 +35,7 @@
 #include "GnuControl.h"
 #include "G2Control.h"
 #include "GnuTransfers.h"
+#include "GnuProtocol.h"
 
 #include "GnuShare.h"
 #include "GnuFileHash.h"
@@ -1184,7 +1185,7 @@ void CGnuDownload::SendPushRequest()
 	FileSource* HostSource = HostInfo();
 
 	if( m_pNet->m_pGnu && HostSource->Network == NETWORK_GNUTELLA )
-		m_pNet->m_pGnu->Route_LocalPush( *HostSource );
+		m_pNet->m_pGnu->m_pProtocol->Send_Push( *HostSource );
 
 	if( m_pNet->m_pG2 && HostSource->Network == NETWORK_G2 )
 		m_pNet->m_pG2->Send_PUSH(HostSource);
