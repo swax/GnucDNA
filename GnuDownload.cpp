@@ -41,6 +41,7 @@
 #include "GnuAltLoc.h"
 
 #include "DnaCore.h"
+#include "DnaEvents.h"
 
 #include "hash/TigerTree2.h"
 
@@ -550,8 +551,8 @@ void CGnuDownload::OnReceive(int nErrorCode)
 					else if (HeaderName == "x-auth-challenge" && !HeaderValue.IsEmpty())
 					{
 						m_RemoteChallenge = HeaderValue;
-						//if(m_pNet->m_pCore->m_dnaCore->m_dnaEvents)
-						//	m_pNet->m_pCore->m_dnaCore->m_dnaEvents->DownloadChallenge(m_pShell->m_DownloadID, m_HostID, m_RemoteChallenge);
+						if(m_pNet->m_pCore->m_dnaCore->m_dnaEvents)
+							m_pNet->m_pCore->m_dnaCore->m_dnaEvents->DownloadChallenge(m_pShell->m_DownloadID, m_HostID, m_RemoteChallenge);
 					
 						// Send Answer to Challenge
 						if( !m_RemoteChallengeAnswer.IsEmpty() )
