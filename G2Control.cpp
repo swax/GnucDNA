@@ -1683,7 +1683,6 @@ void CG2Control::ApplyPatchTable(CG2Node* pNode)
 	double Factor = (double) G2_TABLE_SIZE / (double) RemoteSize; // SMALLER means LARGER remote TABLE
 
 	int remotePos = 0;
-	int rByte = 0, rBit = 0;
 
 	int i = 0, j = 0;
 	for(i = 0; i < pNode->m_PatchSize; i++)
@@ -2618,7 +2617,7 @@ void CG2Control::Send_QHT(CG2Node* pTCP, bool Reset)
 	byte PatchTable[G2_TABLE_SIZE];
 
 	// Get local table
-	memcpy(PatchTable, m_pShare->m_pWordTable->m_LocalHitTable, G2_TABLE_SIZE);
+	memcpy(PatchTable, m_pShare->m_pWordTable->m_G2HitTable, G2_TABLE_SIZE);
 	
 
 	if( m_ClientMode == G2_HUB )

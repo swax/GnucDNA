@@ -162,10 +162,12 @@ struct GnuQuery
 	int  Network;
 	bool Forward;
 
+	bool UltraForward;
+	CGnuNode* Source;
+
 	int   OriginID;
 	IPv4  DirectAddress;
 	GUID  SearchGuid;
-	int   Hops;
 
 	std::vector<CString> Terms;
 
@@ -180,8 +182,10 @@ struct GnuQuery
 		Network  = 0;
 		Forward  = false;
 
+		UltraForward = false;
+		Source = NULL;
+
 		OriginID = 0;
-		Hops	 = 0;
 
 		MinSize = 0;
 		MaxSize = 0;

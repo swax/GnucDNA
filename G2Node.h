@@ -150,7 +150,7 @@ public:
 	int   m_RemoteTableSize;
 	byte  m_RemoteHitTable[G2_TABLE_SIZE];
 	
-	byte* m_LocalHitTable; // Dynamic because not send to child from hub
+	byte* m_LocalHitTable; // Dynamic, sent child->hub and hub->hub, not hub->child
 
 	// Compression
 	bool m_dnapressionOn;

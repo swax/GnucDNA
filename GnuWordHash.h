@@ -3,6 +3,8 @@
 #include "GnuShare.h"
 
 #define GNU_TABLE_BITS	16
+#define GNU_TABLE_SIZE  (1 << GNU_TABLE_BITS) / 8
+
 #define TABLE_INFINITY   2
 
 #define G2_TABLE_BITS	20
@@ -22,13 +24,11 @@ struct WordData
 
 struct WordKey
 {
-	std::vector<WordData>* LocalKey;  // Locally indexed
-	std::list<int>*        RemoteKey; // Remotely indexed	
+	std::vector<WordData>* LocalKey;  // Locally indexed	
 
 	WordKey() 
 	{ 
 		LocalKey  = NULL; 
-		RemoteKey = NULL;
 	};
 
 	~WordKey() 
@@ -37,11 +37,6 @@ struct WordKey
 		{
 			delete LocalKey;
 			LocalKey = NULL;
-		}
-		if(RemoteKey)
-		{
-			delete RemoteKey;
-			RemoteKey = NULL;
 		}
 	};
 };
@@ -65,26 +60,22 @@ public:
 	void LookupQuery(GnuQuery &FileQuery, std::list<UINT> &Indexes, std::list<int> &RemoteNodes);
 
 	bool IntersectIndexes(std::list<UINT> &Index, std::vector<UINT> &CompIndex);
-	bool IntersectNodes(std::list<int> &Nodes, std::list<int> &CompNodes);
-
+	
 	UINT Hash(std::basic_string<char> x, byte bits);
 	
 
-	// Gnu
-	void ResetTable(CGnuNode* ResetNode);
-	void ApplyPatch(CGnuNode* pNode, int EntryBits);
-	
 	WordKey m_HashTable[1 << GNU_TABLE_BITS];
-	char    m_PatchTable[1 << GNU_TABLE_BITS];
 
-	UINT m_TableSize;
 	UINT m_HashedWords;
 	UINT m_LargestRehash;
 	UINT m_UniqueSlots;
-	UINT m_RemoteSlots;
+
+	// Gnutella
+	byte m_GnutellaHitTable[GNU_TABLE_SIZE];
+	uint32 m_GnuEntries;
 
 	// G2
-	byte m_LocalHitTable[G2_TABLE_SIZE];
+	byte m_G2HitTable[G2_TABLE_SIZE];
 	uint32 m_G2Entries;
 
 	CGnuShare*  m_pShare;

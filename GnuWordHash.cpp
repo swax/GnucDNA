@@ -45,29 +45,21 @@ CGnuWordHash::CGnuWordHash(CGnuShare* pShare)
 	m_pCore   = pShare->m_pCore;
 	m_pShare  = pShare;
 
-	memset(m_PatchTable, 0, 1 << GNU_TABLE_BITS);
+	memset(m_GnutellaHitTable, 0xFF, GNU_TABLE_SIZE);
+	m_GnuEntries = 0;
 
-	memset(m_LocalHitTable, 0xFF, G2_TABLE_SIZE);
-
-	m_TableSize     = 1 << GNU_TABLE_BITS;
+	memset(m_G2HitTable, 0xFF, G2_TABLE_SIZE);
+	m_G2Entries = 0;
+	
+	
 	m_HashedWords   = 0;
 	m_LargestRehash = 0;
-	m_UniqueSlots	= 0;
-	m_RemoteSlots	= 0;
-
-	m_G2Entries = 0;
+	m_UniqueSlots	= 0;	
 }
 
 CGnuWordHash::~CGnuWordHash()
 {
 	ClearLocalTable();
-
-	for(int i = 0; i < 1 << GNU_TABLE_BITS; i++)
-		if(m_HashTable[i].RemoteKey)
-		{
-			delete m_HashTable[i].RemoteKey;
-			m_HashTable[i].RemoteKey = NULL;
-		}
 }
 
 void CGnuWordHash::ClearLocalTable()
@@ -83,145 +75,15 @@ void CGnuWordHash::ClearLocalTable()
 
 	m_TableLock.Unlock();
 
-	memset(m_PatchTable, 0, 1 << GNU_TABLE_BITS);
-
 	m_HashedWords   = 0;
 	m_LargestRehash = 0;
 	m_UniqueSlots	= 0;
 	
+	// Gnutella
+	memset(m_GnutellaHitTable, 0xFF, GNU_TABLE_SIZE);
+
 	// G2
-	memset(m_LocalHitTable, 0xFF, G2_TABLE_SIZE);
-}
-
-void CGnuWordHash::ResetTable(CGnuNode* ResetNode)
-{
-	std::list<int>::iterator itNodeID;
-	std::list<int>::iterator itNextID;
-
-	for(int i = 0; i < 1 << GNU_TABLE_BITS; i++)
-	{
-		if(m_HashTable[i].RemoteKey == NULL)
-			continue;
-		
-		m_TableLock.Lock();
-
-		m_HashTable[i].RemoteKey->remove(ResetNode->m_NodeID);
-	
-		// Nothing remote at this key now
-		if(m_HashTable[i].RemoteKey->empty())
-		{
-			delete m_HashTable[i].RemoteKey;
-			m_HashTable[i].RemoteKey = NULL;
-
-			m_RemoteSlots--;
-		}
-
-		m_TableLock.Unlock();
-	}
-}
-
-void CGnuWordHash::ApplyPatch(CGnuNode* pNode, int EntryBits)
-{
-	UINT RemoteTableSize  = pNode->m_TableLength;
-	UINT LocalTableSize	  = 1 << GNU_TABLE_BITS;
-
-	UINT RemoteTablePos   = 0;
-	UINT LocalTablePos    = 0;
-	UINT HashPos		  = 0;
-	
-	double Factor = (double) LocalTableSize / (double) RemoteTableSize;
-
-	std::list<int>::iterator itNodeID;
-	std::list<int>::iterator itNextID;
-	bool NodeFound = false;
-
-	int  TableEntries = 0;
-	char PatchValue = 0;
-
-	for(int i = 0; i < RemoteTableSize; i++)
-	{
-		// Get patch value from remote table
-		if(EntryBits == 4)
-		{
-			if(i % 2 == 0)
-				PatchValue = pNode->m_PatchTable[i / 2] >> 4; // Get high byte
-			else
-				PatchValue = pNode->m_PatchTable[(i - 1) / 2]  & 0xF; // Get low byte
-		
-			// Convert 4 bit nib to 8 bit byte
-			if(PatchValue > 7)
-				PatchValue = PatchValue - 16;
-		}
-		else if(EntryBits == 8)
-		{
-			PatchValue = pNode->m_PatchTable[i];
-		}
-
-
-		// Convert remote postion to local postion, tables may vary in size
-		LocalTablePos = i * Factor;
-
-		
-		// Apply patch to main table
-		
-		m_TableLock.Lock();
-		
-		for(double Next = 0; Next < Factor; Next++)
-		{
-			HashPos = LocalTablePos + Next;
-
-			
-			
-			// Remove node at pos
-			if(PatchValue > 0 && m_HashTable[HashPos].RemoteKey)
-			{	
-				m_HashTable[HashPos].RemoteKey->remove(pNode->m_NodeID);
-
-				if(m_HashTable[HashPos].RemoteKey->empty())
-				{
-					delete m_HashTable[HashPos].RemoteKey;
-					m_HashTable[HashPos].RemoteKey = NULL;
-
-					m_RemoteSlots--;
-				}
-			}
-			
-			// Add node at pos
-			else if(PatchValue < 0)
-			{	
-				TableEntries++;
-
-				// Nothing remote at this key now
-				if(m_HashTable[HashPos].RemoteKey == NULL)
-				{
-					m_HashTable[HashPos].RemoteKey = new std::list<int>;
-
-					m_RemoteSlots++;
-				}
-
-				NodeFound = false;
-
-				for(itNodeID = m_HashTable[HashPos].RemoteKey->begin(); itNodeID != m_HashTable[HashPos].RemoteKey->end(); itNodeID++)
-					if(*itNodeID == pNode->m_NodeID)
-						NodeFound = true;
-
-
-				if(!NodeFound)
-					m_HashTable[HashPos].RemoteKey->push_back(pNode->m_NodeID);			
-			}
-		}
-
-		m_TableLock.Unlock();
-
-
-		// Disconnect if node uses QRP improperly by setting whole table to forward 
-		if( TableEntries > LocalTableSize / 2)
-		{
-			pNode->CloseWithReason("Improper QRP Table");
-			return;
-		}
-	}
-
+	memset(m_G2HitTable, 0xFF, G2_TABLE_SIZE);
 }
 
 void CGnuWordHash::InsertString(std::basic_string<char> Name, int Index, bool BreakString, std::basic_string<char> MetaTag)
@@ -253,10 +115,6 @@ void CGnuWordHash::InsertString(std::basic_string<char> Name, int Index, bool Br
 			CurrentWord[j] = tolowerex(CurrentWord[j]);
 
 		int WordHash = Hash(CurrentWord, GNU_TABLE_BITS);
-		
-
-		// Modify patch table for new hash
-		m_PatchTable[WordHash] = 1 - TABLE_INFINITY;
 
 		// Add word to hash table
 		bool AddWord = true;
@@ -316,13 +174,22 @@ void CGnuWordHash::InsertString(std::basic_string<char> Name, int Index, bool Br
 			
 		}
 
-		// Gnutella 2 Local Hit Table
-		WordHash = Hash(CurrentWord, G2_TABLE_BITS);
+		// Gnutella Local Hit Table
+		WordHash = Hash(CurrentWord, GNU_TABLE_BITS);
 
 		int nByte = ( WordHash >> 3 ); 
 		int nBit  = ( WordHash & 7 ); 
 
-		m_LocalHitTable[ nByte ] &= ~( 1 << nBit ); // Set to 0 (full)
+		m_GnutellaHitTable[ nByte ] &= ~( 1 << nBit ); // Set to 0 (full)
+		m_GnuEntries++;
+
+		// G2 Local Hit Table
+		WordHash = Hash(CurrentWord, G2_TABLE_BITS);
+
+		nByte = ( WordHash >> 3 ); 
+		nBit  = ( WordHash & 7 ); 
+
+		m_G2HitTable[ nByte ] &= ~( 1 << nBit ); // Set to 0 (full)
 		m_G2Entries++;
 	}
 }
@@ -482,44 +349,41 @@ void CGnuWordHash::LookupQuery(GnuQuery &FileQuery, std::list<UINT> &Indexes, st
 			if(!LocalMatch)
 				Indexes.clear();
 		}
+	}
+
+	// Intersect remote nodes (children) for results
+	if(FileQuery.Network == NETWORK_GNUTELLA && FileQuery.Forward && m_pCore->m_pNet->m_pGnu)
+	{
+		CGnuControl* pGnuComm = m_pCore->m_pNet->m_pGnu;
 
 
-		// Intersect remote nodes (children) for results
-		if(FileQuery.Network == NETWORK_GNUTELLA && FileQuery.Forward && m_pCore->m_pNet->m_pGnu)
-		{
-			if(RemoteMatch)
+		// For each Gnutella node run through key hashes for matches
+		pGnuComm->m_NodeAccess.Lock();
+
+			std::vector<CGnuNode*>::iterator itNode;
+			for(itNode = pGnuComm->m_NodeList.begin(); itNode != pGnuComm->m_NodeList.end(); itNode++)
 			{
-				RemoteMatch = false;
+				bool Match = true;
 
-				m_TableLock.Lock();
-
-				// See if hash is in hash table
-				if(m_HashTable[WordHash].RemoteKey)
-					RemoteMatch = true;
-			
-				
-				// Intersect node in hash table with current results
-				if(RemoteMatch)
+				for(i = 0; i < Keywords.size(); i++)
 				{
-					if(RemoteNodes.size())
-						RemoteMatch = IntersectNodes(RemoteNodes, *m_HashTable[WordHash].RemoteKey);
-					else
-					{
-						std::list<int>::iterator itNodeID = m_HashTable[WordHash].RemoteKey->begin();
-						
-						for( ; itNodeID != m_HashTable[WordHash].RemoteKey->end(); itNodeID++)
-							RemoteNodes.push_back(*itNodeID);
+					UINT WordHash = Hash(Keywords[i], GNU_TABLE_BITS);
 
-						RemoteMatch = true;
+					int nByte = ( WordHash >> 3 ); 
+					int nBit  = ( WordHash & 7  ); 
+
+					if( ( ~(*itNode)->m_RemoteHitTable[nByte] & (1 << nBit) ) == 0)
+					{
+						Match = false;
+						break;
 					}
 				}
-				
-				m_TableLock.Unlock();
 
-				if(!RemoteMatch)
-					RemoteNodes.clear();
+				if( Match )
+					RemoteNodes.push_back( (*itNode)->m_NodeID );
 			}
-		}
+	
+		pGnuComm->m_NodeAccess.Unlock();
 	}
 
 
@@ -580,34 +444,6 @@ bool CGnuWordHash::IntersectIndexes(std::list<UINT> &Index, std::vector<UINT> &C
 	}
 	
 	if(Index.empty())
-		return false;
-
-	return true;
-}
-
-bool CGnuWordHash::IntersectNodes(std::list<int> &Nodes, std::list<int> &CompNodes)
-{
-	bool Match = false;
-
-	std::list<int>::iterator itNodeID;
-	std::list<int>::iterator itCompID;
-
-	itNodeID = Nodes.begin();
-	while( itNodeID != Nodes.end())
-	{
-		Match = false;
-
-		for(itCompID = CompNodes.begin(); itCompID != CompNodes.end(); itCompID++)
-			if(*itNodeID == *itCompID)
-				Match = true;
-
-		if(!Match)
-			itNodeID = Nodes.erase(itNodeID);		
-		else
-			itNodeID++;
-	}
-	
-	if(Nodes.empty())
 		return false;
 
 	return true;

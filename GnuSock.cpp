@@ -122,12 +122,13 @@ void CGnuSock::OnReceive(int nErrorCode)
 	// Parse if handshake finished
 	if( m_Handshake.Find("\r\n\r\n") != -1 )
 	{
-		if(m_Handshake.Find(VERSION_4_CONNECT) != -1 || m_Handshake.Find(" CONNECT/") != -1 )
+		if(m_Handshake.Find(" CONNECT/") != -1 )
 			ParseConnectRequest();
 
-		//else if(m_Handshake.Left(10) == "GET / HTTP")
-		//	ParseBrowseRequest();
-
+#ifdef _DEBUG
+		else if(m_Handshake.Left(10) == "GET / HTTP")
+			ParseBrowseRequest();
+#endif
 		else if(m_Handshake.Left(4) == "GET " || m_Handshake.Left(5) == "HEAD ")
 			ParseUploadRequest();
 
@@ -225,10 +226,7 @@ void CGnuSock::ParseConnectRequest()
 	
 		m_pNet->m_pGnu->NodeUpdate(NodeSock);		
 
-		if(m_Handshake.Find(VERSION_4_CONNECT) != -1)
-			NodeSock->ParseHandshake04(m_Handshake, m_pBuff, m_BuffLength);
-		else
-			NodeSock->ParseIncomingHandshake06(m_Handshake, m_pBuff, m_BuffLength);
+		NodeSock->ParseIncomingHandshake06(m_Handshake, m_pBuff, m_BuffLength);
 	}
 
 	else

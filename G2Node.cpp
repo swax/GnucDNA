@@ -88,7 +88,7 @@ CG2Node::CG2Node(CG2Control* pG2Comm, CString Host, uint32 Port)
 	// QHT
 	m_CurrentPart	   = 1;
 	m_PatchReady       = false;
-	m_PatchTimeout     = 90;
+	m_PatchTimeout     = 60;
 
 	m_PatchCompressed  = false;
 	m_PatchBits        = 1;

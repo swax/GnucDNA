@@ -250,3 +250,5 @@ C++ Implementation notes:
 	
 Lesson
 	Use most popular of data set to prevent fakes
+	6025 - pure virtual function call
+	  Occured while deleting a corrupt class, array was being assigned values out of bounds

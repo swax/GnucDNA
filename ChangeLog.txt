@@ -1,3 +1,13 @@
+GnucDNA 1.0.3.1
+	swabby: Removed support for Gnutella 0.4
+	swabby: Gnutella X-Degree Support
+	swabby: Gnutella Inter-Ultrapeer Query Routing
+	swabby: Gnutella support for unknown and variable packet sizes
+	
+GnucDNA 1.0.3.0
+	swabby: Moved to new GnucDNAr3 code base
+	swabby: GnucDNA is now only a pure library
+
 GnucDNA 1.0.2.7
 	swabby: Support for authentication over transfers
 	swabby: LocalIP set to a private one if public cant be found

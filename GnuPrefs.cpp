@@ -69,9 +69,9 @@ void CGnuPrefs::LoadDefaults()
 	m_BehindFirewall	= false;
 
 	// Connect
-	m_LeafModeConnects	= 1;
-	m_MinConnects		= 4;
-	m_MaxConnects		= 6;
+	m_LeafModeConnects	= 3;
+	m_MinConnects		= 24;
+	m_MaxConnects		= 32;
 
 	// G2 Connect Prefs
 	m_G2ChildConnects = 1;
@@ -157,12 +157,12 @@ void CGnuPrefs::LoadConfig(CString ConfigFile)
 	m_BehindFirewall = (0 != atoi(buffer));
 
 	// Connect
-	GetPrivateProfileString("Connect",  "LeafModeConnects",	"1",		buffer, 256, ConfigFile);
-	m_LeafModeConnects = atoi(buffer);
-	GetPrivateProfileString("Connect",  "MinConnects",	"4",		buffer, 256, ConfigFile);
-	m_MinConnects = atoi(buffer);
-	GetPrivateProfileString("Connect",  "MaxConnects",	"6",		buffer, 256, ConfigFile);
-	m_MaxConnects = atoi(buffer);
+	//GetPrivateProfileString("Connect",  "LeafModeConnects",	"1",		buffer, 256, ConfigFile);
+	//m_LeafModeConnects = atoi(buffer);
+	//GetPrivateProfileString("Connect",  "MinConnects",	"4",		buffer, 256, ConfigFile);
+	//m_MinConnects = atoi(buffer);
+	//GetPrivateProfileString("Connect",  "MaxConnects",	"6",		buffer, 256, ConfigFile);
+	//m_MaxConnects = atoi(buffer);
 
 	// Connect Servers
 	for(int i = 1; ; i++)
@@ -376,9 +376,9 @@ void CGnuPrefs::SaveConfig(CString ConfigFile)
 	WritePrivateProfileString("LocalFirewall", "BehindFirewall",     NumtoStr(m_BehindFirewall),	ConfigFile);
 
 	// Connect
-	WritePrivateProfileString("Connect", "LeafModeConnects",NumtoStr(m_LeafModeConnects),	ConfigFile);
-	WritePrivateProfileString("Connect", "MinConnects",		NumtoStr(m_MinConnects),		ConfigFile);
-	WritePrivateProfileString("Connect", "MaxConnects",		NumtoStr(m_MaxConnects),		ConfigFile);
+	//WritePrivateProfileString("Connect", "LeafModeConnects",NumtoStr(m_LeafModeConnects),	ConfigFile);
+	//WritePrivateProfileString("Connect", "MinConnects",		NumtoStr(m_MinConnects),		ConfigFile);
+	//WritePrivateProfileString("Connect", "MaxConnects",		NumtoStr(m_MaxConnects),		ConfigFile);
 	
 	// Connect Servers
 	WritePrivateProfileString("Connect Servers", NULL, NULL, ConfigFile); 

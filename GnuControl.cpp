@@ -66,11 +66,10 @@ CGnuControl::CGnuControl(CGnuNetworks* pNet)
 	m_LanSock = new CGnuLocal(this);
 	m_LanSock->Init();
 
-
-	m_ModeVersion6		= true;
 	m_NetworkName		= "GNUTELLA";
 
 	m_GnuClientMode   = GNU_ULTRAPEER;
+
 	m_ForcedUltrapeer = false;
 	
 	m_NormalConnectsApprox = 0;
@@ -151,6 +150,9 @@ void CGnuControl::Broadcast_Query(packet_Query* Query, int length, CGnuNode* exc
 		CGnuNode *p = m_NodeList[i];
 
 		if(m_GnuClientMode == GNU_ULTRAPEER && p->m_GnuNodeMode == GNU_LEAF)
+			continue;
+
+		if(Query->Header.TTL == 1 && p->m_SupportInterQRP)
 			continue;
 
 		if(p != exception && p->m_Status == SOCK_CONNECTED)
@@ -432,25 +434,36 @@ void CGnuControl::Encode_QueryHit(GnuQuery &FileQuery, std::list<UINT> &Matching
 void CGnuControl::Forward_Query(GnuQuery &FileQuery, std::list<int> &MatchingNodes)
 {
 	// Forward query to child nodes that match the query
-	// When UDP queries results are in, forward ttl 0, hops 7 to children
-	if(FileQuery.Hops < MAX_TTL)
-	{
-		std::list<int>::iterator  itNodeID;
 
-		for(itNodeID = MatchingNodes.begin(); itNodeID != MatchingNodes.end(); itNodeID++)
-			if(*itNodeID != FileQuery.OriginID)
-			{
-				m_NodeAccess.Lock();
+	packet_Query* pQuery = (packet_Query*) FileQuery.Packet;
+	if(pQuery->Header.TTL == 0)
+		pQuery->Header.TTL++;
 
-					std::map<int, CGnuNode*>::iterator itNode = m_NodeIDMap.find(*itNodeID);
+	std::list<int>::iterator  itNodeID;
 
-					if(itNode != m_NodeIDMap.end())
-						if(itNode->second->m_Status == SOCK_CONNECTED)
-							itNode->second->Send_ForwardQuery( FileQuery );
+	for(itNodeID = MatchingNodes.begin(); itNodeID != MatchingNodes.end(); itNodeID++)
+		if(*itNodeID != FileQuery.OriginID)
+		{
+			m_NodeAccess.Lock();
 
-				m_NodeAccess.Unlock();
-			}
-	}
+				std::map<int, CGnuNode*>::iterator itNode = m_NodeIDMap.find(*itNodeID);
+
+				if(itNode != m_NodeIDMap.end())
+				{
+					CGnuNode* pNode = itNode->second;
+
+					if(pNode->m_Status == SOCK_CONNECTED)
+					{
+						if( pNode->m_GnuNodeMode == GNU_LEAF)
+							pNode->Send_ForwardQuery( FileQuery );
+
+						if( pNode->m_GnuNodeMode == GNU_ULTRAPEER && pNode->m_SupportInterQRP)
+							pNode->Send_ForwardQuery( FileQuery );
+					}
+				}
+
+			m_NodeAccess.Unlock();
+		}
 }
 
 ////////////////////////////////////////////////////////////////////////////
@@ -632,7 +645,7 @@ void CGnuControl::Timer()
 		{
 			BackSize += m_NodeList[i]->m_BackBuffLength;
 
-			for(int j = 0; j < 6; j++)
+			for(int j = 0; j < MAX_TTL; j++)
 				BufferSize += m_NodeList[i]->m_PacketListLength[j];
 		}
 
@@ -880,8 +893,8 @@ void CGnuControl::ShareUpdate()
 	m_NodeAccess.Lock();
 		
 	for(int i = 0; i < m_NodeList.size(); i++)	
-		if(m_NodeList[i]->m_Status == SOCK_CONNECTED)
-			m_NodeList[i]->m_PatchUpdateNeeded = true;
+		if(m_NodeList[i]->m_Status == SOCK_CONNECTED && m_NodeList[i]->m_GnuNodeMode == GNU_ULTRAPEER)
+			m_NodeList[i]->m_SendDelayPatch = true;
 	
 	m_NodeAccess.Unlock();
 }

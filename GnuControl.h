@@ -88,7 +88,6 @@ public:
 	void ShareUpdate();
 
 	// Network
-	bool	 m_ModeVersion6;
 	CString  m_NetworkName;
 	
 

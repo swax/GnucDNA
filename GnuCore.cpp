@@ -58,7 +58,7 @@ CGnuCore::CGnuCore(CDnaCore* dnaCore)
 	SetLicense();
 	SetCredits();
 
-	m_DnaVersion	= DNA_VERSION; // GetVersionInfo();
+	m_DnaVersion	= DNA_VERSION;
 
 	m_ClientName    = "GnuApp";
 	m_ClientVersion = m_DnaVersion;
@@ -317,29 +317,4 @@ void CGnuCore::DebugTrigger(bool details)
 	#endif*/
 }
 
-/*CString CGnuCore::GetVersionInfo(void)
-{
-	char szDllName[_MAX_PATH];
-	DWORD dwHandle, dwSize;
-	CString version = "9.9.9.9";
 
-	if(	GetModuleFileName(AfxGetInstanceHandle(), szDllName, sizeof(szDllName)) )
-	{
-		dwHandle = 0;
-		dwSize = GetFileVersionInfoSize(szDllName, &dwHandle);
-		if( dwSize != 0L )
-		{
-			UINT uVerInfoSize;
-			LPVOID lpStr;
-			LPVOID lpVerInfo = new BYTE[dwSize];
-			if( GetFileVersionInfo(szDllName, NULL, dwSize, lpVerInfo) )
-			{
-				if( VerQueryValue(lpVerInfo, "\\StringFileInfo\\040904B0\\ProductVersion", &lpStr, &uVerInfoSize) )
-					version = reinterpret_cast<char *>(lpStr);
-			}
-			delete[] lpVerInfo;
-		}
-	}
-
-	return version;
-}*/

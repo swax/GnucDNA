@@ -114,23 +114,31 @@ CGnuNode::CGnuNode(CGnuControl* pComm, CString Host, UINT Port)
 	m_NodeLeafMax		= 0;
 	
 	m_DowngradeRequest  = false;
-	m_PatchUpdateNeeded = false;
+	
 
 	m_UltraPongSent	= false;	
 	
 
 	// QRP
-	m_TableInfinity	= 0;
-	m_TableLength	= 0;
-	
-	m_PatchTable	= NULL;
-	m_TableNextPos  = 0;
-	
-	m_dnapressedTable = NULL;
-	m_dnapressedSize  = 0;
+	m_CurrentSeq = 1;
 
-	m_CurrentSeq	  = 1;
+	m_PatchBuffer = NULL;
+	m_PatchOffset = 0;
+	m_PatchSize   = 0;
+	m_PatchCompressed = false;
+	m_PatchBits   = 0;
+
+	m_PatchReady   = false;
+	m_PatchTimeout = 60;
+
+	m_RemoteTableInfinity = 0;
+	m_RemoteTableSize     = 0;
 	
+
+	m_SendDelayPatch    = false;
+	m_PatchWait         = 60;
+	m_SupportInterQRP   = false;
+	m_LocalHitTable     = NULL;
 
 	// Host Browsing
 	m_BrowseID	 = 0;
@@ -147,7 +155,7 @@ CGnuNode::CGnuNode(CGnuControl* pComm, CString Host, UINT Port)
 
 
 	// Sending
-	for(int i = 0; i < 6; i++)
+	for(int i = 0; i < MAX_TTL; i++)
 		m_PacketListLength[i] = 0;
 	m_BackBuffLength = 0;
 
@@ -219,12 +227,12 @@ CGnuNode::~CGnuNode()
 	//CloseWithReason("Deconstructor");
 
 	// Clean packet stuff
-	for(i = 0; i < 6; i++)
+	for(i = 0; i < MAX_TTL; i++)
 		m_PacketListLength[i] = 0;
 
 	m_BackBuffLength = 0;
 
-	for(i = 0; i < 6; i++)
+	for(i = 0; i < MAX_TTL; i++)
 		while(!m_PacketList[i].empty())
 		{
 			delete m_PacketList[i].back();
@@ -241,21 +249,17 @@ CGnuNode::~CGnuNode()
 
 	m_TransferPacketAccess.Unlock();
 
-
-	// Delete query routing tables
-	if(m_TableLength)
-		m_pShare->m_pWordTable->ResetTable(this);
-
-	if(m_PatchTable)		
+	// Delete patch table
+	if(m_PatchBuffer)		
 	{
-		delete [] m_PatchTable;
-		m_PatchTable = NULL;
+		delete [] m_PatchBuffer;
+		m_PatchBuffer = NULL;
 	}
 
-	if(m_dnapressedTable)
+	if(m_LocalHitTable)
 	{
-		delete [] m_dnapressedTable;
-		m_dnapressedTable = NULL;
+		delete [] m_LocalHitTable;
+		m_LocalHitTable = NULL;
 	}
 
 	// Clean up compression
@@ -309,10 +313,16 @@ void CGnuNode::OnConnect(int nErrorCode)
 	}
 
 	// Else if we're making a normal gnutella 0.6 connection
-	else if(m_pComm->m_ModeVersion6 || m_pPrefs->m_LanMode)
+	else
 	{
 		Handshake =  m_pComm->m_NetworkName + " CONNECT/0.6\r\n";
 		
+		// Listen-IP header
+		Handshake += "Listen-IP: " + IPtoStr(m_pNet->m_CurrentIP) + ":" + NumtoStr(m_pNet->m_CurrentPort) + "\r\n";
+
+		// Remote-IP header
+		Handshake += "Remote-IP: " + m_HostIP + "\r\n";
+
 		Handshake += "User-Agent: " + m_pCore->GetUserAgent() + "\r\n";
 
 		// LAN Header
@@ -330,9 +340,17 @@ void CGnuNode::OnConnect(int nErrorCode)
 			Handshake += "X-Leaf-Max: " + NumtoStr(m_pPrefs->m_MaxLeaves) + "\r\n";
 		}
 
-
+		// X-Degree
+		Handshake += "X-Degree: " + NumtoStr(m_pPrefs->m_MaxConnects) + "\r\n";
+		
 		// Query Routing Header
 		Handshake += "X-Query-Routing: 0.1\r\n";
+		
+		// X-Ultrapeer-Query-Routing
+		Handshake += "X-Ultrapeer-Query-Routing: 0.1\r\n";
+		
+		// X-Max-TTL
+		Handshake += "X-Max-TTL: " + NumtoStr(MAX_TTL) + "\r\n";
 
 		// Accept-Encoding Header
 		if(m_dnapressionOn)
@@ -345,7 +363,6 @@ void CGnuNode::OnConnect(int nErrorCode)
 		// Bye Header
 		Handshake += "Bye-Packet: 0.1\r\n";
 
-
 		// Authentication
 		if(m_pCore->m_dnaCore->m_dnaEvents)
 			m_pCore->m_dnaCore->m_dnaEvents->NetworkAuthenticate(m_NodeID);
@@ -355,9 +372,6 @@ void CGnuNode::OnConnect(int nErrorCode)
 
 		Handshake += "\r\n";
 	}
-	else
-		Handshake = VERSION_4_CONNECT ;
-
 
 	Send(Handshake, Handshake.GetLength());
 
@@ -425,15 +439,8 @@ void CGnuNode::OnReceive(int nErrorCode)
 
 		m_InitData += MoreData;
 
-
-		// Gnutella 0.4 Handshake
-		if( m_InitData.Find(VERSION_4_CONNECT_OK) != -1 && !m_pComm->m_ModeVersion6)
-		{
-			ParseHandshake04(m_InitData, m_pBuff, BuffLength);
-		}
-
 		// Gnutella 0.6 Handshake
-		else if( m_InitData.Find("\r\n\r\n") != -1 && m_pComm->m_ModeVersion6)
+		if( m_InitData.Find("\r\n\r\n") != -1)
 		{
 			if(m_BrowseID)
 				ParseBrowseHandshakeResponse(m_InitData, m_pBuff, BuffLength);
@@ -460,73 +467,6 @@ void CGnuNode::OnReceive(int nErrorCode)
 
 /////////////////////////////////////////////////////////////////////////////
 // New connections
-
-void CGnuNode::ParseHandshake04(CString Data, byte* Stream, int StreamLength)
-{
-	// Cant do authentication over 0.4 connection
-	if(m_pCore->m_dnaCore->m_dnaEvents)
-		m_pCore->m_dnaCore->m_dnaEvents->NetworkAuthenticate(m_NodeID);
-
-	if(!m_Challenge.IsEmpty())
-	{
-		CloseWithReason("No Authentication");
-		return;
-	}
-
-
-	// Node making an inbound 0.4 connection
-	if(m_Inbound)
-	{
-		if(m_pComm->m_GnuClientMode == GNU_LEAF)
-		{
-			CloseWithReason("In Leaf Mode");
-			return;
-		}
-
-		bool Busy = false;
-
-		if(m_pPrefs->m_MaxConnects != -1)
-			if(m_pComm->CountNormalConnects() >= m_pPrefs->m_MaxConnects)	
-			{
-				CloseWithReason("Connects Maxed");
-				return;
-			}
-
-
-		m_WholeHandshake += "GNUTELLA CONNECT/0.4\r\n";
-		
-
-		// Send Connect OK
-		CString Response = VERSION_4_CONNECT_OK ;
-		Send(Response, Response.GetLength());
-
-		Response.Replace("\n\n", "\r\n");
-		m_WholeHandshake += Response;
-
-		SetConnected();
-	}
-
-
-	// This node making an outbound 0.4 connect
-	else
-	{
-		m_WholeHandshake += "GNUTELLA OK\r\n";
-
-		SetConnected();
-
-		// Stream begins
-		for(int i = 0; i < StreamLength - 2; i++)
-			if(strncmp((char*) &Stream[i], "\n\n", 2) == 0)
-			{
-				int BuffLength = StreamLength - (i + 2);
-				memcpy(m_pBuff, &Stream[i + 2], BuffLength);
-			
-				FinishReceive(BuffLength);				
-
-				break;
-			}
-	}
-}
 
 void CGnuNode::ParseIncomingHandshake06(CString Data, byte* Stream, int StreamLength)
 {
@@ -562,6 +502,11 @@ void CGnuNode::ParseIncomingHandshake06(CString Data, byte* Stream, int StreamLe
 		CString RoutingHeader = FindHeader("X-Query-Routing");
 		if(!RoutingHeader.IsEmpty() && RoutingHeader == "0.1")
 			QueryRouting = true;
+
+		// Parse X-Ultrapeer-Query-Routing header
+		RoutingHeader = FindHeader("X-Ultrapeer-Query-Routing");
+		if(!RoutingHeader.IsEmpty() && RoutingHeader == "0.1")
+			m_SupportInterQRP = true;
 
 		// Parse Accept-Encoding
 		CString EncodingHeader = FindHeader("Accept-Encoding");
@@ -838,6 +783,12 @@ void CGnuNode::ParseOutboundHandshake06(CString Data, byte* Stream, int StreamLe
 		CString RoutingHeader = FindHeader("X-Query-Routing");
 		if(!RoutingHeader.IsEmpty() && RoutingHeader == "0.1")
 			QueryRouting = true;
+
+		// Parse X-Ultrapeer-Query-Routing header
+		RoutingHeader = FindHeader("X-Ultrapeer-Query-Routing");
+		if(!RoutingHeader.IsEmpty() && RoutingHeader == "0.1")
+			m_SupportInterQRP = true;
+
 
 		// Parse Accept-Encoding
 		CString EncodingHeader = FindHeader("Accept-Encoding");
@@ -1181,21 +1132,21 @@ void CGnuNode::Send_ConnectOK(bool Reply)
 	else
 	{
 		Handshake =  m_NetworkName + "/0.6 200 OK\r\n";
+
+		// Listen-IP header
+		Handshake += "Listen-IP: " + IPtoStr(m_pNet->m_CurrentIP) + ":" + NumtoStr(m_pNet->m_CurrentPort) + "\r\n";
+
+		// Remote IP header
+		UINT nTrash;
+		GetPeerName(m_HostIP, nTrash);
+		Handshake += "Remote-IP: " + m_HostIP + "\r\n";
+		
 		Handshake += "User-Agent: " + m_pCore->GetUserAgent() + "\r\n";
 
 
 		// LAN header
 		if(m_pPrefs->m_LanMode)
 			Handshake += "LAN: " + m_pPrefs->m_LanName + "\r\n";
-
-
-		// Remote IP header
-		UINT nTrash;
-		GetPeerName(m_HostIP, nTrash);
-		Handshake += "Remote-IP: " + m_HostIP + "\r\n";
-
-		// Query Routing Header
-		Handshake += "X-Query-Routing: 0.1\r\n";
 
 		// Ultrapeer header
 		if(m_pComm->m_GnuClientMode == GNU_ULTRAPEER)
@@ -1209,6 +1160,18 @@ void CGnuNode::Send_ConnectOK(bool Reply)
 		else
 			Handshake += "X-Ultrapeer: False\r\n";
 		
+		// X-Degree
+		Handshake += "X-Degree: " + NumtoStr(m_pPrefs->m_MaxConnects) + "\r\n";
+
+		// Query Routing Header
+		Handshake += "X-Query-Routing: 0.1\r\n";
+
+		// X-Ultrapeer-Query-Routing
+		Handshake += "X-Ultrapeer-Query-Routing: 0.1\r\n";
+
+		// X-Max-TTL
+		Handshake += "X-Max-TTL: " + NumtoStr(MAX_TTL) + "\r\n";
+
 		// Compression headers
 		Handshake += "Accept-Encoding: deflate\r\n";
 
@@ -1352,7 +1315,6 @@ void CGnuNode::ParseBrowseHandshakeRequest(CString Data)
 	// Create query for share files
 	GnuQuery BrowseQuery;
 	BrowseQuery.OriginID  = m_NodeID;
-	BrowseQuery.Hops = 1;
 	GnuCreateGuid(&BrowseQuery.SearchGuid);
 
 	std::list<UINT> FileIndexes;
@@ -1559,10 +1521,17 @@ void CGnuNode::SetConnected()
 		DeflateStream.avail_out = m_BackBuffLength;
 	}
 
+	// Init Remote QRP Table
+	memset( m_RemoteHitTable, 0xFF, GNU_TABLE_SIZE );
 
 	// We are a leaf send index to supernode
-	if(m_pComm->m_GnuClientMode == GNU_LEAF)
-		m_PatchUpdateNeeded  = true;
+	if( (m_pComm->m_GnuClientMode == GNU_LEAF && m_GnuNodeMode == GNU_ULTRAPEER) ||
+		(m_GnuNodeMode == GNU_ULTRAPEER && m_SupportInterQRP))
+	{
+		Send_PatchReset(); // Send reset
+
+		m_SendDelayPatch = true; // Set to send patch
+	}
 
 
 	Send_Ping(1);			
@@ -1578,11 +1547,13 @@ void CGnuNode::SendPacket(void* packet, int length, int type, int distance, bool
 		return;
 	}
 
-	if(distance >= MAX_TTL || distance < 0)
-	{
-		ASSERT(0);
-		return;
-	}
+	// handled by inspect packet already, asserts on forwared queries to leaves
+	// need to check cause packetlist array would go out of bounds
+	if(distance >= MAX_TTL)
+		distance = MAX_TTL - 1;
+
+	if(distance < 0)
+		distance = 0;
 
 	ASSERT(packet);
 
@@ -1852,14 +1823,15 @@ void CGnuNode::Close()
 		// Clear receive buffer
 		int BuffLength = 0;
 
-		do 
-		{
-			BuffLength = Receive(&m_pBuff[m_ExtraLength], PACKET_BUFF - m_ExtraLength);
+		
+		if(m_Status == SOCK_CONNECTED)
+			do {
+				BuffLength = Receive(&m_pBuff[m_ExtraLength], PACKET_BUFF - m_ExtraLength);
 
-			if(BuffLength > 0)
-				SplitBundle(m_pBuff, BuffLength);
+				if(BuffLength > 0)
+					SplitBundle(m_pBuff, BuffLength);
 
-		} while(BuffLength > 0);
+			} while(BuffLength > 0);
 
 
 		// Close socket
@@ -1937,21 +1909,13 @@ void CGnuNode::SplitBundle(byte* bundle, DWORD length)
 		{
 			packet = (packet_Header*) (bundle + nextPos);
 
-			Payload = packet->Payload; 
-		 
-			if((packet->Function == 0x00 && Payload ==  0)					  ||
-			   (packet->Function == 0x01 && Payload == 14)					  ||		   		 
-			   (packet->Function == 0x30 && Payload > 2 && Payload < 32768)   ||
-			   (packet->Function == 0x40 && Payload == 26)					  ||
-			   (packet->Function == 0x80 && Payload >  2 && Payload <= 230)   ||
-			   (packet->Function == 0x81 && Payload > 26 && Payload < 32768)  ||
-			   (packet->Function == 0x02 && Payload > 0 && Payload < 32768)	  )
+			if(packet->Payload < 16384)
 			{
-				if (nextPos + sizeof(packet_Header) + Payload <= length)
+				if (nextPos + sizeof(packet_Header) + packet->Payload <= length)
 				{
-					HandlePacket(packet, 23 + Payload);
+					HandlePacket(packet, 23 + packet->Payload);
 					
-					nextPos += 23 + Payload;
+					nextPos += 23 + packet->Payload;
 					if (nextPos == length)
 						theStatus = status_DONE;
 				}
@@ -1960,10 +1924,13 @@ void CGnuNode::SplitBundle(byte* bundle, DWORD length)
 			}
 			else
 			{
-		        if (nextPos < length - sizeof(packet_Header))
-					nextPos++;
-		        else   
-					theStatus = status_BAD_PACKET;
+				CloseWithReason("Packet Size Greater than 16k");
+				return;
+
+		        //if (nextPos < length - sizeof(packet_Header))
+				//	nextPos++;
+		        //else   
+				//	theStatus = status_BAD_PACKET;
 			}
 		}
 	} while(status_CONTINUE == theStatus);
@@ -2028,7 +1995,7 @@ void CGnuNode::HandlePacket(packet_Header* packet, DWORD length)
 
 bool CGnuNode::InspectPacket(packet_Header* packet)
 {
-	if(packet->TTL == 0 ||  packet->Hops >= MAX_TTL)
+	if(packet->TTL == 0 || packet->Hops >= MAX_TTL)
 		return false;
 
 
@@ -2133,6 +2100,12 @@ void CGnuNode::Receive_Ping(packet_Ping* Ping, int nLength)
 
 void CGnuNode::Receive_Pong(packet_Pong* Pong, int nLength)
 {
+	if(Pong->Header.Payload < 14)		   		 
+	{
+		m_pCore->DebugLog("Gnutella", "Bad Pong, Length " + NumtoStr(Pong->Header.Payload));
+		return;
+	}
+
 	// Packet stats
 	int StatPos = UpdateStats(Pong->Header.Function);
 
@@ -2239,6 +2212,13 @@ void CGnuNode::Receive_Pong(packet_Pong* Pong, int nLength)
 
 void CGnuNode::Receive_Push(packet_Push* Push, int nLength)
 {
+	if(Push->Header.Payload < 26)		   		 
+	{
+		m_pCore->DebugLog("Gnutella", "Bad Push, Length " + NumtoStr(Push->Header.Payload));
+		return;
+	}
+
+
 	// Packet stats
 	int StatPos = UpdateStats(Push->Header.Function);
 	
@@ -2321,8 +2301,21 @@ void CGnuNode::Receive_Push(packet_Push* Push, int nLength)
 
 void CGnuNode::Receive_Query(packet_Query* Query, int nLength)
 {
+	if(Query->Header.Payload < 2)		   		 
+	{
+		m_pCore->DebugLog("Gnutella", "Bad Query, Length " + NumtoStr(Query->Header.Payload));
+		return;
+	}
+	
 	// Packet stats
 	int StatPos = UpdateStats(Query->Header.Function);
+
+
+	if(!InspectPacket(&Query->Header))
+	{
+		m_pComm->PacketIncoming(m_NodeID, (byte*) Query, nLength, ERROR_HOPS, false);
+		return;
+	}
 
 	// Inspect
 	int QuerySize  = Query->Header.Payload - 2;
@@ -2335,7 +2328,7 @@ void CGnuNode::Receive_Query(packet_Query* Query, int nLength)
 		//TRACE0("Text Query too big " + CString((char*) Query + 25) + "\n");
 		return;
 	}
-	
+
 	CString ExtendedQuery;
 
 	if (TextSize < QuerySize)
@@ -2367,15 +2360,8 @@ void CGnuNode::Receive_Query(packet_Query* Query, int nLength)
 		{
 			// Query with double nulls, wtf
 		}
-		
 	}
 
-	if(!InspectPacket(&Query->Header))
-	{
-		m_pComm->PacketIncoming(m_NodeID, (byte*) Query, nLength, ERROR_HOPS, false);
-		return;
-	}
-	
 	
 	int RouteID = m_pComm->m_TableRouting.FindValue(Query->Header.Guid);
 	int LocalRouteID = m_pComm->m_TableLocal.FindValue(Query->Header.Guid);
@@ -2396,26 +2382,46 @@ void CGnuNode::Receive_Query(packet_Query* Query, int nLength)
 		if(*((char*) Query + 25) == '\\')
 			return;
 
-		// Broadcast if still alive
-		if(Query->Header.Hops < MAX_TTL && Query->Header.TTL > 0)
+		// Client in Ultrapeer Mode
+		if(m_pComm->m_GnuClientMode == GNU_ULTRAPEER)
 		{
-			if(m_GnuNodeMode == GNU_LEAF)
+			// Received from Leaf
+			if( m_GnuNodeMode == GNU_LEAF )
+			{
+				Query->Header.Hops = 0; // Reset Hops
+				Query->Header.TTL++;    // Increase TTL
+
 				m_pComm->Broadcast_Query(Query, nLength, this);
-			else
-				m_pComm->Broadcast_Query(Query, nLength, this);
+			}
+
+			// Received from Ultrapeer
+			if( m_GnuNodeMode == GNU_ULTRAPEER )
+			{
+				if(Query->Header.Hops < MAX_TTL && Query->Header.TTL > 0)
+					m_pComm->Broadcast_Query(Query, nLength, this);
+			}
 		}
 
+		if(Query->Header.TTL == 0 && m_SupportInterQRP)
+		{
+			CString Text((char*) Query + 25);
+			TRACE0("QUERY:" + Text + "\n");
+		}
+			
 		// Queue to be compared with local files
 		GnuQuery G1Query;
 		G1Query.Network    = NETWORK_GNUTELLA;
 		G1Query.OriginID   = m_NodeID;
 		G1Query.SearchGuid = Query->Header.Guid;
-		G1Query.Hops       = Query->Header.Hops;
 
 		if(m_pComm->m_GnuClientMode == GNU_ULTRAPEER)
 		{
 			G1Query.Forward = true;
-			
+			G1Query.Source  = this;
+
+			if(Query->Header.TTL == 1)
+				G1Query.UltraForward = true;
+
 			memcpy(G1Query.Packet, (byte*) Query, nLength);
 			G1Query.PacketSize = nLength;
 		}
@@ -2456,6 +2462,12 @@ void CGnuNode::Receive_Query(packet_Query* Query, int nLength)
 
 void CGnuNode::Receive_QueryHit(packet_QueryHit* QueryHit, DWORD nLength)
 {
+	if(QueryHit->Header.Payload < 27)		   		 
+	{
+		m_pCore->DebugLog("Gnutella", "Bad Query Hit, Length " + NumtoStr(QueryHit->Header.Payload));
+		return;
+	}
+
 	// Packet stats
 	int StatPos = UpdateStats(QueryHit->Header.Function);
 
@@ -2539,12 +2551,28 @@ void CGnuNode::Receive_QueryHit(packet_QueryHit* QueryHit, DWORD nLength)
 		if(m_pComm->m_TablePush.FindValue( *((GUID*) ((byte*)QueryHit + (nLength - 16)))) == -1)
 			m_pComm->m_TablePush.Insert( *((GUID*) ((byte*)QueryHit + (nLength - 16))) , m_NodeID);
 		
+		// If received from child reset
+		if(m_pComm->m_GnuClientMode == GNU_ULTRAPEER && m_GnuNodeMode == GNU_LEAF)
+		{
+			QueryHit->Header.Hops = 0;
+			QueryHit->Header.TTL  = MAX_TTL;
+		}
+
 		// Send it out
 		if(QueryHit->Header.Hops < MAX_TTL && QueryHit->Header.TTL > 0)
 			m_pComm->Route_QueryHit(QueryHit, nLength, RouteID);
 
+		// Send if meant for child
+		std::map<int, CGnuNode*>::iterator itNode = m_pComm->m_NodeIDMap.find(RouteID);
+		if(itNode != m_pComm->m_NodeIDMap.end())
+			if(itNode->second->m_Status == SOCK_CONNECTED && itNode->second->m_GnuNodeMode == GNU_LEAF)
+			{	
+				QueryHit->Header.TTL++;
+				m_pComm->Route_QueryHit(QueryHit, nLength, RouteID);
+			}
 
 		AddGoodStat(QueryHit->Header.Function);
+
 		m_pComm->PacketIncoming(m_NodeID, (byte*) QueryHit, nLength, ERROR_NONE, false);
 		
 		return;
@@ -2752,119 +2780,219 @@ void CGnuNode::Receive_Bye(packet_Bye* Bye, int nLength)
 
 void CGnuNode::Receive_RouteTableReset(packet_RouteTableReset* TableReset, UINT Length)
 {
-	if(m_GnuNodeMode != GNU_LEAF || TableReset->Header.Hops > 0)
+	if(TableReset->Header.Payload < 6)		   		 
 	{
-		m_pComm->PacketIncoming(m_NodeID, (byte*) TableReset, Length, ERROR_UNKNOWN, false);
+		m_pCore->DebugLog("Gnutella", "Bad Table Reset, Length " + NumtoStr(TableReset->Header.Payload));
+		return;
+	}
+
+	if(m_GnuNodeMode != GNU_ULTRAPEER)		   		 
+	{
+		m_pCore->DebugLog("Gnutella", "Table Reset Received while in Leaf Mode");
+		return;
+	}
+
+	if(TableReset->Header.Hops > 0)
+	{
+		m_pCore->DebugLog("Gnutella", "Table Reset Hops > 0");
 		return;
 	}
 
 	m_pComm->PacketIncoming(m_NodeID, (byte*) TableReset, Length, ERROR_NONE, true);
 
-	m_TableInfinity = TableReset->Infinity;
-	m_TableLength   = TableReset->TableLength;
-
-
-	// Reset main patch table
-	m_pShare->m_pWordTable->ResetTable(this);
+	m_RemoteTableInfinity = TableReset->Infinity;
+	m_RemoteTableSize     = TableReset->TableLength / 8;
+	memset( m_RemoteHitTable, 0xFF, GNU_TABLE_SIZE );
 
 	m_CurrentSeq = 1;
 }
 
 void CGnuNode::Receive_RouteTablePatch(packet_RouteTablePatch* TablePatch, UINT Length)
 {
-	if(m_GnuNodeMode != GNU_LEAF || TablePatch->Header.Hops > 0)
+	if(TablePatch->Header.Payload < 5)		   		 
 	{
-		m_pComm->PacketIncoming(m_NodeID, (byte*) TablePatch, Length, ERROR_UNKNOWN, false);
+		m_pCore->DebugLog("Gnutella", "Bad Table Patch, Length " + NumtoStr(TablePatch->Header.Payload));
+		return;
+	}
+
+	if(m_GnuNodeMode != GNU_ULTRAPEER)		   		 
+	{
+		m_pCore->DebugLog("Gnutella", "Table Patch Received while in Leaf Mode");
+		return;
+	}
+
+	if(TablePatch->Header.Hops > 0)
+	{
+		m_pCore->DebugLog("Gnutella", "Table Patch Hops > 0");
+		return;
+	}
+
+	if( TablePatch->SeqNum == 0 || TablePatch->SeqNum > TablePatch->SeqSize || m_CurrentSeq != TablePatch->SeqNum)
+	{
+		CloseWithReason("Table Patch Sequence Error");
+		return;
+	}
+
+	if(TablePatch->EntryBits != 4 && TablePatch->EntryBits != 8)
+	{
+		CloseWithReason("Table Patch Invalid Entry Bits");
+		return;
+	}
+
+	// Make sure table length and infinity have been set
+	if(m_RemoteTableSize == 0 || m_RemoteTableInfinity == 0)
+	{
+		m_pCore->DebugLog("Gnutella", "Table Patch Received Before Reset");
 		return;
 	}
 
 	m_pComm->PacketIncoming(m_NodeID, (byte*) TablePatch, Length, ERROR_NONE, true);
 
-	// Connection must be closed if patch is out of synch
-	if(m_CurrentSeq != TablePatch->SeqNum)
-	{
-		CloseWithReason("Patch Table Error, " + NumtoStr(m_CurrentSeq) + " != " +  NumtoStr(TablePatch->SeqNum) );
-		return;
-	}
-
-	// Make sure table length and infinity have been set
-	if(m_TableLength == 0 || m_TableInfinity == 0)
-		return;
 
 	// If first patch in sequence, reset table
 	if(TablePatch->SeqNum == 1)
 	{
-		if(m_PatchTable)
-			delete [] m_PatchTable;
+		if(m_PatchBuffer)
+			delete [] m_PatchBuffer;
 
-		m_PatchTable   = new char[m_TableLength];
-		m_TableNextPos = 0;
-		
-		memset(m_PatchTable, 0, m_TableLength);
-
-		// Compressed patch table
-		if(m_dnapressedTable)
-			delete [] m_dnapressedTable;
-
-		m_dnapressedTable = new byte[m_TableLength];
-		m_dnapressedSize  = 0;
+		m_PatchSize   = m_RemoteTableSize * TablePatch->EntryBits;
+		m_PatchBuffer  = new byte[m_PatchSize];
+		m_PatchOffset = 0;
 	}
 	
+	// Check patch not received out of sync and buff not created
+	if(m_PatchBuffer == NULL)
+	{
+		m_pCore->DebugLog("Gnutella", "Table Patch Received Out of Sync");
+		return;
+	}
+
 
 	if(TablePatch->SeqNum <= TablePatch->SeqSize)
 	{
-		UINT PatchSize = TablePatch->Header.Payload - 5;
+		int PartSize = TablePatch->Header.Payload - 5;
 
 		// As patches come in, build buffer of data
-		if(m_dnapressedSize + PatchSize <= m_TableLength)
+		if(m_PatchOffset + PartSize <= m_PatchSize)
 		{
-			memcpy(m_dnapressedTable + m_dnapressedSize, (byte*) TablePatch + 28, PatchSize);
-
-			m_dnapressedSize += PatchSize;
+			memcpy(m_PatchBuffer + m_PatchOffset, (byte*) TablePatch + 28, PartSize);
+			m_PatchOffset += PartSize;
 		}
 		else
 		{
-			CloseWithReason("Patch too big, " + NumtoStr(m_TableLength) );
-			m_pCore->LogError("Patch too big");
+			CloseWithReason("Patch Exceeded Specified Size");
+			m_pCore->DebugLog("Gnutella", "Table Patch Too Large");
 		}
 	}
 
 	// Final patch received
 	if(TablePatch->SeqNum == TablePatch->SeqSize)
 	{
-		DWORD UncompressedSize = m_TableLength;
-		
-		// Uncompress packet if needed
 		if(TablePatch->Compression == 0x1)
-		{
-			if(uncompress((byte*) m_PatchTable, &UncompressedSize, m_dnapressedTable, m_dnapressedSize) != Z_OK)
-				m_pCore->LogError("Uncompress patch error");
-		}
-		else
-		{
-			UncompressedSize = m_dnapressedSize;
-			memcpy(m_PatchTable, m_dnapressedTable, UncompressedSize);
-		}
+			m_PatchCompressed = true;
+
+		m_PatchBits = TablePatch->EntryBits;
+
+		m_PatchReady = true;
+	}
+	else
+		m_CurrentSeq++;
 	
+}
 
-		// Add patch to main patch table
-		m_pShare->m_pWordTable->ApplyPatch(this, TablePatch->EntryBits);
-		
+void CGnuNode::ApplyPatchTable()
+{
+	byte* PatchTable = NULL;
 
-		delete [] m_PatchTable;
-		m_PatchTable	  = NULL;
-		
-		delete [] m_dnapressedTable;
-		m_dnapressedTable = NULL;
+	// Decompress table if needed
+	if( m_PatchCompressed )
+	{
+		PatchTable = new byte[m_PatchSize];
 
-		m_CurrentSeq = 1;
+		DWORD UncompressedSize = m_PatchSize;
+
+		int zerror = uncompress( PatchTable, &UncompressedSize, m_PatchBuffer, m_PatchOffset);
+		if( zerror != Z_OK )
+		{
+			CloseWithReason("Patch Table Decompress Error");
+			delete [] PatchTable;
+			return;
+		}
+
+		ASSERT( UncompressedSize == m_PatchSize );
+
+		delete [] m_PatchBuffer;
+		m_PatchBuffer = NULL;
 	}
 	else
 	{
-		m_CurrentSeq++;
+		PatchTable = m_PatchBuffer; // Make sure deleted in function!
+		m_PatchBuffer = NULL; 
 	}
+
+	
+	// Apply patch
+	// Only can accurately convert smaller tables, a node's larger table is not kept around to patch against later
+
+	int RemoteSize = m_PatchSize;
+	RemoteSize /= m_PatchBits;
+
+	double Factor = (double) GNU_TABLE_SIZE / (double) RemoteSize; // SMALLER means LARGER remote TABLE
+
+	int remotePos = 0;
+
+	int i = 0, j = 0;
+	for(i = 0; i < m_PatchSize; i++)
+	{
+		if(m_PatchBits == 4)
+		{
+			// high bit
+			remotePos = i * 2;
+			SetPatchBit(remotePos, Factor, PatchTable[i] >> 4);
+			
+			// low bit
+			remotePos++;
+			SetPatchBit(remotePos, Factor, PatchTable[i] & 0xF);
+		}
+		else if(m_PatchBits == 8)
+		{
+			remotePos = i;
+			SetPatchBit(remotePos, Factor, PatchTable[i]);
+		}
+	}
+
+	delete [] PatchTable;
+	PatchTable = NULL;
+
+	// Patch table for node modified, if node a child update inter-hub QHT
+	if( m_GnuNodeMode == GNU_LEAF )
+		for( i = 0; i < m_pComm->m_NodeList.size(); i++)
+			if(m_pComm->m_NodeList[i]->m_GnuNodeMode == GNU_ULTRAPEER && m_pComm->m_NodeList[i]->m_Status == SOCK_CONNECTED)
+				m_pComm->m_NodeList[i]->m_SendDelayPatch = true;
 }
 
+void CGnuNode::SetPatchBit(int &remotePos, double &Factor, byte value)
+{
+	int localPos  = 0;
+	int lByte = 0, lBit = 0;
+
+	for(double Next = 0; Next < Factor; Next++)
+	{
+		localPos = remotePos * Factor + Next;
+
+		lByte = ( localPos >> 3 ); 
+		lBit  = ( localPos & 7 ); 
+
+		// Switch byte
+		if(value > 7)  // turn on (byte negetive)
+			m_RemoteHitTable[lByte] &= ~(1 << lBit);
+		
+		else if(value > 0) // turn off (byte positive)
+			m_RemoteHitTable[lByte] |= 1 << lBit;
+
+		// zero no change
+	}
+}
 void CGnuNode::Receive_Unknown(byte* UnkownPacket, DWORD dwLength)
 {
 	m_pComm->PacketIncoming(m_NodeID, (byte*) UnkownPacket, dwLength, ERROR_UNKNOWN, false);
@@ -2936,8 +3064,10 @@ void CGnuNode::Send_QueryHit(GnuQuery &FileQuery, byte* pQueryHit, DWORD ReplyLe
 	QueryHit->Header.Guid = FileQuery.SearchGuid;
 	m_pComm->m_TableLocal.Insert(FileQuery.SearchGuid, m_NodeID);
 
+	packet_Query* pQuery = (packet_Query*) FileQuery.Packet;
+
 	QueryHit->Header.Function = 0x81;
-	QueryHit->Header.TTL	  = FileQuery.Hops;
+	QueryHit->Header.TTL	  = pQuery->Header.Hops;
 	QueryHit->Header.Hops	  = 0;
 
 	QueryHit->TotalHits	= ReplyCount;
@@ -3048,16 +3178,13 @@ void CGnuNode::Send_Bye(CString Reason)
 	delete [] PacketData;
 }
 
-
-void CGnuNode::Send_PatchTable()
+void CGnuNode::Send_PatchReset()
 {
-	byte* PacketBuff   = new byte[1 << GNU_TABLE_BITS]; // Used so everything is sent in the correct order
-	UINT  NextPos	   = 0;
-
 	GUID Guid = GUID_NULL;
 	GnuCreateGuid(&Guid);
 	if (Guid == GUID_NULL)
 		return;
+
 
 	// Build the packet
 	packet_RouteTableReset Reset;
@@ -3072,42 +3199,111 @@ void CGnuNode::Send_PatchTable()
 	Reset.TableLength	= 1 << GNU_TABLE_BITS;
 	Reset.Infinity		= TABLE_INFINITY;
 
-	// Send reset packet so remote host clears entries for us
-	memcpy(PacketBuff + NextPos, &Reset, 29);
-	NextPos += 29;
+	SendPacket(&Reset, 29, PACKET_QUERY, Reset.Header.Hops);
+}
 
+void CGnuNode::Send_PatchTable()
+{
+	byte PatchTable[GNU_TABLE_SIZE];
+
+	// Get local table
+	memcpy(PatchTable, m_pShare->m_pWordTable->m_GnutellaHitTable, GNU_TABLE_SIZE);
+	
+
+	// Sending inter-ultrapeer qrp table
+	if( m_pComm->m_GnuClientMode == GNU_ULTRAPEER )
+	{
+		// Build aggregate table of leaves
+		for(int i = 0; i < m_pComm->m_NodeList.size(); i++)
+			if(m_pComm->m_NodeList[i]->m_Status == SOCK_CONNECTED && m_pComm->m_NodeList[i]->m_GnuNodeMode == GNU_LEAF)
+			{
+				for(int k = 0; k < GNU_TABLE_SIZE; k++)
+					PatchTable[k] &= m_pComm->m_NodeList[i]->m_RemoteHitTable[k];
+			}
+	}
+
+	// Create local table if not created yet (needed to save qht info if needed to send again)
+	if( m_LocalHitTable == NULL)
+	{
+		m_LocalHitTable = new byte [GNU_TABLE_SIZE];
+		memset( m_LocalHitTable,  0xFF, GNU_TABLE_SIZE );
+	}
+
+	// create 4 bit patch table to send to remote host
+	byte* FourBitPatch = new byte [GNU_TABLE_SIZE * 4];
+	memset(FourBitPatch, 0, GNU_TABLE_SIZE * 4);
+
+	int pos = 0;
+	for(int i = 0; i < GNU_TABLE_SIZE; i++)
+	{
+		// Find what changed and build a 4 bit patch table for it
+		for(byte mask = 1; mask != 0; mask *= 2)
+		{ 
+			pos++;
+
+			// No change
+			if( (PatchTable[i] & mask) == (m_LocalHitTable[i] & mask) )
+			{
+				
+			}
+			// Patch turning on ( set negetive value)
+			else if( (PatchTable[i] & mask) == 0 && (m_LocalHitTable[i] & mask) > 0)
+			{
+				if(pos % 2 == 0) 
+					FourBitPatch[pos / 2] = 15 << 4; // high -1
+				else
+					FourBitPatch[pos / 2] |= 15;  // low -1
+			}
+			// Patch turning off ( set positive value)
+			else if( (PatchTable[i] & mask) > 0 && (m_LocalHitTable[i] & mask) == 0)
+			{
+				if(pos % 2 == 0)
+					FourBitPatch[pos / 2] = 1 << 4;// high 1
+				else
+					FourBitPatch[pos / 2] |= 1;  // low 1
+			}
+		}
+
+		m_LocalHitTable[i] = PatchTable[i];
+	}
 
 	// Compress patch table
-	DWORD PatchSize  = 1 << GNU_TABLE_BITS;
-	DWORD CompSize	= PatchSize * 1.2 + 12;
-
+	DWORD CompSize	= GNU_TABLE_SIZE * 4 * 1.2;
 	byte* CompBuff	= new byte[CompSize];
 	
-	if(compress(CompBuff, &CompSize, (byte*) m_pShare->m_pWordTable->m_PatchTable, PatchSize) != Z_OK)
+	if(compress(CompBuff, &CompSize, FourBitPatch, GNU_TABLE_SIZE * 4) != Z_OK)
 	{
+		delete [] FourBitPatch;
+		FourBitPatch = NULL;
+
 		m_pCore->LogError("Patch Compression Error");
 		return;
 	}
-	
 
-	 // Determine how many 1024 byte packets to send 
-	int SeqSize = (CompSize + (1024 - 1)) >> 10; 
+	delete [] FourBitPatch;
+	FourBitPatch = NULL;
+
+	 // Determine how many 2048 byte packets to send 
+	int SeqSize = (CompSize + (PATCH_PART_MAXSIZE - 1)) >> 11; 
 	
 	int CopyPos  = 0;
 	int CopySize = 0;
 
-	byte* RawPacket = new byte[1024 + 28];
-	packet_RouteTablePatch* PatchPacket = (packet_RouteTablePatch*) RawPacket;
-	
+	byte* RawPacket = new byte[PATCH_PART_MAXSIZE + 28];
+	packet_RouteTablePatch* PatchPacket = (packet_RouteTablePatch*) RawPacket;	
+
+	byte* PacketBuff   = new byte[GNU_TABLE_SIZE * 4 + 896]; // Used so everything is sent in the correct order enough space for packet headers
+	UINT  NextPos	   = 0;
 
 	for(int SeqNum = 1; SeqNum <= SeqSize; SeqNum++)
 	{
-		if(CompSize - CopyPos < 1024)
+		if(CompSize - CopyPos < PATCH_PART_MAXSIZE)
 			CopySize = CompSize - CopyPos;
 		else
-			CopySize = 1024;
+			CopySize = PATCH_PART_MAXSIZE;
 
 		// Build packet
+		GUID Guid = GUID_NULL;
 		GnuCreateGuid(&Guid);
 
 		PatchPacket->Header.Guid		= Guid;
@@ -3121,14 +3317,13 @@ void CGnuNode::Send_PatchTable()
 		PatchPacket->SeqSize	= SeqSize;
 
 		PatchPacket->Compression = 0x1;
-		PatchPacket->EntryBits	 = 8;
+		PatchPacket->EntryBits	 = 4;
 
 		memcpy(RawPacket + 28, CompBuff + CopyPos, CopySize);
-
+		CopyPos += PATCH_PART_MAXSIZE;
+	
 		memcpy(PacketBuff + NextPos, RawPacket, 28 + CopySize);
 		NextPos += 28 + CopySize;
-
-		CopyPos += 1024;
 	}
 
 	// This mega packet includes the reset and all patches
@@ -3272,14 +3467,33 @@ void CGnuNode::NodeManagement()
 
 	else if(SOCK_CONNECTED == m_Status)
 	{
-		// Check if we need to update the patch table
-		if(m_pComm->m_GnuClientMode == GNU_LEAF)
-			if(m_PatchUpdateNeeded)
+		// QRP - Recv
+		if(m_PatchTimeout > 0)
+			m_PatchTimeout--;
+
+		if(m_PatchReady)
+			if(m_PatchTimeout == 0 || m_GnuNodeMode == GNU_ULTRAPEER) // Hub always able to update, prevent child from taking hub cpu
 			{
-				Send_PatchTable();
+				ApplyPatchTable();
+
+				m_PatchReady   = false;
+				m_PatchTimeout = 60;
+				m_CurrentSeq  = 1;
 			}
 
-		m_PatchUpdateNeeded = false;
+		// QRP - Send
+		if( m_PatchWait > 0)
+			m_PatchWait--;
+
+		if(m_SendDelayPatch && m_PatchWait == 0)
+		{
+			if( (m_pComm->m_GnuClientMode == GNU_LEAF && m_GnuNodeMode == GNU_ULTRAPEER) ||
+				(m_GnuNodeMode == GNU_ULTRAPEER && m_SupportInterQRP))
+				Send_PatchTable();
+
+			m_SendDelayPatch  = false;
+			m_PatchWait       = PATCH_TIMEOUT;
+		}
 
 		// Transfer packets from share thread to main thread
 		m_TransferPacketAccess.Lock();

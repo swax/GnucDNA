@@ -110,8 +110,6 @@
 
 
 // Prog defines
-#define MAX_TTL				7
-
 #define CONNECT_TIMEOUT		5
 #define TRANSFER_TIMEOUT    10
 

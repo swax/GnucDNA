@@ -1,16 +1,28 @@
-Sockets flaky when mfc linked shared
-After mfc replaced go back to static
 
-Q2/NAT
-QH2/FW
-NAT detection, map of 10000 ips, once 10000 hit turn off detection
-  add ips from udp send and sock connects
-If PI/RELAY recved with UDP address of directly connected host (but not from directly connected host), disconnect youngest link
+Test
+	Verify DNA Leaf -> LimeWire UP, DNA Leaf -> BearShare UP, DNA Leaf -> DNA UP
+	Verify Changes in shar
+   Connect to ultrapeers and leaf mode, verify forwarded queries match shared files
+   Verify stopping shared files, cuts forwarded queries
+   Verify Queries forwarded and not forwarded last hop
+   Verify receiving last hop queries only for files shared
 
-Gnutella-->Networks::IncomingSource-->IncomingResult
-      G2-/                         \->AddHost
 
-15 minute upgrade only if setconnected never called
+Gnu Questions
+	Why does limewire make 6 connects in leaf mode?
+
+
+G2
+	Q2/NAT
+	QH2/FW
+	NAT detection, map of 10000 ips, once 10000 hit turn off detection
+	add ips from udp send and sock connects
+	If PI/RELAY recved with UDP address of directly connected host (but not from directly	 connected host), disconnect youngest link
+
+	Gnutella-->Networks::IncomingSource-->IncomingResult
+		G2-/                         \->AddHost
+
+	15 minute upgrade only if setconnected never called
 
 Now	
 	IPrefs::SetSpeedUp
