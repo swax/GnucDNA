@@ -58,7 +58,7 @@ CGnuCore::CGnuCore(CDnaCore* dnaCore)
 	SetLicense();
 	SetCredits();
 
-	m_DnaVersion	= GetVersionInfo();
+	m_DnaVersion	= DNA_VERSION; // GetVersionInfo();
 
 	m_ClientName    = "GnuApp";
 	m_ClientVersion = m_DnaVersion;
@@ -317,7 +317,7 @@ void CGnuCore::DebugTrigger(bool details)
 	#endif*/
 }
 
-CString CGnuCore::GetVersionInfo(void)
+/*CString CGnuCore::GetVersionInfo(void)
 {
 	char szDllName[_MAX_PATH];
 	DWORD dwHandle, dwSize;
@@ -342,4 +342,4 @@ CString CGnuCore::GetVersionInfo(void)
 	}
 
 	return version;
-}
+}*/

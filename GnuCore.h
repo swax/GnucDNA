@@ -16,7 +16,7 @@ public:
 	CGnuCore(CDnaCore* dnaCore);
 	~CGnuCore();
 
-	CString GetVersionInfo(void);
+	//CString GetVersionInfo(void);
 
 	void SetLicense();
 	void SetCredits();
