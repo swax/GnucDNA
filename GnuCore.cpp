@@ -184,8 +184,15 @@ void CGnuCore::ScanPerformance()
 	m_IsKernalNT = (osv.dwPlatformId == VER_PLATFORM_WIN32_NT) ? true : false;
 	
 	m_IsSp2 = false;
-	if(osv.dwMajorVersion == 5 && osv.dwMinorVersion == 1 && strcmp(osv.szCSDVersion, "Service Pack 2") == 0)
-		m_IsSp2 = true;
+	if(osv.dwMajorVersion == 5 && osv.dwMinorVersion == 1)
+	{
+		OSVERSIONINFOEX osvEx;
+		osvEx.dwOSVersionInfoSize = sizeof(OSVERSIONINFOEX);
+		GetVersionEx((OSVERSIONINFO*)&osvEx);
+
+		if (osvEx.wServicePackMajor >= 2)
+			m_IsSp2 = true;
+	}
 
 	// Get total system memory
 	MEMORYSTATUS memstat;

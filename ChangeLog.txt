@@ -5,6 +5,7 @@ GnucDNA 1.1.1.3
 	swabby: Support for limewire crawler
 	swabby: Added check for corrupted tiger in gnuhashes file
 	swabby: Fixed bug when tiger hash verifying small files
+	swabby: Revised SP2 detection
 	
 GnucDNA 1.1.1.2
 	swabby: Downloaded IPs from webcache randomized
