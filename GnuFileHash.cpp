@@ -32,7 +32,7 @@
 
 #include "hash/Sha1.h"
 #include "hash/md5.h"
-#include "hash/md4.h"
+#include "hash/ed2k_md4.h"
 #include "hash/tigertree2.h"
 
 #include "GnuFileHash.h"
@@ -101,7 +101,7 @@ UINT HashWorker(LPVOID pVoidHash)
 
 	sha_ctx     Sha1_Context;
 	MD5Context  MD5_Context;
-	MD4Context  MD4_Context;
+	ED2K_CTX    MD4_Context;
 	tt2_context Tiger_Context;
 	Tiger_Context.tree = NULL;
 	
@@ -149,7 +149,7 @@ UINT HashWorker(LPVOID pVoidHash)
 				{
 					sha_init(&Sha1_Context);
 					MD5Init(&MD5_Context);
-					MD4Init(&MD4_Context);
+					ED2KInit(&MD4_Context);
 					tt2_init(&Tiger_Context);
 
 					memset(Sha1_Digest,  0, 20);
@@ -208,7 +208,7 @@ UINT HashWorker(LPVOID pVoidHash)
 			{
 				sha_update(&Sha1_Context, (byte*) Buffer,  ReadSize);
 				MD5Update(&MD5_Context,   (byte*) Buffer,  ReadSize);
-				MD4Update(&MD4_Context,   (byte*) Buffer,  ReadSize);
+				ED2KUpdate(&MD4_Context,   (byte*) Buffer,  ReadSize);
 				tt2_update(&Tiger_Context, (byte*) Buffer,  ReadSize);
 			}
 
@@ -222,7 +222,7 @@ UINT HashWorker(LPVOID pVoidHash)
 				sha_final(&Sha1_Context);
 				sha_digest(&Sha1_Context,	Sha1_Digest);
 				MD5Final(&MD5_Context,		MD5_Digest);
-				MD4Final(&MD4_Context,		MD4_Digest);
+				ED2KFinal(&MD4_Context,		MD4_Digest);
 				tt2_digest(&Tiger_Context,	Tiger_Digest);
 
 				

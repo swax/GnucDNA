@@ -288,6 +288,9 @@
 					Name="Algorithms"
 					Filter="">
 					<File
+						RelativePath=".\Hash\ed2k_md4.cpp">
+					</File>
+					<File
 						RelativePath=".\hash\md4.cpp">
 					</File>
 					<File
@@ -822,6 +825,9 @@
 				<Filter
 					Name="Algorithms"
 					Filter="">
+					<File
+						RelativePath=".\Hash\ed2k_md4.h">
+					</File>
 					<File
 						RelativePath=".\hash\md4.h">
 					</File>

@@ -8,6 +8,7 @@ GnucDNA 1.1.1.0
 	swabby: Improved how G2 connections are tried from cache
 	swabby: Improved gnutella connection process by making sure failed hosts arent re-tried
 	swabby: Added auto-upgrade to gnutella side to promote 1.1 version ultrapeers
+	fv: Added ED2K MD4 compatible hash to shared files
 	
 GnucDNA 1.1.0.9
 	swabby: Query Ack packet now sent to leaves who do direct tcp query
