@@ -491,9 +491,22 @@ struct GnuNodeInfo
 
 	int    NetBpsIn;   // Bytes per sec
 	int    NetBpsOut;  // Bytes per sec
+	int    UdpBpsIn;   // Bytes per sec
+	int    UdpBpsOut;  // Bytes per sec
+
+	bool   HubAble;
+	bool   Firewall;
+	bool   Router;
 
 	uint64 UpSince;       
 	uint32 ConnectUptime;
+
+	int    Cpu;
+	int	   Mem;
+
+	// Location
+	uint16 Latitude;
+	uint16 Longitude;
 		
 	GnuNodeInfo()
 	{
@@ -510,6 +523,12 @@ struct GnuNodeInfo
 
 		UpSince = 0;
 		ConnectUptime = 0;
+
+		Cpu = 0;
+		Mem = 0;
+
+		Latitude  = 0;
+		Longitude = 0;
 	};
 };
 
@@ -537,6 +556,8 @@ struct G2_CRAWLR // Crawl Request
 
 struct G2_CRAWLA // Crawl Ack
 {
+	int Network;
+
 	G2NodeInfo G2Self;
 	std::vector<G2NodeInfo> G2Hubs;
 	std::vector<G2NodeInfo> G2Leaves;
@@ -547,7 +568,8 @@ struct G2_CRAWLA // Crawl Ack
 
 	G2_CRAWLR OrigRequest;
 
-	G2_CRAWLA()
+	G2_CRAWLA(int net)
 	{
+		Network = net;
 	};
 };

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "GnuWordHash.h"
+#include "G2Packets.h"
 
 // Actual mem 720k
 
@@ -116,6 +117,7 @@ public:
 	void RemovePacket(int);
 
 	bool ValidAgent(CString Agent);
+	void GetNodeInfo(GnuNodeInfo &RemoteNode);
 
 	
 	// Node vars

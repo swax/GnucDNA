@@ -3,6 +3,7 @@
 
 #include "GnuRouting.h"
 #include "GnuPackets.h"
+#include "G2Packets.h"
 #include "GnuShare.h"
 
 struct key_Value;
@@ -74,6 +75,7 @@ public:
 	void DowngradeClient();	
 	void ShareUpdate();
 	DWORD GetSpeed();
+	void GetLocalNodeInfo(GnuNodeInfo &LocalNode);
 
 	CString GetPushProxyHeader();
 
@@ -136,6 +138,9 @@ public:
 	std::map<int, GUID> m_PushProxyHosts; // NodeID, ClientID
 
 	// Bandwidth
+	double m_TcpSecBytesDown;
+	double m_TcpSecBytesUp;
+
 	double m_NetSecBytesDown;
 	double m_NetSecBytesUp;
 

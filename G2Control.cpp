@@ -2409,64 +2409,63 @@ void CG2Control::Receive_CRAWLR(G2_RecvdPacket &PacketCRAWLR)
 	G2_CRAWLR CrawlRequest;
 	m_pProtocol->Decode_CRAWLR(PacketCRAWLR.Root, CrawlRequest);
 
-	G2_CRAWLA CrawlAck;
+
+	// Send a repsonse for G2
+	G2_CRAWLA G2CrawlAck(NETWORK_G2);
 
 	// Self Info
-	GetLocalNodeInfo(CrawlAck.G2Self);
-	CrawlAck.G2Self.Client = m_pCore->GetUserAgent();
-	CrawlAck.G2Self.Mode   = m_ClientMode;
+	GetLocalNodeInfo(G2CrawlAck.G2Self);
+	G2CrawlAck.G2Self.Client = m_pCore->GetUserAgent();
+	G2CrawlAck.G2Self.Mode   = m_ClientMode;
 
 	// G2 Nodes
 	for(int i = 0; i < m_G2NodeList.size(); i++)
 		if( m_G2NodeList[i]->m_Status == SOCK_CONNECTED && m_G2NodeList[i]->m_NodeInfo.Address.Host.S_addr != 0)
-			{
-				G2NodeInfo G2Node  = m_G2NodeList[i]->m_NodeInfo;
-				G2Node.Client      = m_G2NodeList[i]->m_RemoteAgent;
-				G2Node.ConnectUptime = time(NULL) - m_G2NodeList[i]->m_ConnectTime.GetTime();
+		{
+			G2NodeInfo G2Node  = m_G2NodeList[i]->m_NodeInfo;
+			G2Node.Client      = m_G2NodeList[i]->m_RemoteAgent;
+			G2Node.ConnectUptime = time(NULL) - m_G2NodeList[i]->m_ConnectTime.GetTime();
 
-				if( m_G2NodeList[i]->m_NodeMode == G2_HUB ) 
-					CrawlAck.G2Hubs.push_back( G2Node );
+			if( m_G2NodeList[i]->m_NodeMode == G2_HUB ) 
+				G2CrawlAck.G2Hubs.push_back( G2Node );
 
-				if( CrawlRequest.ReqLeaves && m_G2NodeList[i]->m_NodeMode == G2_CHILD ) 
-					CrawlAck.G2Leaves.push_back( G2Node );
-			}
+			if( CrawlRequest.ReqLeaves && m_G2NodeList[i]->m_NodeMode == G2_CHILD ) 
+				G2CrawlAck.G2Leaves.push_back( G2Node );
+		}
 
-	// Gnu Info
-	if( CrawlRequest.ReqG1 && m_pNet->m_pGnu)
-	{
-		CrawlAck.GnuSelf.Mode      = m_pNet->m_pGnu->m_GnuClientMode;
-		CrawlAck.GnuSelf.LeafCount = m_pNet->m_pGnu->CountLeafConnects();
-		CrawlAck.GnuSelf.LeafMax   = m_pPrefs->m_MaxLeaves;
-		CrawlAck.GnuSelf.NetBpsIn  = m_pNet->m_pGnu->m_NetSecBytesDown;
-		CrawlAck.GnuSelf.NetBpsOut = m_pNet->m_pGnu->m_NetSecBytesUp;
-		CrawlAck.GnuSelf.UpSince   = m_pNet->m_pGnu->m_ClientUptime.GetTime();
-		
-		for(int i = 0; i < m_pNet->m_pGnu->m_NodeList.size(); i++)
-			if(m_pNet->m_pGnu->m_NodeList[i]->m_Status == SOCK_CONNECTED)
-			{
-				GnuNodeInfo GnuNode;
-				GnuNode.Address      = m_pNet->m_pGnu->m_NodeList[i]->m_Address;
-				GnuNode.Client       = m_pNet->m_pGnu->m_NodeList[i]->m_RemoteAgent;
-				GnuNode.LibraryCount = m_pNet->m_pGnu->m_NodeList[i]->m_NodeFileCount;
-				GnuNode.ConnectUptime = time(NULL) - m_pNet->m_pGnu->m_NodeList[i]->m_ConnectTime.GetTime();
+	G2CrawlAck.OrigRequest = CrawlRequest;
 
-				if( m_pNet->m_pGnu->m_NodeList[i]->m_StatsRecvd )
-				{
-					GnuNode.LeafMax = m_pNet->m_pGnu->m_NodeList[i]->m_LeafMax;
-					GnuNode.UpSince = m_pNet->m_pGnu->m_NodeList[i]->m_UpSince;
-				}
+	Send_CRAWLA(PacketCRAWLR.Source, G2CrawlAck);
 
-				if(m_pNet->m_pGnu->m_NodeList[i]->m_GnuNodeMode == GNU_ULTRAPEER)
-					CrawlAck.GnuUPs.push_back( GnuNode );
+	if( !CrawlRequest.ReqG1 || m_pNet->m_pGnu == NULL)
+		return;
 
-				if(CrawlRequest.ReqLeaves && m_pNet->m_pGnu->m_NodeList[i]->m_GnuNodeMode == GNU_LEAF)
-					CrawlAck.GnuLeaves.push_back( GnuNode );
-			}
-	}
 
-	CrawlAck.OrigRequest = CrawlRequest;
+	// Send response for Gnutella
+	G2_CRAWLA GnuCrawlAck(NETWORK_GNUTELLA);
 
-	Send_CRAWLA(PacketCRAWLR.Source, CrawlAck);
+	// Self Info
+	m_pNet->m_pGnu->GetLocalNodeInfo(G2CrawlAck.GnuSelf);
+	
+	for(int i = 0; i < m_pNet->m_pGnu->m_NodeList.size(); i++)
+		if(m_pNet->m_pGnu->m_NodeList[i]->m_Status == SOCK_CONNECTED)
+		{
+			CGnuNode* pNode = m_pNet->m_pGnu->m_NodeList[i];
+
+			GnuNodeInfo GnuNode;
+			pNode->GetNodeInfo(GnuNode);
+
+			if(pNode->m_GnuNodeMode == GNU_ULTRAPEER)
+				GnuCrawlAck.GnuUPs.push_back( GnuNode );
+
+			if(CrawlRequest.ReqLeaves && pNode->m_GnuNodeMode == GNU_LEAF)
+				GnuCrawlAck.GnuLeaves.push_back( GnuNode );
+		}
+	
+
+	GnuCrawlAck.OrigRequest = CrawlRequest;
+
+	Send_CRAWLA(PacketCRAWLR.Source, GnuCrawlAck);
 }
 
 void CG2Control::GetLocalNodeInfo(G2NodeInfo &LocalNode)

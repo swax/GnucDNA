@@ -1768,20 +1768,37 @@ void CG2Protocol::Encode_CRAWLA(G2_CRAWLA &CrawlAck)
 
 	int  i = 0;
 
-	// G2 Self
-	G2_Frame* pG2SELF = WritePacket(pCRAWLA, "SELF");
-
-	if(CrawlAck.G2Self.Mode == G2_HUB)
-		WritePacket(pG2SELF, "G2HUB");
-	if(CrawlAck.G2Self.Mode == G2_CHILD)
-		WritePacket(pG2SELF, "G2LEAF");
-
-	Encode_G2CrawlInfo(pG2SELF, CrawlAck.G2Self, CrawlAck);
-
-
-	// Gnu Self
-	if(CrawlAck.OrigRequest.ReqG1)
+	if(CrawlAck.Network == NETWORK_G2)
 	{
+		// G2 Self
+		G2_Frame* pG2SELF = WritePacket(pCRAWLA, "SELF");
+
+		if(CrawlAck.G2Self.Mode == G2_HUB)
+			WritePacket(pG2SELF, "G2HUB");
+		if(CrawlAck.G2Self.Mode == G2_CHILD)
+			WritePacket(pG2SELF, "G2LEAF");
+
+		Encode_G2CrawlInfo(pG2SELF, CrawlAck.G2Self, CrawlAck);
+
+		// G2 Hubs
+		for(i = 0; i < CrawlAck.G2Hubs.size(); i++)
+		{
+			G2_Frame* pNH = WritePacket(pCRAWLA, "NH");
+			Encode_G2CrawlInfo(pNH, CrawlAck.G2Hubs[i], CrawlAck);
+		}
+
+		// G2 Leaves
+		for(i = 0; i < CrawlAck.G2Leaves.size(); i++)
+		{
+			G2_Frame* pNL = WritePacket(pCRAWLA, "NL");
+			Encode_G2CrawlInfo(pNL, CrawlAck.G2Leaves[i], CrawlAck);
+		}
+	}
+
+
+	if(CrawlAck.Network == NETWORK_GNUTELLA)
+	{
+		// Gnu Self
 		G2_Frame* pGnuSELF = WritePacket(pCRAWLA, "G1SELF");
 
 		if(CrawlAck.GnuSelf.Mode == GNU_ULTRAPEER)
@@ -1790,38 +1807,21 @@ void CG2Protocol::Encode_CRAWLA(G2_CRAWLA &CrawlAck)
 			WritePacket(pGnuSELF, "G1LEAF");
 		
 		Encode_GnuCrawlInfo(pGnuSELF, CrawlAck.GnuSelf, CrawlAck, true);
+
+		// Gnu Hubs
+		for(i = 0; i < CrawlAck.GnuUPs.size(); i++)
+		{
+			G2_Frame* pG1NH = WritePacket(pCRAWLA, "G1NH");			
+			Encode_GnuCrawlInfo(pG1NH, CrawlAck.GnuUPs[i], CrawlAck, false);
+		}
+
+		// Gnu Leaves
+		for(i = 0; i < CrawlAck.GnuLeaves.size(); i++)
+		{
+			G2_Frame* pG1NL = WritePacket(pCRAWLA, "G1NL");
+			Encode_GnuCrawlInfo(pG1NL, CrawlAck.GnuLeaves[i], CrawlAck, false);
+		}
 	}
-	
-
-	// G2 Hubs
-	for(i = 0; i < CrawlAck.G2Hubs.size(); i++)
-	{
-		G2_Frame* pNH = WritePacket(pCRAWLA, "NH");
-		Encode_G2CrawlInfo(pNH, CrawlAck.G2Hubs[i], CrawlAck);
-	}
-
-	// G2 Leaves
-	for(i = 0; i < CrawlAck.G2Leaves.size(); i++)
-	{
-		G2_Frame* pNL = WritePacket(pCRAWLA, "NL");
-		Encode_G2CrawlInfo(pNL, CrawlAck.G2Leaves[i], CrawlAck);
-	}
-
-
-	// Gnu Hubs
-	for(i = 0; i < CrawlAck.GnuUPs.size(); i++)
-	{
-		G2_Frame* pG1NH = WritePacket(pCRAWLA, "G1NH");			
-		Encode_GnuCrawlInfo(pG1NH, CrawlAck.GnuUPs[i], CrawlAck, false);
-	}
-
-	// Gnu Leaves
-	for(i = 0; i < CrawlAck.GnuLeaves.size(); i++)
-	{
-		G2_Frame* pG1NL = WritePacket(pCRAWLA, "G1NL");
-		Encode_GnuCrawlInfo(pG1NL, CrawlAck.GnuLeaves[i], CrawlAck, false);
-	}
-
 
 	// ID
 	if(CrawlAck.OrigRequest.ReqID)
@@ -1837,19 +1837,21 @@ void CG2Protocol::Encode_G2CrawlInfo(G2_Frame* pNode,  G2NodeInfo &G2Node,   G2_
 
 	// Network Address
 	WritePacket(pNode, "NA", &G2Node.Address, 6);
-
 	
 	// Hub Status
-	memcpy(assm, &G2Node.LeafCount, 2);
-	memcpy(assm + 2, &G2Node.LeafMax, 2);
-	WritePacket(pNode, "HS", assm, 4);
+	if(G2Node.LeafCount || G2Node.LeafMax)
+	{
+		memcpy(assm, &G2Node.LeafCount, 2);
+		memcpy(assm + 2, &G2Node.LeafMax, 2);
+		WritePacket(pNode, "HS", assm, 4);
+	}
 
 	// Username
 	//if(CrawlAck.OrigRequest.ReqNames && !NodeInfo.Node.Name.IsEmpty())
 	//	WritePacket(pNode, "NAME", (byte*) ((LPCSTR) NodeInfo.Node.Namee), NodeInfo.Node.Name.GetLength());
 
 	// GPS
-	if(CrawlAck.OrigRequest.ReqGPS)
+	if(CrawlAck.OrigRequest.ReqGPS && (G2Node.Latitude || G2Node.Longitude))
 	{
 		memcpy(assm, &G2Node.Latitude, 2);
 		memcpy(assm + 2, &G2Node.Longitude, 2);
@@ -1863,9 +1865,12 @@ void CG2Protocol::Encode_G2CrawlInfo(G2_Frame* pNode,  G2NodeInfo &G2Node,   G2_
 		WritePacket(pNode, "CV", (byte*) ((LPCSTR) G2Node.Client), G2Node.Client.GetLength());
 
 		// Cpu/Mem
-		memcpy(assm, &G2Node.Cpu, 2);
-		memcpy(assm + 2, &G2Node.Mem, 2);
-		WritePacket(pNode, "CM", assm, 4);
+		if(G2Node.Cpu || G2Node.Mem)
+		{
+			memcpy(assm, &G2Node.Cpu, 2);
+			memcpy(assm + 2, &G2Node.Mem, 2);
+			WritePacket(pNode, "CM", assm, 4);
+		}
 
 		// Firewall
 		if(G2Node.Firewall)
@@ -1880,17 +1885,23 @@ void CG2Protocol::Encode_G2CrawlInfo(G2_Frame* pNode,  G2NodeInfo &G2Node,   G2_
 			WritePacket(pNode, "RTR");
 
 		// Library Statistics
-		memcpy(assm, &G2Node.LibraryCount, 4);
-		memcpy(assm + 4, &G2Node.LibrarySizeKB, 4);
-		WritePacket(pNode, "LS", assm, 8);
+		if(G2Node.LibraryCount || G2Node.LibrarySizeKB)
+		{
+			memcpy(assm, &G2Node.LibraryCount, 4);
+			memcpy(assm + 4, &G2Node.LibrarySizeKB, 4);
+			WritePacket(pNode, "LS", assm, 8);
+		}
 
 		// Bandwidth
-		memcpy(assm, &G2Node.NetBpsIn, 4);
-		memcpy(assm + 4, &G2Node.NetBpsOut, 4);
-		WritePacket(pNode, "NBW", assm, 8);
+		if(G2Node.NetBpsIn || G2Node.NetBpsOut)
+		{
+			memcpy(assm, &G2Node.NetBpsIn, 4);
+			memcpy(assm + 4, &G2Node.NetBpsOut, 4);
+			WritePacket(pNode, "NBW", assm, 8);
+		}
 
 		// Udp Bandwidth
-		if(G2Node.UdpBpsIn)
+		if(G2Node.UdpBpsIn || G2Node.UdpBpsOut)
 		{
 			memcpy(assm, &G2Node.UdpBpsIn, 4);
 			memcpy(assm + 4, &G2Node.UdpBpsOut, 4);
@@ -1898,11 +1909,15 @@ void CG2Protocol::Encode_G2CrawlInfo(G2_Frame* pNode,  G2NodeInfo &G2Node,   G2_
 		}
 
 		// Uptime
-		uint32 Uptime = time(NULL) - G2Node.UpSince;
-		WritePacket(pNode, "UP", &Uptime, 4);
+		if(G2Node.UpSince > 0)
+		{
+			uint32 Uptime = time(NULL) - G2Node.UpSince;
+			WritePacket(pNode, "UP", &Uptime, 4);
+		}
 
 		// Connect Uptime
-		WritePacket(pNode, "CUP", &G2Node.ConnectUptime, 4);
+		if(G2Node.ConnectUptime > 0)
+			WritePacket(pNode, "CUP", &G2Node.ConnectUptime, 4);
 
 		// Avg QKRs
 		if(G2Node.PacketsQKR[AVG_TOTAL]) // In self only
@@ -1927,8 +1942,7 @@ void CG2Protocol::Encode_GnuCrawlInfo(G2_Frame* pNode, GnuNodeInfo &GnuNode, G2_
 	byte assm[32];
 
 	// Network Address
-	if(!Self)
-		WritePacket(pNode, "NA", &GnuNode.Address, 6);
+	WritePacket(pNode, "NA", &GnuNode.Address, 6);
 
 	
 	// Hub Status
@@ -1937,33 +1951,74 @@ void CG2Protocol::Encode_GnuCrawlInfo(G2_Frame* pNode, GnuNodeInfo &GnuNode, G2_
 	WritePacket(pNode, "HS", assm, 4);
 
 
+	// GPS
+	if(CrawlAck.OrigRequest.ReqGPS && (GnuNode.Latitude || GnuNode.Longitude))
+	{
+		memcpy(assm, &GnuNode.Latitude, 2);
+		memcpy(assm + 2, &GnuNode.Longitude, 2);
+		WritePacket(pNode, "GPS", assm, 4);
+	}
+
 	// Extended
 	if(CrawlAck.OrigRequest.ReqExt)
 	{
 		// Client version
-		if(!Self)
-			WritePacket(pNode, "CV", (byte*) ((LPCSTR) GnuNode.Client), GnuNode.Client.GetLength());
+		WritePacket(pNode, "CV", (byte*) ((LPCSTR) GnuNode.Client), GnuNode.Client.GetLength());
+
+		// Cpu/Mem
+		if(GnuNode.Cpu || GnuNode.Mem)
+		{
+			memcpy(assm, &GnuNode.Cpu, 2);
+			memcpy(assm + 2, &GnuNode.Mem, 2);
+			WritePacket(pNode, "CM", assm, 4);
+		}
+
+		// Firewall
+		if(GnuNode.Firewall)
+			WritePacket(pNode, "FW");
+
+		// Hub Able
+		if(GnuNode.HubAble)
+			WritePacket(pNode, "HA");
+
+		// Router
+		if(GnuNode.Router)
+			WritePacket(pNode, "RTR");
 
 		// Library Statistics
-		memcpy(assm, &GnuNode.LibraryCount, 4);
-		memcpy(assm + 4, &GnuNode.LibrarySizeKB, 4);
-		WritePacket(pNode, "LS", assm, 8);
+		if(GnuNode.LibraryCount || GnuNode.LibrarySizeKB)
+		{
+			memcpy(assm, &GnuNode.LibraryCount, 4);
+			memcpy(assm + 4, &GnuNode.LibrarySizeKB, 4);
+			WritePacket(pNode, "LS", assm, 8);
+		}
 
 		// Bandwidth
-		if(Self)
+		if(GnuNode.NetBpsIn || GnuNode.NetBpsOut)
 		{
 			memcpy(assm, &GnuNode.NetBpsIn, 4);
 			memcpy(assm + 4, &GnuNode.NetBpsOut, 4);
 			WritePacket(pNode, "NBW", assm, 8);
 		}
 
-		// Uptime
-		uint32 Uptime = time(NULL) - GnuNode.UpSince;
-		WritePacket(pNode, "UP", &Uptime, 4);
+		// Udp Bandwidth
+		if(GnuNode.UdpBpsIn || GnuNode.UdpBpsOut)
+		{
+			memcpy(assm, &GnuNode.UdpBpsIn, 4);
+			memcpy(assm + 4, &GnuNode.UdpBpsOut, 4);
+			WritePacket(pNode, "UBW", assm, 8);
+		}
 
+		// Uptime
+		if(GnuNode.UpSince > 0)
+		{
+			uint32 Uptime = time(NULL) - GnuNode.UpSince;
+			WritePacket(pNode, "UP", &Uptime, 4);
+		}
 
 		// Connect Uptime
-		WritePacket(pNode, "CUP", &GnuNode.ConnectUptime, 4);
+		if(GnuNode.ConnectUptime > 0)
+			WritePacket(pNode, "CUP", &GnuNode.ConnectUptime, 4);
 	}
 }
 

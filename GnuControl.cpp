@@ -89,6 +89,8 @@ CGnuControl::CGnuControl(CGnuNetworks* pNet)
 	// Bandwidth
 	m_NetSecBytesDown	= 0;
 	m_NetSecBytesUp		= 0;
+	m_TcpSecBytesDown	= 0;
+	m_TcpSecBytesUp		= 0;
 
 	m_Minute = 0;
 
@@ -468,6 +470,9 @@ void CGnuControl::ManageNodes()
 	}
 
 	// Add in udp bandwidth
+	m_TcpSecBytesDown = m_NetSecBytesDown;
+	m_TcpSecBytesUp   = m_NetSecBytesUp;
+
 	m_NetSecBytesDown += m_pDatagram->m_AvgUdpDown.GetAverage();
 	m_NetSecBytesUp   += m_pDatagram->m_AvgUdpUp.GetAverage();
 
@@ -1128,4 +1133,27 @@ CString CGnuControl::GetPushProxyHeader()
 	ProxyList.Trim(", ");
 
 	return "X-Push-Proxy: " + ProxyList + "\r\n";
+}
+
+void CGnuControl::GetLocalNodeInfo(GnuNodeInfo &LocalNode)
+{
+	LocalNode.Client		= m_pCore->GetUserAgent();	
+	LocalNode.Mode			= m_GnuClientMode;
+	LocalNode.Address.Host	= m_pNet->m_CurrentIP;
+	LocalNode.Address.Port	= m_pNet->m_CurrentPort;
+	LocalNode.LeafCount		= CountLeafConnects();
+	LocalNode.LeafMax		= MAX_LEAVES;
+	LocalNode.NetBpsIn		= m_TcpSecBytesDown;
+	LocalNode.NetBpsOut		= m_TcpSecBytesUp;
+	LocalNode.UdpBpsIn		= m_pDatagram->m_AvgUdpDown.GetAverage();
+	LocalNode.UdpBpsOut		= m_pDatagram->m_AvgUdpUp.GetAverage();
+	LocalNode.UpSince		= m_ClientUptime.GetTime();
+	LocalNode.LibraryCount  = m_pShare->m_TotalLocalFiles;
+	LocalNode.HubAble		= m_pPrefs->m_SupernodeAble;
+	LocalNode.Firewall		= (m_pNet->m_TcpFirewall || m_pNet->m_UdpFirewall != UDP_FULL);
+	LocalNode.Router		= m_pNet->m_BehindRouter;
+	LocalNode.Cpu			= m_pCore->m_SysSpeed;
+	LocalNode.Mem			= m_pCore->m_SysMemory;
+	LocalNode.Latitude		= m_pPrefs->m_GeoLatitude;
+	LocalNode.Longitude		= m_pPrefs->m_GeoLongitude;
 }

@@ -2571,3 +2571,24 @@ bool CGnuNode::LetConnect()
 
 	return false;
 }
+
+void CGnuNode::GetNodeInfo(GnuNodeInfo &RemoteNode)
+{
+	RemoteNode.Address       = m_Address;
+	RemoteNode.Client        = m_RemoteAgent;
+	RemoteNode.LibraryCount  = m_NodeFileCount;
+	RemoteNode.ConnectUptime = time(NULL) - m_ConnectTime.GetTime();
+
+	if( m_StatsRecvd )
+	{
+		RemoteNode.LeafCount = m_LeafCount;
+		RemoteNode.LeafMax   = m_LeafMax;
+		RemoteNode.UpSince   = m_UpSince;
+		RemoteNode.Cpu		 = m_Cpu;
+		RemoteNode.Mem		 = m_Mem;
+		RemoteNode.HubAble	 = m_UltraAble;
+		RemoteNode.Router	 = m_Router;
+		RemoteNode.Firewall	 = m_FirewallTcp;
+		RemoteNode.Router	 = m_FirewallUdp;
+	}
+}
