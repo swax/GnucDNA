@@ -504,12 +504,14 @@ void CGnuControl::ManageNodes()
 
 
 	bool NeedDnaUltras = false;
-	if(UltraConnects && UltraDnaConnects * 100 / UltraConnects < 25)
-		NeedDnaUltras = true;
+	
 
 
 	if(m_GnuClientMode == GNU_LEAF)
 	{
+		if(UltraConnects && UltraDnaConnects * 100 / UltraConnects < 50)
+			NeedDnaUltras = true;
+		
 		// Reduce leaf connects by 1 each 6 mins of inactivity, leveling at 1 connect after a half hour
 		int LeafConnects = 5 - ((time(NULL) - m_LastSearchTime) / 60 / 6);
 		
@@ -528,6 +530,9 @@ void CGnuControl::ManageNodes()
 
 	if(m_GnuClientMode == GNU_ULTRAPEER)
 	{
+		if(UltraConnects && UltraDnaConnects * 100 / UltraConnects < 25)
+			NeedDnaUltras = true;
+
 		if(m_pPrefs->m_MinConnects && UltraConnects < m_pPrefs->m_MinConnects)
 			AddConnect(NeedDnaUltras);
 		

@@ -292,10 +292,10 @@ UINT HashWorker(LPVOID pVoidHash)
 
 							// Insert hash value into QRP table
 							pShare->m_pWordTable->InsertString((LPCTSTR) ( "urn:" + HashIDtoTag(HASH_SHA1)      + Sha1_String),     i, false);
-							pShare->m_pWordTable->InsertString((LPCTSTR) ( "urn:" + HashIDtoTag(HASH_MD5)       + MD5_String),      i, false);
-							pShare->m_pWordTable->InsertString((LPCTSTR) ( "urn:" + HashIDtoTag(HASH_MD4_ED2K)  + MD4_String),      i, false);
-							pShare->m_pWordTable->InsertString((LPCTSTR) ( "urn:" + HashIDtoTag(HASH_TIGERTREE) + Tiger_String),    i, false);
-							pShare->m_pWordTable->InsertString((LPCTSTR) ( "urn:" + HashIDtoTag(HASH_BITPRINT)  + Bitprint_String), i, false);
+							//pShare->m_pWordTable->InsertString((LPCTSTR) ( "urn:" + HashIDtoTag(HASH_MD5)       + MD5_String),      i, false);
+							//pShare->m_pWordTable->InsertString((LPCTSTR) ( "urn:" + HashIDtoTag(HASH_MD4_ED2K)  + MD4_String),      i, false);
+							//pShare->m_pWordTable->InsertString((LPCTSTR) ( "urn:" + HashIDtoTag(HASH_TIGERTREE) + Tiger_String),    i, false);
+							//pShare->m_pWordTable->InsertString((LPCTSTR) ( "urn:" + HashIDtoTag(HASH_BITPRINT)  + Bitprint_String), i, false);
 
 							pShare->m_SharedHashMap[Sha1_String] = i;
 							

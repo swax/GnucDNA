@@ -252,19 +252,6 @@ void CGnuProtocol::Receive_Query(Gnu_RecvdPacket &Packet)
 	
 	// Packet stats
 	pNode->UpdateStats(Query->Header.Function);
-
-
-	// Inspect
-	int QuerySize  = Query->Header.Payload - 2;
-	int TextSize   = strlen((char*) Query + 25) + 1;
-
-	// Bad packet, text bigger than payload
-	if (TextSize > QuerySize)
-	{
-		PacketError("Query", "Routing", (byte*) Query, Packet.Length);
-		//TRACE0("Text Query too big " + CString((char*) Query + 25) + "\n");
-		return;
-	}
 	
 	int RouteID		 = m_pComm->m_TableRouting.FindValue(Query->Header.Guid);
 	int LocalRouteID = m_pComm->m_TableLocal.FindValue(Query->Header.Guid);
@@ -355,45 +342,54 @@ void CGnuProtocol::Receive_Query(Gnu_RecvdPacket &Packet)
 		memcpy(G1Query.Packet, (byte*) Query, Packet.Length);
 		G1Query.PacketSize = Packet.Length;
 
-		G1Query.Terms.push_back( CString((char*) Query + 25, TextSize) );
-
 		
-		CString ExtendedQuery;
+		byte* pPayload = (byte*) Query + 25;
+		int   BytesLeft = Query->Header.Payload - 2;
 
-		if (TextSize < QuerySize)
+
+		// Get Query string
+		uint32 BytesRead = ParsePayload(pPayload, BytesLeft, NULL, m_QueryBuffer, 1024);
+		if(BytesRead)
+			G1Query.Terms.push_back( CString((char*) m_QueryBuffer, BytesRead) );
+
+		// Get extended query info
+		BytesRead = ParsePayload(pPayload, BytesLeft, 0x1C, m_QueryBuffer, 1024);
+		while(BytesRead)
 		{
-			int ExtendedSize = strlen((char*) Query + 25 + TextSize);
-		
-			if(ExtendedSize)
+			if( m_QueryBuffer[0] == '<' || 
+				(BytesRead >= 4 && memcmp(m_QueryBuffer, "urn:", 4) == 0) )
 			{
-				ExtendedQuery = CString((char*) Query + 25 + TextSize, ExtendedSize);
-		
-				/*int WholeSize = TextSize + HugeSize + 1;
+				// prevent extra null from  being copied into new string, screwing up comparison
+				if(m_QueryBuffer[BytesRead - 1] == NULL)
+					BytesRead--;
+
+				G1Query.Terms.push_back( CString((char*) m_QueryBuffer, BytesRead) );
 				
-				TRACE0("Huge Query, " + NumtoStr(WholeSize) + " bytes\n");
-				TRACE0("     " + CString((char*)Query + 25 + TextSize) + "\n");
-
-				if(WholeSize > QuerySize)
-					TRACE0("   Huge Query too big " + CString((char*) Query + 25 + TextSize) + "\n");
-
-				if(WholeSize < QuerySize)
-				{
-					TRACE0("   Huge Query too small " + CString((char*) Query + 25 + TextSize) + "\n");
-
-					byte* j = 0;
-					for(int i = WholeSize; i < QuerySize; i++)
-						j = (byte*) Query + 25 + i;
-				}*/
 			}
 			else
 			{
-				// Query with double nulls, wtf
+				// check if ggep
+				if(m_QueryBuffer[0] == 0xC3 && BytesRead > 0)
+				{
+					byte* ggepBuff = m_QueryBuffer;
+					ggepBuff  += 1;
+					BytesRead -= 1;
+
+					GGEPReadResult Status = BLOCK_GOOD;
+					
+					while(Status == BLOCK_GOOD)
+					{
+						packet_GGEPBlock Block;
+						Status = Decode_GGEPBlock(Block, ggepBuff, BytesRead);
+
+						if(Block.Last)
+							break;
+					}
+				}
 			}
+
+			BytesRead = ParsePayload(pPayload, BytesLeft, 0x1C, m_QueryBuffer, 512);
 		}
-
-		while(!ExtendedQuery.IsEmpty())
-			G1Query.Terms.push_back( ParseString(ExtendedQuery, 0x1C) );
-
 
 		m_pShare->m_QueueAccess.Lock();
 			m_pShare->m_PendingQueries.push_front(G1Query);	
@@ -417,6 +413,36 @@ void CGnuProtocol::Receive_Query(Gnu_RecvdPacket &Packet)
 			return;
 		}
 	}
+}
+
+int	CGnuProtocol::ParsePayload(byte* &pPayload, int &BytesLeft, byte Break, byte* pBuffer, int BufferSize)
+{
+	if(BytesLeft == 0)
+		return 0;
+
+	int BytesRead = memfind(pPayload, BytesLeft, Break);
+
+	bool BreakFound = true;
+	if( BytesRead == -1)
+	{
+		BreakFound = false;
+		BytesRead  = BytesLeft;
+	}
+	
+	if(BytesRead > BufferSize)
+	{
+		BreakFound = false;
+		BytesRead  = BufferSize;
+	}
+
+	memcpy(pBuffer, pPayload, BytesRead);
+	
+	int NextPos = BreakFound ? BytesRead + 1 : BytesRead;
+	
+	pPayload  += NextPos;
+	BytesLeft -= NextPos;
+
+	return BytesRead;
 }
 
 void CGnuProtocol::Receive_QueryHit(Gnu_RecvdPacket &Packet)
@@ -1532,20 +1558,20 @@ void CGnuProtocol::Send_PatchTable(CGnuNode* pTCP)
 			{
 				if(pos % 2 == 0) 
 					//FourBitPatch[pos / 2] = 15 << 4; // high -1
-					FourBitPatch[pos / 2] = 10 << 4; // high -6 works with LW
+					FourBitPatch[pos / 2]   = 10 << 4; // high -6 works with LW
 				else
-					//FourBitPatch[pos / 2] |= 15;  // low -1
-					FourBitPatch[pos / 2] = 10 << 4; // low -6 works with LW
+					//FourBitPatch[pos / 2] |= 15; // low -1
+					FourBitPatch[pos / 2]   |= 10; // low -6 works with LW
 			}
 			// Patch turning off ( set positive value)
 			else if( (PatchTable[i] & mask) > 0 && (pTCP->m_LocalHitTable[i] & mask) == 0)
 			{
 				if(pos % 2 == 0)
-					//FourBitPatch[pos / 2] = 1 << 4;// high 1
-					FourBitPatch[pos / 2] = 6 << 4;// high 6 works with LW
+					//FourBitPatch[pos / 2] = 1 << 4; // high 1
+					FourBitPatch[pos / 2]   = 6 << 4; // high 6 works with LW
 				else
-					//FourBitPatch[pos / 2] |= 1;  // low 1
-					FourBitPatch[pos / 2] = 6 << 4;// low 6 works with LW
+					//FourBitPatch[pos / 2] |= 1; // low 1
+					FourBitPatch[pos / 2]   |= 6; // low 6 works with LW
 			}
 			
 			pos++;
@@ -1755,7 +1781,7 @@ void CGnuProtocol::Send_QueryHit(GnuQuery &FileQuery, byte* pQueryHit, DWORD Rep
 	packet_Query* pQuery = (packet_Query*) FileQuery.Packet;
 
 	QueryHit->Header.Function = 0x81;
-	QueryHit->Header.TTL	  = pQuery->Header.Hops;
+	QueryHit->Header.TTL	  = pQuery->Header.Hops + 1; // plus 1 to get through lime ultrapeer
 	QueryHit->Header.Hops	  = 0;
 
 	QueryHit->TotalHits	= ReplyCount;

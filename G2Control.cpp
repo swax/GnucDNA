@@ -451,7 +451,7 @@ void CG2Control::ManageNodes()
 			m_NoConnections++;
 
 			// After 10 minutes of no connections upgrade to hub
-			if(m_NoConnections >= 10 * 60)
+			if(m_NoConnections >= 15 * 60)
 			{
 				SwitchG2ClientMode( G2_HUB, true);
 				m_NoConnections = 0;

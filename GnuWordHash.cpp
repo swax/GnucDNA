@@ -521,7 +521,7 @@ void CGnuWordHash::BreakupMeta(CString &QueryEx, std::vector< std::basic_string<
 					BreakupName( (LPCTSTR) AttributeValue, KeyValues);
 
 					for(int i = 0; i < KeyValues.size(); i++)
-						Keywords.push_back( KeyValues[i].c_str() );
+						AddWord(Keywords,  KeyValues[i] );
 						//Keywords.push_back( (LPCTSTR) (MetaName + "." + AttributeName + "=" + KeyValues[i].c_str()) ) ;
 				}
 				else

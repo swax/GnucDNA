@@ -5,6 +5,10 @@ GnucDNA 1.1.1.2
 	swabby: Added buffer checks to encoding bases
 	swabby: Re-Search sent faster over new connections
 	swabby: X-Try-DNA header and cache optimizations for faster connections
+	swabby: QHT using -6 instead of -1 for limewire
+	swabby: Increased ttl of G1 query hits to ensure their passage through the network
+	swabby: GGEP support added for queries
+	swabby: Only sha1 hash inserted into query hit table
 	
 GnucDNA 1.1.1.1
 	swabby: NoReload Shared option added for clients with thousands of dynamic files

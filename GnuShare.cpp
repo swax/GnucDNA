@@ -279,12 +279,17 @@ void CGnuShare::LoadFiles()
 
 
 		// Insert hash
-		for(int j = 0; j < HASH_TYPES; j++)
+		if( !m_SharedFiles[i].HashValues[HASH_SHA1].empty() )
+		{
+			CString Hash = "urn:" + HashIDtoTag(HASH_SHA1) + CString(m_SharedFiles[i].HashValues[HASH_SHA1].c_str());
+			m_pWordTable->InsertString((LPCTSTR) Hash, i, false);
+		}
+		/*for(int j = 0; j < HASH_TYPES; j++)
 			if( !m_SharedFiles[i].HashValues[j].empty() )
 			{
 				CString Hash = "urn:" + HashIDtoTag(j) + CString(m_SharedFiles[i].HashValues[j].c_str());
 				m_pWordTable->InsertString((LPCTSTR) Hash, i, false);
-			}
+			}*/
 
 
 		// Insert meta
