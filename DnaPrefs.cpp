@@ -31,6 +31,7 @@
 #include "GnuPrefs.h"
 #include "GnuNetworks.h"
 #include "GnuControl.h"
+#include "G2Control.h"
 
 #include "DnaPrefs.h"
 
@@ -165,8 +166,13 @@ void CDnaPrefs::SetSuperNodeAble(BOOL newVal)
 
 	// If downgrading
 	if(newVal == false)
+	{
 		if(m_dnaCore->m_gnuCore->m_pNet->m_pGnu)
 			m_dnaCore->m_gnuCore->m_pNet->m_pGnu->DowngradeClient();
+		
+		if(m_dnaCore->m_gnuCore->m_pNet->m_pG2)
+			m_dnaCore->m_gnuCore->m_pNet->m_pG2->SwitchG2ClientMode(G2_CHILD);
+	}
 
 	m_gnuPrefs->m_SupernodeAble = newVal;
 }

@@ -318,6 +318,23 @@ bool IsPrivateIP(IP Address)
 	return false;
 }
 
+CString IPv4toStr(IPv4 Address)
+{
+	return IPtoStr(Address.Host) + ":" + NumtoStr(Address.Port);
+}
+
+IPv4 StrtoIPv4(CString HostPort)
+{
+	HostPort.Trim(" ");
+
+	IPv4 Address;
+	Address.Host = StrtoIP( ParseString(HostPort, ':') );
+	Address.Port = atoi(HostPort);
+
+	return Address;
+}
+
+
 } // end gdna namespace
 
 //

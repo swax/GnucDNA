@@ -33,6 +33,7 @@ public:
 	CString m_GetRequest;
 	CString m_ListenIP;
 	
+	bool m_Push;
 	
 	bool m_ThreadRunning;
 	CWinThread*  m_pUploadThread;

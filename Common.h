@@ -51,6 +51,9 @@ struct IPv4
 };
 #pragma pack (pop)
 
+CString IPv4toStr(IPv4 Address);
+IPv4    StrtoIPv4(CString HostPort);
+
 } // end gdna namespace
 
 

@@ -38,6 +38,7 @@ protected:
 	void ParseBrowseRequest();
 	void ParseUploadRequest();
 	void ParseDownloadRequest(int Network);
+	void ParsePushProxyRequest();
 
 	void SendGetGnucleus();
 

@@ -38,9 +38,9 @@ public:
 
 	bool CheckCompletion();
 
-	void AddAltLocation(CString);
-	void AddAltLocation(AltLocation);
-	CString GetAltLocationHeader(CString ToIP, int HostCount=5);
+	void AddAltLocation(CString strAddr);
+	void AddAltLocation(IPv4 Address);
+	CString GetAltLocHeader(IP ToIP, int HostCount=6);
 
 	void Start();
 	void Stop();
@@ -137,7 +137,7 @@ public:
 	std::vector<FileSource> m_Queue;
 	byte m_Packet[255];
 
-	std::deque<AltLocation> m_AltHosts;
+	std::deque<IPv4> m_AltHosts;
 
 	// Proxy
 	bool    m_UseProxy;

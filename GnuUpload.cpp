@@ -36,7 +36,6 @@
 #include "GnuDownloadShell.h"
 #include "GnuPrefs.h"
 #include "GnuFileHash.h"
-#include "GnuAltLoc.h"
 
 #include "GnuUploadShell.h"
 #include "GnuUpload.h"
@@ -58,6 +57,8 @@ CGnuUpload::CGnuUpload(CGnuUploadShell* pShell)
 	m_ThreadRunning = false;
 
 	m_Authorized = false;
+
+	m_Push = false;
 }
 
 CGnuUpload::~CGnuUpload()
@@ -102,6 +103,7 @@ void CGnuUpload::OnConnect(int nErrorCode)
 		return;
 	}
 
+	m_Push = true;
 	
 	CString HttpGiv;
 	
@@ -277,17 +279,21 @@ void CGnuUpload::Send_HttpOK()
 		if (!m_pShell->m_TigerHash.IsEmpty())
 			HttpOK += "X-TigerTree-Path: /gnutella/tigertree/v3?urn:tree:tiger/:" + m_pShell->m_TigerHash + "\r\n";
 
-		// Alt-Locations
+		// X-Alt
 		if (!m_pShell->m_IsPartial)
-			HttpOK += m_pShare->m_pAltLoc->GetAltLocationHeader(m_pShell->m_Sha1Hash, IPtoStr(m_pShell->m_Host));
+			HttpOK += m_pShare->GetShareAltLocHeader(m_pShell->m_Sha1Hash, m_pShell->m_Host);
 		else
 		{
 			itPart = m_pTrans->m_DownloadMap.find(m_pShell->m_PartialID);
 
 			if(itPart != m_pTrans->m_DownloadMap.end())
-				HttpOK += itPart->second->GetAltLocationHeader(IPtoStr(m_pShell->m_Host)); // Supply's own \r\n
+				HttpOK += itPart->second->GetAltLocHeader( m_pShell->m_Host );
 		}
 	}
+
+	// X-Push-Proxy
+	if(m_Push && m_pShell->m_Network == NETWORK_GNUTELLA && m_pNet->m_pGnu)
+		HttpOK += m_pNet->m_pGnu->GetPushProxyHeader();
 
 	// X-Filename
 	if(m_pShell->m_RequestURI.Left(9) == "/uri-res/")
@@ -331,13 +337,10 @@ void CGnuUpload::StartUpload()
 	{
 		m_pShell->StatusUpdate(TRANSFER_SENDING);
 
-		// Add this host an alt-location for partial content at least
-		//http://208.63.229.219:6346/uri-res/N2R?urn:sha1:F5PYORT7X67OPLYJUZRSYEJCGSILOEWH 2003-02-05T19:01:54Z
-
+		
 		if(!m_ListenIP.IsEmpty() && !m_pShell->m_Sha1Hash.IsEmpty())
-			m_pShare->m_pAltLoc->AddAltLocation("http://" + m_ListenIP + "/uri-res/N2R?urn:sha1:" + m_pShell->m_Sha1Hash + " " + CTimeToStr(CTime::GetCurrentTime() - LocalTimeZone()), m_pShell->m_Sha1Hash);
-
-
+			m_pShare->AddShareAltLocation(m_pShell->m_Sha1Hash, m_ListenIP);
+		
 		// Start upload thread
 		GnuEndThread(m_pUploadThread);
 
@@ -484,17 +487,21 @@ void CGnuUpload::Send_HttpBusy()
 		else if( m_pShell->m_Network == NETWORK_G2 )
 			Http503 += "Content-URN: urn:sha1:" + m_pShell->m_Sha1Hash + "\r\n";
 
-		// Alt-Locations
+		// X-Alt
 		if (!m_pShell->m_IsPartial)
-			Http503 += m_pShare->m_pAltLoc->GetAltLocationHeader(m_pShell->m_Sha1Hash, IPtoStr(m_pShell->m_Host));
+			Http503 += m_pShare->GetShareAltLocHeader(m_pShell->m_Sha1Hash, m_pShell->m_Host);
 		else
 		{
 			itPart = m_pTrans->m_DownloadMap.find(m_pShell->m_PartialID);
 
 			if(itPart != m_pTrans->m_DownloadMap.end())	
-				Http503 += itPart->second->GetAltLocationHeader(IPtoStr(m_pShell->m_Host));
+				Http503 += itPart->second->GetAltLocHeader( m_pShell->m_Host );
 		}
 	}
+
+	// X-Push-Proxy
+	if(m_Push && m_pShell->m_Network == NETWORK_GNUTELLA && m_pNet->m_pGnu)
+		Http503 += m_pNet->m_pGnu->GetPushProxyHeader();
 
 	// Truncate header
 	Http503 = LimitHeadersLength(Http503);	//Truncate to max 4090 bytes
@@ -581,17 +588,21 @@ void CGnuUpload::Send_HttpFailed()
 		else if( m_pShell->m_Network == NETWORK_G2 )
 			Http503 += "Content-URN: urn:sha1:" + m_pShell->m_Sha1Hash + "\r\n";
 		
-		// Alt-Locations
+		// X-Alt
 		if (!m_pShell->m_IsPartial)
-			Http503 += m_pShare->m_pAltLoc->GetAltLocationHeader(m_pShell->m_Sha1Hash, IPtoStr(m_pShell->m_Host));
+			Http503 += m_pShare->GetShareAltLocHeader(m_pShell->m_Sha1Hash, m_pShell->m_Host);
 		else
 		{
 			itPart = m_pTrans->m_DownloadMap.find(m_pShell->m_PartialID);
 
 			if(itPart != m_pTrans->m_DownloadMap.end())	
-				Http503 += itPart->second->GetAltLocationHeader(IPtoStr(m_pShell->m_Host));
+				Http503 += itPart->second->GetAltLocHeader( m_pShell->m_Host );
 		}
 	}
+
+	// X-Push-Proxy
+	if(m_Push && m_pShell->m_Network == NETWORK_GNUTELLA && m_pNet->m_pGnu)
+		Http503 += m_pNet->m_pGnu->GetPushProxyHeader();
 
 	// Truncate header
 	Http503 = LimitHeadersLength(Http503);	//Truncate to max 4090 bytes
@@ -713,17 +724,21 @@ void CGnuUpload::Send_HttpInternalError()
 		else if( m_pShell->m_Network == NETWORK_G2 )
 			Http500 += "Content-URN: urn:sha1:" + m_pShell->m_Sha1Hash + "\r\n";
 		
-		// Alt-Locations
+		// X-Alt
 		if (!m_pShell->m_IsPartial)
-			Http500 += m_pShare->m_pAltLoc->GetAltLocationHeader(m_pShell->m_Sha1Hash, IPtoStr(m_pShell->m_Host));
+			Http500 += m_pShare->GetShareAltLocHeader(m_pShell->m_Sha1Hash, m_pShell->m_Host);
 		else
 		{
 			std::map<int, CGnuDownloadShell*>::iterator itPart = m_pTrans->m_DownloadMap.find(m_pShell->m_PartialID);
 
 			if(itPart != m_pTrans->m_DownloadMap.end())
-				Http500 += itPart->second->GetAltLocationHeader(IPtoStr(m_pShell->m_Host));
+				Http500 += itPart->second->GetAltLocHeader( m_pShell->m_Host );
 		}
 	}
+
+	// X-Push-Proxy
+	if(m_Push && m_pShell->m_Network == NETWORK_GNUTELLA && m_pNet->m_pGnu)
+		Http500 += m_pNet->m_pGnu->GetPushProxyHeader();
 
 	// Truncate header
 	Http500 = LimitHeadersLength(Http500);	//Truncate to max 4090 bytes
@@ -857,17 +872,21 @@ void CGnuUpload::Send_HttpRangeNotAvailable()
 		else if( m_pShell->m_Network == NETWORK_G2 )
 			Http503 += "Content-URN: urn:sha1:" + m_pShell->m_Sha1Hash + "\r\n";
 		
-		// Alt-Locations
+		// X-Alt
 		if (!m_pShell->m_IsPartial)
-			Http503 += m_pShare->m_pAltLoc->GetAltLocationHeader(m_pShell->m_Sha1Hash, IPtoStr(m_pShell->m_Host));
+			Http503 += m_pShare->GetShareAltLocHeader(m_pShell->m_Sha1Hash, m_pShell->m_Host);
 		else
 		{
 			itPart = m_pTrans->m_DownloadMap.find(m_pShell->m_PartialID);
 
 			if(itPart != m_pTrans->m_DownloadMap.end())
-				Http503 += itPart->second->GetAltLocationHeader(IPtoStr(m_pShell->m_Host));
+				Http503 += itPart->second->GetAltLocHeader( m_pShell->m_Host );
 		}
 	}
+
+	// X-Push-Proxy
+	if(m_Push && m_pShell->m_Network == NETWORK_GNUTELLA && m_pNet->m_pGnu)
+		Http503 += m_pNet->m_pGnu->GetPushProxyHeader();
 
 	// Truncate header
 	Http503 = LimitHeadersLength(Http503);	//Truncate to max 4090 bytes

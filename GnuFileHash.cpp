@@ -190,6 +190,7 @@ UINT HashWorker(LPVOID pVoidHash)
 		{
 			if(pHash->m_StopThread)
 			{
+				tt2_init(&Tiger_Context);
 				ExitThread(0);
 				return 0;
 			}
@@ -633,7 +634,12 @@ void CGnuFileHash::LoadShareHashes(CString HashFileName)
 			}
 
 			if(Ident == "Alt-Loc")
-				hf.AltHosts.push_back(ReadString.Mid(ColonPos + 1));
+			{
+				CString AltLocs = ReadString.Mid(ColonPos + 1);
+
+				while( !AltLocs.IsEmpty() )
+					hf.AltHosts.push_back( StrtoIPv4(ParseString(AltLocs, ',')) );
+			}
 		}
 			
 	}
@@ -676,8 +682,13 @@ void CGnuFileHash::SaveShareHashes(CString HashFileName)
 			HashFile.WriteString(EncodeBase32(m_pShare->m_SharedFiles[i].TigerTree + j, 24) + ".");
 		HashFile.WriteString("\n");
 
+		CString AltLocs;
 		for(j = 0; j < m_pShare->m_SharedFiles[i].AltHosts.size(); j++)
-			HashFile.WriteString("Alt-Loc:" + m_pShare->m_SharedFiles[i].AltHosts[j].GetString() + "\n");
+			AltLocs += IPv4toStr(m_pShare->m_SharedFiles[i].AltHosts[j]) + ", ";
+		
+		AltLocs.Trim(", ");
+		if( !AltLocs.IsEmpty() )
+			HashFile.WriteString("Alt-Loc:" + AltLocs + "\n");
 
 		HashFile.WriteString("End\n");
 	}

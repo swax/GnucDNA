@@ -204,7 +204,7 @@ void CGnuNetworks::Timer()
 
 	// NAT detect clean
 	if(m_UdpFirewall != UDP_FULL)
-		while(m_NatDetectMap.size() > 5000)
+		while(m_NatDetectMap.size() > 5000) // can be large because firewalled node doesnt have much else to do
 		{
 			uint32 addy = m_NatDetectVect.front();
 
@@ -386,6 +386,10 @@ bool CGnuNetworks::NotLocal(Node TestNode)
 
 void CGnuNetworks::IncomingSource(GUID &SearchGuid, FileSource &Source)
 {
+	// Prevent user from getting unreachable sources
+	if( m_TcpFirewall && Source.Firewall)
+		return;
+
 	// Find Requesting Searches
 	CGnuSearch* pSearch = NULL;
 

@@ -83,7 +83,7 @@ CGnuControl::CGnuControl(CGnuNetworks* pNet)
 	m_NoConnections = 0;
 
 	
-		// Bandwidth
+	// Bandwidth
 	m_NetSecBytesDown	= 0;
 	m_NetSecBytesUp		= 0;
 
@@ -94,7 +94,7 @@ CGnuControl::CGnuControl(CGnuNetworks* pNet)
 	m_pDatagram = new CGnuDatagram(this);
 	m_pProtocol = new CGnuProtocol(this);
 
-	m_pProtocol->Init();
+	m_pProtocol->Init();	
 }
 
 CGnuControl::~CGnuControl()
@@ -462,7 +462,7 @@ void CGnuControl::ManageNodes()
 	{
 		if(UltraConnects < m_pPrefs->m_LeafModeConnects)
 			AddConnect();
-
+		
 		else if(UltraConnects && NeedDnaUltras)
 			AddConnect();
 
@@ -475,7 +475,7 @@ void CGnuControl::ManageNodes()
 	{
 		if(m_pPrefs->m_MinConnects && UltraConnects < m_pPrefs->m_MinConnects)
 			AddConnect();
-
+		
 		else if(UltraConnects && NeedDnaUltras)
 			AddConnect();
 
@@ -1055,4 +1055,23 @@ DWORD CGnuControl::GetSpeed()
 	}
 
 	return 0;
+}
+
+CString CGnuControl::GetPushProxyHeader()
+{
+	if( m_GnuClientMode == GNU_ULTRAPEER)
+		return "";
+
+	CString ProxyList;
+
+	for(int i = 0; i < m_NodeList.size(); i++)
+		if(m_NodeList[i]->m_PushProxy.Host.S_addr)
+			ProxyList += IPv4toStr(m_NodeList[i]->m_PushProxy) + ", ";
+
+	if(ProxyList.IsEmpty())
+		return "";
+
+	ProxyList.Trim(", ");
+
+	return "X-Push-Proxy: " + ProxyList + "\r\n";
 }

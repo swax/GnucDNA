@@ -119,7 +119,7 @@ Attribute *image_file_analyze(const char *fileName)
    return attrList;
 }
 
-static void image_free_attributes(Attribute *attrList)
+void image_free_attributes(Attribute *attrList)
 {
    int i;
    

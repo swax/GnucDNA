@@ -31,6 +31,7 @@
 #include "GnuPrefs.h"
 #include "GnuRouting.h"
 #include "GnuControl.h"
+#include "GnuProtocol.h"
 #include "G2Control.h"
 #include "G2Node.h"
 #include "GnuTransfers.h"
@@ -118,7 +119,6 @@ void CGnuSock::OnReceive(int nErrorCode)
 		return;
 	}
 
-
 	// Parse if handshake finished
 	if( m_Handshake.Find("\r\n\r\n") != -1 )
 	{
@@ -129,11 +129,19 @@ void CGnuSock::OnReceive(int nErrorCode)
 		else if(m_Handshake.Left(10) == "GET / HTTP")
 			ParseBrowseRequest();
 //#endif
+
+		else if(m_Handshake.Find("/gnutella/pushproxy?")  != -1 || 
+			    m_Handshake.Find("/gnutella/push-proxy?") != -1 || 
+			    m_Handshake.Find("/gnet/push-proxy?")     != -1)
+			ParsePushProxyRequest();
+		
 		else if(m_Handshake.Left(4) == "GET " || m_Handshake.Left(5) == "HEAD ")
 			ParseUploadRequest();
 
 		else if(m_Handshake.Left(5) == "PUSH ")
 			ParseDownloadRequest(NETWORK_G2);
+
+		
 
 		Close();
 	}
@@ -412,6 +420,92 @@ void CGnuSock::ParseDownloadRequest(int Network)
 
 	return;
 }
+
+void CGnuSock::ParsePushProxyRequest()
+{
+	CString Response;
+
+	CString lowHandshake = m_Handshake;
+	lowHandshake.MakeLower();
+
+	// Check Gnutella is running
+	if(m_pNet->m_pGnu == NULL)
+	{
+		Response = "HTTP 410 Push Proxy: Servent not connected\r\n\r\n";
+		Send(Response, Response.GetLength());
+		return;
+	}
+
+	// Get Source Address from handshake
+	IPv4 SourceAddress;
+	int  pos = lowHandshake.Find("x-node");
+	if(pos != -1)
+	{
+		CString strXNode = ParseString( lowHandshake.Mid(pos), '\n');
+		strXNode.Replace("::", ":"); // fix limewire bug
+		ParseString(strXNode, ':'); // header out of the way
+		strXNode.Trim(' ');
+
+		SourceAddress = StrtoIPv4(strXNode);
+	}
+	else
+	{
+		Response = "HTTP 400 Push Proxy: Bad Request\r\n\r\n";
+		Send(Response, Response.GetLength());
+		return;
+	}
+
+	
+	// Get Client ID
+	GUID ClientID;
+
+	CString UrlString = ParseString(lowHandshake, '\n');
+	pos = UrlString.Find("guid=");
+	if(pos != -1)
+		DecodeBase16( UrlString.Mid(pos + 5, 32), 32, (byte*) &ClientID);
+		
+	pos = UrlString.Find("serverid=");
+	if(pos != -1)
+		DecodeBase32( UrlString.Mid(pos + 9, 26), 26, (byte*) &ClientID);
+
+
+	// Match with leaf node
+	int HostID = 0;
+	std::map<int, GUID>::iterator itHost = m_pNet->m_pGnu->m_PushProxyHosts.begin();
+	for( ; itHost != m_pNet->m_pGnu->m_PushProxyHosts.end(); itHost++)
+		if(ClientID == itHost->second)
+			HostID = itHost->first;
+
+	
+	if(HostID == 0)
+	{
+		Response = "HTTP 410 Push Proxy: Servent not connected\r\n\r\n";
+		Send(Response, Response.GetLength());
+		return;
+	}
+
+
+	// Get File ID from handshake
+	int FileID = 0;
+	pos = UrlString.Find("file=");
+	if(pos != -1)
+		FileID = atoi( ParseString( UrlString.Mid(pos + 5), '&') );
+		
+
+	// Build and send push
+	FileSource PushInfo;
+	PushInfo.Distance	= 1;
+	PushInfo.PushID		= ClientID;
+	PushInfo.FileIndex	= FileID;
+	PushInfo.GnuRouteID	= HostID;
+
+	if(m_pNet->m_pGnu)
+		m_pNet->m_pGnu->m_pProtocol->Send_Push(PushInfo, SourceAddress);
+
+	Response = "HTTP 202 Push Proxy: Message Sent\r\n\r\n";
+	Send(Response, Response.GetLength());
+}
+
 void CGnuSock::SendGetGnucleus()
 {
 
@@ -488,7 +582,7 @@ void CGnuSock::SendGetGnucleus()
 
 			CString ClientMode = "Normal Node";
 			
-			Host = IPtoStr(pNode->m_Address.Host) + ":" + NumtoStr(pNode->m_Address.Port);
+			Host = IPv4toStr(pNode->m_Address);
 				
 			if(pNode->m_GnuNodeMode == GNU_ULTRAPEER)
 				ClientMode = "Ultrapeer";
@@ -534,7 +628,7 @@ void CGnuSock::SendGetGnucleus()
 
 				ConnectCount++;
 
-				Host = IPtoStr(pNode->m_Address.Host) + ":" + NumtoStr(pNode->m_Address.Port);
+				Host = IPv4toStr(pNode->m_Address);
 
 				CTimeSpan Uptime(CTime::GetCurrentTime() - pNode->m_ConnectTime);
 
@@ -616,7 +710,7 @@ void CGnuSock::SendGetGnucleus()
 
 			CString ClientMode = "Normal Node";
 			
-			Host = IPtoStr(pNode->m_Address.Host) + ":" + NumtoStr(pNode->m_Address.Port);
+			Host = IPv4toStr(pNode->m_Address);
 				
 			if(pNode->m_NodeMode == G2_HUB)
 				ClientMode = "Hub";
@@ -662,7 +756,7 @@ void CGnuSock::SendGetGnucleus()
 
 				ConnectCount++;
 
-				Host = IPtoStr(pNode->m_Address.Host) + ":" + NumtoStr(pNode->m_Address.Port);
+				Host = IPv4toStr(pNode->m_Address);
 
 				CTimeSpan Uptime(CTime::GetCurrentTime() - pNode->m_ConnectTime);
 
@@ -696,5 +790,4 @@ void CGnuSock::SendGetGnucleus()
 	Send(Http200, Http200.GetLength());
 	Close();
 }
-
 

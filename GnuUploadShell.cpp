@@ -35,7 +35,6 @@
 #include "GnuControl.h"
 #include "GnuDownloadShell.h"
 #include "GnuPrefs.h"
-#include "GnuAltLoc.h"
 
 #include "GnuUpload.h"
 #include "GnuUploadQueue.h"
@@ -399,10 +398,21 @@ void CGnuUploadShell::ParseRequest(CString Handshake)
 		// Alt-Location header
 		else if (HeaderName.Right(12) == "alt-location" || HeaderName.Right(18) == "alternate-location")
 		{
+			AltLocation OldFormat = HeaderValue;
+			
+			IPv4 Location;
+			Location.Host = StrtoIP( OldFormat.HostPort.Host);
+			Location.Port = OldFormat.HostPort.Port;
+
 			if (!m_Sha1Hash.IsEmpty())
-				m_pShare->m_pAltLoc->AddAltLocation(HeaderValue, m_Sha1Hash);
+				m_pShare->AddShareAltLocation(m_Sha1Hash, Location);
 		}
 
+		else if (HeaderName  == "x-alt")
+		{
+			if (!m_Sha1Hash.IsEmpty())
+				m_pShare->AddShareAltLocation(m_Sha1Hash, HeaderValue);
+		}
 
 		// X-Queue header (signals that client wants to be queued)
 		else if (HeaderName == "x-queue")

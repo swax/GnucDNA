@@ -1,9 +1,5 @@
 
-Request push proxy, send in hits
-Serve push proxy, forward push
-
 Test
-	Check remote vendor messages that we match
 	Gnutella Leaf Mode / Preferencing / Upgrade Path
 	Gnutella Ultrapeer Mode / Preferencing / Upgrade Path
 	G2 Leaf Mode / Preferencing / Upgrade Path
@@ -19,15 +15,6 @@ New System
 
 
 ----------------------------------------------------------------------
-
-Download
-	x-alt header
-	Using push proxy
-	Sending push proxy with hits
-	Serving push proxy
-	save direct hubs
-	Dont send push proxy header when x-features g2
-	Make sure G1/G2 download sources dont conflict
 
 G2
 	Cached query keys fix qkr/qka

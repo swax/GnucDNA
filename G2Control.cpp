@@ -740,7 +740,7 @@ bool CG2Control::GetAltHubs(CString &HostList, CG2Node* NodeExclude)
 			if(PrefDna && pNode->m_RemoteAgent.Find("GnucDNA") == -1)
 				continue;
 			
-			HostList += IPtoStr(pNode->m_Address.Host) + ":" + NumtoStr(pNode->m_Address.Port) + " " + CTimeToStr( CTime::GetCurrentTime() ) + ",";	
+			HostList += IPv4toStr(pNode->m_Address) + " " + CTimeToStr( CTime::GetCurrentTime() ) + ",";	
 			Hosts++;
 		}
 
@@ -1396,18 +1396,14 @@ void CG2Control::Receive_PI(G2_RecvdPacket &PacketPI)
 				// forward via tcp
 				if( m_ClientMode == G2_HUB )
 					for(int i = 0; i < m_G2NodeList.size(); i++)
-						if( m_G2NodeList[i] != PacketPI.pTCP && 
-							m_G2NodeList[i]->m_NodeMode == G2_HUB && 
-							m_G2NodeList[i]->m_Status == SOCK_CONNECTED)
+						if( m_G2NodeList[i] != PacketPI.pTCP &&          // Not the same node
+							m_G2NodeList[i]->m_NodeMode == G2_HUB &&     // Forward to hub
+							m_G2NodeList[i]->m_Status == SOCK_CONNECTED) // Connected
 							Send_PI(m_G2NodeList[i]->m_Address, Ping, m_G2NodeList[i] ); 
-			}	
 
-			if( m_ClientMode == G2_CHILD )
-			{
 				if( Ping.TestFirewall )
-					if(rand() % 25 == 0) // 25% chance of testing host for firewall
-						CreateNode( Node(IPtoStr(Ping.UdpAddress.Host), Ping.UdpAddress.Port, NETWORK_G2) );
-			}
+					CreateNode( Node(IPtoStr(Ping.UdpAddress.Host), Ping.UdpAddress.Port, NETWORK_G2) );
+			}	
 		}
 
 		else // keep alive ping
@@ -1453,9 +1449,9 @@ void CG2Control::Receive_PO(G2_RecvdPacket &PacketPO)
 			Local = true;
 
 	// If pong received udp, and not connected directly
-	if(PacketPO.pTCP == NULL && !Local)
+	if(PacketPO.pTCP == NULL)
 	{
-		if(Pong.Relay)
+		if(Pong.Relay && !Local)
 		{
 			std::map<uint32, bool>::iterator itHost = m_pNet->m_NatDetectMap.find(PacketPO.Source.Host.S_addr);
 			if(itHost == m_pNet->m_NatDetectMap.end())
@@ -1463,8 +1459,8 @@ void CG2Control::Receive_PO(G2_RecvdPacket &PacketPO)
 		}
 
 		// If this turned on and NAT really doesnt work, net spam and dead acks ensue
-		//else if(m_pNet->m_UdpFirewall != UDP_FULL)
-		//	m_pNet->m_UdpFirewall = UDP_NAT;
+		else if(m_pNet->m_UdpFirewall == UDP_BLOCK)
+			m_pNet->m_UdpFirewall = UDP_NAT;
 	}
 }
 

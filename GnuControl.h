@@ -73,6 +73,7 @@ public:
 	void ShareUpdate();
 	DWORD GetSpeed();
 
+	CString GetPushProxyHeader();
 
 	// Network
 	CString  m_NetworkName;
@@ -124,6 +125,8 @@ public:
 	CCriticalSection m_OobHitsLock;
 	std::map<uint32, OobHit*> m_OobHits;
 
+	// Push Proxying
+	std::map<int, GUID> m_PushProxyHosts; // NodeID, ClientID
 
 	// Bandwidth
 	double m_NetSecBytesDown;

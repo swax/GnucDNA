@@ -287,7 +287,7 @@ void DecodeBase32(const char *base32Buffer, unsigned int base32BufLen, byte *buf
 
 int EncodeLengthBase32(int rawLength)
 {
-    return ((rawLength * 8) / 5) + ((rawLength % 5) != 0) + 1;
+    return ((rawLength * 8) / 5) + ((rawLength * 8 % 5) ? 1 : 0);
 }
 
 int DecodeLengthBase32(int base32Length)

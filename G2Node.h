@@ -90,6 +90,7 @@ public:
 	
 	int m_SecsTrying;
 	int m_SecsDead;
+	int m_SecsAlive;
 	int m_CloseWait;
 
 	// Socket

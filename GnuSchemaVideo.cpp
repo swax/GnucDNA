@@ -50,6 +50,9 @@ void CGnuSchemaVideo::LoadData(SharedFile &File)
 		LoadFileAttribute(&File, "width",  videoatt[1].value);
 		LoadFileAttribute(&File, "height", videoatt[2].value);
 		LoadFileAttribute(&File, "minutes", videoatt[4].value);
+		
+		video_free_attributes(videoatt);
 	}
+	
 	
 }

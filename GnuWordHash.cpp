@@ -364,26 +364,27 @@ void CGnuWordHash::LookupQuery(GnuQuery &FileQuery, std::list<UINT> &Indexes, st
 
 			std::vector<CGnuNode*>::iterator itNode;
 			for(itNode = pGnuComm->m_NodeList.begin(); itNode != pGnuComm->m_NodeList.end(); itNode++)
-			{
-				bool Match = true;
-
-				for(i = 0; i < Keywords.size(); i++)
+				if( (*itNode)->m_GnuNodeMode == GNU_LEAF || FileQuery.UltraForward)
 				{
-					UINT WordHash = Hash(Keywords[i], GNU_TABLE_BITS);
+					bool Match = true;
 
-					int nByte = ( WordHash >> 3 ); 
-					int nBit  = ( WordHash & 7  ); 
-
-					if( ( ~(*itNode)->m_RemoteHitTable[nByte] & (1 << nBit) ) == 0)
+					for(i = 0; i < Keywords.size(); i++)
 					{
-						Match = false;
-						break;
-					}
-				}
+						UINT WordHash = Hash(Keywords[i], GNU_TABLE_BITS);
 
-				if( Match )
-					RemoteNodes.push_back( (*itNode)->m_NodeID );
-			}
+						int nByte = ( WordHash >> 3 ); 
+						int nBit  = ( WordHash & 7  ); 
+
+						if( ( ~(*itNode)->m_RemoteHitTable[nByte] & (1 << nBit) ) == 0)
+						{
+							Match = false;
+							break;
+						}
+					}
+
+					if( Match )
+						RemoteNodes.push_back( (*itNode)->m_NodeID );
+				}
 	
 		pGnuComm->m_NodeAccess.Unlock();
 	}

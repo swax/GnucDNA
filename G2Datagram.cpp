@@ -199,16 +199,6 @@ void CG2Datagram::Decode_GND(IPv4 Address, GND_Header* RecvPacket, int length)
 		return;
 	}
 
-	// Not behind firewall if udp received from indirect connection
-	// Turned off because not reliable and doesnt work for NATs
-	// PI/RELAY working now with DNA on network
-	/*if( m_pG2Comm->m_pNet->m_UdpFirewall != UDP_FULL)
-	{
-		std::map<uint32, CG2Node*>::iterator itNode = m_pG2Comm->m_G2NodeAddrMap.find(Address.Host.S_addr);
-		if(itNode == m_pG2Comm->m_G2NodeAddrMap.end())
-			m_pG2Comm->m_pNet->m_UdpFirewall = UDP_FULL;
-	}*/
-
 	// Record bandwidth
 	std::map<uint32, CG2Node*>::iterator itNode = m_pG2Comm->m_G2NodeAddrMap.find(Address.Host.S_addr);
 	if(itNode != m_pG2Comm->m_G2NodeAddrMap.end())

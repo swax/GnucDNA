@@ -311,7 +311,7 @@ std::vector<CString> CDnaShare::GetFileAltLocs(LONG FileID)
 			int i = itFile->second;
 
 			for(int j = 0; j < m_gnuShare->m_SharedFiles[i].AltHosts.size(); j++)
-				AltLocs.push_back( m_gnuShare->m_SharedFiles[i].AltHosts[j].GetString() );
+				AltLocs.push_back( IPv4toStr(m_gnuShare->m_SharedFiles[i].AltHosts[j]) );
 		}
 
 	m_gnuShare->m_FilesAccess.Unlock();

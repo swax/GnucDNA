@@ -55,7 +55,7 @@ typedef struct _Attribute
 typedef void Context;
 
 Attribute *image_file_analyze(const char *fileName);
-
+void image_free_attributes(Attribute *attrList);
 
 
 #ifdef __cplusplus

@@ -223,6 +223,11 @@ CGnuNode::~CGnuNode()
 	if(itAddr != m_pComm->m_GnuNodeAddrMap.end())
 		m_pComm->m_GnuNodeAddrMap.erase(itAddr);
 	
+	std::map<int, GUID>::iterator itProxy = m_pComm->m_PushProxyHosts.find( m_NodeID);
+	if(itProxy != m_pComm->m_PushProxyHosts.end())
+		m_pComm->m_PushProxyHosts.erase(itProxy);
+	
+	
 	// Clear browse buffer
 	for(int i = 0; i < m_BrowseHits.size(); i++)
 		delete [] m_BrowseHits[i];
@@ -325,7 +330,7 @@ void CGnuNode::OnConnect(int nErrorCode)
 		Handshake += "Accept: text/html, application/x-gnutella-packets\r\n";
 		Handshake += "Accept-Encoding: deflate\r\n";
 		Handshake += "Connection: close\r\n";
-		Handshake += "Host:" + IPtoStr(m_Address.Host) + ":" + NumtoStr(m_Address.Port) + "\r\n";
+		Handshake += "Host:" + IPv4toStr(m_Address) + "\r\n";
 
 		// Authentication
 		if(m_pCore->m_dnaCore->m_dnaEvents)
@@ -586,6 +591,11 @@ void CGnuNode::ParseIncomingHandshake06(CString Data, byte* Stream, int StreamLe
 		if(m_lowHandshake.Find("bearshare 2.") != -1)
 			m_GnuNodeMode = GNU_ULTRAPEER;
 
+		if(!QueryRouting)
+		{
+			Send_ConnectError("503 No QRP");
+			return;
+		}
 
 		// If in Ultrapeer Mode
 		if(m_pComm->m_GnuClientMode == GNU_ULTRAPEER)
@@ -593,7 +603,7 @@ void CGnuNode::ParseIncomingHandshake06(CString Data, byte* Stream, int StreamLe
 			// Ultrapeer Connecting
 			if(m_GnuNodeMode == GNU_ULTRAPEER)
 			{
-				if(m_pPrefs->m_MaxConnects != -1 && m_pComm->CountUltraConnects() >= m_pPrefs->m_MaxConnects)
+				if(m_pPrefs->m_MaxConnects != -1 && m_pComm->CountUltraConnects() >= m_pPrefs->m_MaxConnects && !LetConnect())
 				{
 					Send_ConnectError("503 Connects Maxed");
 					return;
@@ -606,13 +616,9 @@ void CGnuNode::ParseIncomingHandshake06(CString Data, byte* Stream, int StreamLe
 			// Connecting Leaf
 			if(m_GnuNodeMode == GNU_LEAF)
 			{
-				if(!QueryRouting)
-				{
-					Send_ConnectError("503 No QRP");
-					return;
-				}
+				
 
-				if(m_pShare->RunningCapacity(m_pPrefs->m_MaxLeaves) > 100)
+				if(m_pComm->CountLeafConnects() > m_pPrefs->m_MaxLeaves && !LetConnect())
 				{
 					Send_ConnectError("503 Leaf Capacity Maxed");
 					return;
@@ -632,8 +638,7 @@ void CGnuNode::ParseIncomingHandshake06(CString Data, byte* Stream, int StreamLe
 			// Ultrapeer connecting
 			if(m_GnuNodeMode == GNU_ULTRAPEER)
 			{
-				
-				if(m_pComm->CountUltraConnects() >= m_pPrefs->m_LeafModeConnects || !QueryRouting)
+				if(m_pComm->CountUltraConnects() >= m_pPrefs->m_LeafModeConnects && !LetConnect())
 				{
 					Send_ConnectError("503 Ultrapeer Connects Maxed");
 					return;
@@ -1418,13 +1423,14 @@ void CGnuNode::SetConnected()
 	m_StatusText = "Connected";
 	m_pComm->NodeUpdate(this);
 
+	
 	// For testing protcol compatibility
-	//if( m_RemoteAgent.Find("1.1.0.0") == -1 )
-	//	if( m_RemoteAgent.Find("Lime") == -1 && m_RemoteAgent.Find("Bear") == -1 )
-	//	{
-	//		CloseWithReason("Not DNA");
-	//		return;
-	//	}
+	/*if( m_RemoteAgent.Find("1.1.0.0") == -1 )
+		if( m_RemoteAgent.Find("Lime") == -1 && m_RemoteAgent.Find("Bear") == -1 )
+		{
+			CloseWithReason("Not DNA");
+			return;
+		}*/
 
 	// Setup inflate if remote host supports it
 	if(m_InflateRecv)
@@ -1482,7 +1488,7 @@ void CGnuNode::SetConnected()
 		SupportedMessages.push_back( packet_VendIdent("GTKG", 7, 2) );		// udp connect back
 		//SupportedMessages.push_back( packet_VendIdent("LIME", 11, 2) );	// oob query
 		//SupportedMessages.push_back( packet_VendIdent("LIME", 12, 1) );	// oob query
-		//SupportedMessages.push_back( packet_VendIdent("LIME", 21, 1) );	// push proxy
+		SupportedMessages.push_back( packet_VendIdent("LIME", 21, 1) );	// push proxy
 
 		uint16 VectorSize = SupportedMessages.size();
 
@@ -1777,7 +1783,7 @@ void CGnuNode::CloseWithReason(CString Reason, bool RemoteClosed)
 		//if( m_RemoteAgent.Find("GnucDNA") != -1)
 		//{
 		//	CTimeSpan Uptime = CTime::GetCurrentTime() - m_ConnectTime;
-		//	m_pCore->DebugLog( m_RemoteAgent + " " + IPtoStr(m_Address.Host) + ":" + NumtoStr(m_Address.Port) + ", Uptime " + Uptime.Format("%DD %HH %MM") + " Closed: " + Reason);
+		//	m_pCore->DebugLog( m_RemoteAgent + " " + IPv4toStr(m_Address) + ", Uptime " + Uptime.Format("%DD %HH %MM") + " Closed: " + Reason);
 		//}
 	}
 
@@ -2024,7 +2030,7 @@ bool CGnuNode::GetAlternateSuperList(CString &HostList)
 			if(PrefDna && m_pComm->m_NodeList[i]->m_RemoteAgent.Find("GnucDNA") == -1)
 				continue;
 
-			HostList += IPtoStr(m_pComm->m_NodeList[i]->m_Address.Host) + ":" + NumtoStr(m_pComm->m_NodeList[i]->m_Address.Port) + ",";	
+			HostList += IPv4toStr(m_pComm->m_NodeList[i]->m_Address) + ",";	
 			Hosts++;
 		}
 	
@@ -2183,8 +2189,9 @@ void CGnuNode::NodeManagement()
 			}
 
 			// Update searches with a new host
-			for(i = 0; i < m_pNet->m_SearchList.size(); i++)
-				m_pNet->m_SearchList[i]->IncomingGnuNode(this);
+			if(m_GnuNodeMode == GNU_ULTRAPEER)
+				for(i = 0; i < m_pNet->m_SearchList.size(); i++)
+					m_pNet->m_SearchList[i]->IncomingGnuNode(this);
 		}
 
 		// Allow 20 secs for tcp and udp tests to come back
@@ -2195,13 +2202,13 @@ void CGnuNode::NodeManagement()
 				m_pProtocol->Send_StatsMsg(this);
 
 			// Send PushProxy Request
-			/*if(m_pComm->m_GnuClientMode == GNU_LEAF && m_pNet->m_TcpFirewall)
+			if(m_pComm->m_GnuClientMode == GNU_LEAF && m_pNet->m_TcpFirewall && m_SupportsVendorMsg)
 			{
 				packet_VendMsg PushProxyRequest;
 				PushProxyRequest.Header.Guid = m_pPrefs->m_ClientID;
-				PushProxyRequest.Ident = packet_VendIdent("LIME", 21, 2);
+				PushProxyRequest.Ident = packet_VendIdent("LIME", 21, 1);
 				m_pProtocol->Send_VendMsg( this, PushProxyRequest);
-			}*/
+			}
 		}
 		
 		// Send stat update at 30 min interval
@@ -2361,4 +2368,16 @@ bool CGnuNode::ValidAgent(CString Agent)
 		return false;
 
 	return true;
+}
+
+bool CGnuNode::LetConnect()
+{
+	// Let GnucDNA's connect if local client full
+
+	// Preferencing says if the local client already has 50% dna, this new connection will be dropped after setconnected
+
+	if( m_RemoteAgent.Find("GnucDNA") != -1 )
+		return true;
+
+	return false;
 }

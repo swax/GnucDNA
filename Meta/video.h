@@ -60,7 +60,9 @@ int parse_mpeg(FILE *file, Data *data);
 double round_double(double num);
 unsigned long int fread_le(FILE *file, int bytes);
 unsigned long int fread_be(FILE *file, int bytes);
+void video_free_attributes(Attribute *attrList);
 Attribute  *video_file_analyze(const char *fileName);
+
 
 #ifdef __cplusplus
 }

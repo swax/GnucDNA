@@ -45,11 +45,14 @@ void CGnuSchemaImage::LoadData(SharedFile &File)
 	CGnuSchema::LoadData(File);
 
 	Attribute* imgattr = image_file_analyze(File.Dir.c_str());
-
+	
 	if(imgattr)
 	{
 		LoadFileAttribute(&File, "width",  imgattr[0].value );
 		LoadFileAttribute(&File, "height", imgattr[1].value );
 		LoadFileAttribute(&File, "colors", imgattr[2].value );
+
+		image_free_attributes(imgattr);
 	}
+
 }

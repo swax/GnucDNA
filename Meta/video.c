@@ -4,7 +4,6 @@
 /* --- Prototypes for externally-called plugin functions --- */
 
 static void              video_shutdown_plugin(void);
-static void              video_free_attributes(Attribute *attrList);
 
 /* --- Initialize plugin information --- */
 
@@ -151,7 +150,7 @@ Attribute *video_file_analyze(const char *fileName)
    return attrList;
 }
 
-static void video_free_attributes(Attribute *attrList)
+void video_free_attributes(Attribute *attrList)
 {
    int i = 0;
 

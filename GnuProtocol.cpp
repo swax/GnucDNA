@@ -313,8 +313,8 @@ void CGnuProtocol::Receive_Query(Gnu_RecvdPacket &Packet)
 
 				pNode->m_QueryThrottle += Packet.Length;
 
-				if(pNode->m_QueryThrottle > 1024)
-					TRACE0("Query Throttle Tripped at " + NumtoStr(pNode->m_QueryThrottle) + " by " + pNode->m_RemoteAgent + "\n");
+				//if(pNode->m_QueryThrottle > 1024)
+				//	TRACE0("Query Throttle Tripped at " + NumtoStr(pNode->m_QueryThrottle) + " by " + pNode->m_RemoteAgent + "\n");
 
 				if(Query->Header.TTL > 1 && pNode->m_QueryThrottle < 1024) // Throttle broadcasting of incoming queries at 1kb/s
 					for(int i = 0; i < m_pComm->m_NodeList.size(); i++)	
@@ -711,9 +711,9 @@ void CGnuProtocol::Decode_QueryHit( std::vector<FileSource> &Sources, Gnu_RecvdP
 		if(ExtendedPacket)
 			Item.Vendor = GetVendor( Vendor );
 
-		// Push Proxy off for now
-		//for(int i = 0; i < DirectUltrapeers.size(); i++)
-		//	Item.DirectHubs.push_back( DirectUltrapeers[i] );
+		// Push Proxy off for now 
+		for(int i = 0; i < DirectUltrapeers.size(); i++)
+			Item.DirectHubs.push_back( DirectUltrapeers[i] );
 
 		Item.GnuRouteID = SourceNodeID;
 		memcpy(&Item.PushID, &Packet[ClientIDPos], 16);
@@ -1080,6 +1080,27 @@ void CGnuProtocol::Receive_VendMsg(Gnu_RecvdPacket &Packet)
 			}
 		}
 
+		// Push Proxy Request
+		if(VendMsg->Ident == packet_VendIdent("LIME", 21, 1) )
+		{
+			if(Packet.Length != 31)
+				return;
+
+			if(Packet.pTCP->m_GnuNodeMode != GNU_LEAF)
+				return;
+
+			m_pComm->m_PushProxyHosts[ Packet.pTCP->m_NodeID ] = VendMsg->Header.Guid;
+
+			IPv4 LocalAddr;
+			LocalAddr.Host = m_pNet->m_CurrentIP;
+			LocalAddr.Port = m_pNet->m_CurrentPort;
+
+			packet_VendMsg ProxyAck;
+			ProxyAck.Header.Guid = VendMsg->Header.Guid;
+			ProxyAck.Ident = packet_VendIdent("LIME", 22, 2);
+			Send_VendMsg(Packet.pTCP, ProxyAck, &LocalAddr, 6);
+		}
+
 		// Push Proxy Acknowledgement
 		if(VendMsg->Ident == packet_VendIdent("LIME", 22, 2) )
 		{
@@ -1135,8 +1156,8 @@ void CGnuProtocol::Receive_VendMsg(Gnu_RecvdPacket &Packet)
 			if(Request == 0x01)
 			{
 				packet_VendMsg AckMsg;
-				GnuCreateGuid(&AckMsg.Header.Guid);
-				AckMsg.Ident = packet_VendIdent("GNUC", 62, 1);
+				AckMsg.Header.Guid = VendMsg->Header.Guid;
+				AckMsg.Ident       = packet_VendIdent("GNUC", 62, 1);
 				
 				if( Packet.pTCP->m_GnuNodeMode != GNU_ULTRAPEER || // Make sure remote is ultrapeer
 					m_pComm->m_GnuClientMode != GNU_LEAF ||		   // Make sure we are a leaf
@@ -1763,6 +1784,7 @@ void CGnuProtocol::Send_QueryHit(GnuQuery &FileQuery, byte* pQueryHit, DWORD Rep
 	QHD->FlagBusy	= true;
 	QHD->FlagStable	= true;
 	QHD->FlagSpeed	= true;
+	QHD->FlagGGEP   = true;
 	QHD->FlagTrash  = 0;
 
 	QHD->Push	= m_pNet->m_TcpFirewall;
@@ -1770,8 +1792,42 @@ void CGnuProtocol::Send_QueryHit(GnuQuery &FileQuery, byte* pQueryHit, DWORD Rep
 	QHD->Busy	= Busy;
 	QHD->Stable	= m_pNet->m_HaveUploaded;
 	QHD->Speed	= m_pNet->m_RealSpeedUp ? true : false;
+	QHD->GGEP   = false;
 	QHD->Trash	= 0;
+
+
+	// Get list of push proxies
+	std::vector<IPv4> PushProxies;
+
+	for(int i = 0; i < m_pComm->m_NodeList.size(); i++)
+		if( m_pComm->m_NodeList[i]->m_GnuNodeMode == GNU_ULTRAPEER && m_pComm->m_NodeList[i]->m_PushProxy.Host.S_addr != 0)
+			PushProxies.push_back(m_pComm->m_NodeList[i]->m_PushProxy);
+
+	if( PushProxies.size() )
+	{
+		QHD->GGEP = true;
+
+		byte* pGGEPStart = pQueryHit + packetLength;
 	
+		*pGGEPStart   = 0xC3; // ggep magic
+		packetLength += 1;
+
+		packet_GGEPBlock Block;
+		memcpy(Block.Name, "PUSH", 4);
+		Block.Last = true;
+
+		int   GgepPayloadLength = PushProxies.size() * 6;
+		byte* GgepPayload       = new byte[GgepPayloadLength];
+
+		int x = 0;
+		for(i = 0; i < PushProxies.size(); i++, x += 6)
+			memcpy(GgepPayload + x, &PushProxies[i], 6);
+
+		// Write ggep block
+		packetLength += Encode_GGEPBlock(Block, pQueryHit + packetLength, GgepPayload, GgepPayloadLength);
+
+		delete [] GgepPayload;
+	}
 
 	// Add Metadata to packet
 	strcpy((char*) pQueryHit + packetLength, "{deflate}");
@@ -1799,7 +1855,7 @@ void CGnuProtocol::Send_QueryHit(GnuQuery &FileQuery, byte* pQueryHit, DWORD Rep
 
 
 	// DirectAddress set signal node wants hits out of band
-	if(FileQuery.DirectAddress.Host.S_addr)
+	if(FileQuery.DirectAddress.Host.S_addr && m_pNet->m_UdpFirewall != UDP_BLOCK)
 	{	
 		std::map<uint32, OobHit*>::iterator itHit = m_pComm->m_OobHits.find( HashGuid(QueryHit->Header.Guid) );
 	
@@ -1834,7 +1890,7 @@ void CGnuProtocol::Send_QueryHit(GnuQuery &FileQuery, byte* pQueryHit, DWORD Rep
 	m_pComm->m_NodeAccess.Unlock();
 
 	// Node not found, check if its a node browsing files
-	for(int i = 0; i < m_pComm->m_NodesBrowsing.size(); i++)
+	for( i = 0; i < m_pComm->m_NodesBrowsing.size(); i++)
 		if(m_pComm->m_NodesBrowsing[i]->m_NodeID == FileQuery.OriginID)
 		{
 			byte* BrowsePacket = new byte[packetLength];
@@ -1849,7 +1905,7 @@ void CGnuProtocol::Send_QueryHit(GnuQuery &FileQuery, byte* pQueryHit, DWORD Rep
 }
 
 // Called from share thread
-void CGnuProtocol::Send_Push(FileSource Download)
+void CGnuProtocol::Send_Push(FileSource Download, IPv4 Proxy)
 {
 	GUID Guid;
 	GnuCreateGuid(&Guid);
@@ -1864,12 +1920,22 @@ void CGnuProtocol::Send_Push(FileSource Download)
 	Push.Header.Payload		= 26;
 	Push.ServerID			= Download.PushID;
 	Push.Index				= Download.FileIndex;
-	Push.Host				= m_pNet->m_CurrentIP;
-	Push.Port				= m_pNet->m_CurrentPort;
 
-	if(m_pPrefs->m_ForcedHost.S_addr)
-		Push.Host = m_pPrefs->m_ForcedHost;
+	if(Proxy.Host.S_addr)
+	{
+		Push.Host = Proxy.Host;
+		Push.Port = Proxy.Port;
+	}
+	else
+	{
+		Push.Host = m_pNet->m_CurrentIP;
+		Push.Port = m_pNet->m_CurrentPort;
 
+		if(m_pPrefs->m_ForcedHost.S_addr)
+			Push.Host = m_pPrefs->m_ForcedHost;
+	}
+
+	
 	// Send Push
 	for(int i = 0; i < m_pComm->m_NodeList.size(); i++)	
 	{
@@ -1877,7 +1943,8 @@ void CGnuProtocol::Send_Push(FileSource Download)
 
 		if(p->m_NodeID == Download.GnuRouteID && p->m_Status == SOCK_CONNECTED)
 		{
-			m_pComm->m_TableLocal.Insert(Guid, p->m_NodeID);
+			if(Proxy.Host.S_addr == 0)
+				m_pComm->m_TableLocal.Insert(Guid, p->m_NodeID);
 
 			p->SendPacket(&Push, 49, PACKET_PUSH, Push.Header.TTL - 1);
 		}
@@ -2134,4 +2201,125 @@ GGEPReadResult CGnuProtocol::Decode_GGEPBlock(packet_GGEPBlock &Block, byte* &st
 	length -= Block.PayloadSize;
 
 	return BLOCK_GOOD;
+}
+
+int CGnuProtocol::Encode_GGEPBlock(packet_GGEPBlock &Block, byte* stream, byte* payload, uint32 length)
+{
+	int len = 0;
+
+	// Set flags
+	packet_GGEPHeaderFlags* pFlags = (packet_GGEPHeaderFlags*) stream;
+
+	pFlags->Compression	= Block.Compression;
+	pFlags->Encoding	= Block.Encoded;
+	pFlags->Last		= Block.Last;
+	pFlags->Reserved    = 0;
+	pFlags->NameLength  = strlen( Block.Name );
+
+	len++;
+
+	// Set name
+	memcpy(stream + len, Block.Name, pFlags->NameLength );
+
+	len += pFlags->NameLength;
+
+	// Set size
+	int pos = 0;
+
+	if(length & 0x3F000) // value in 12 - 17?
+	{
+		(stream + len)[pos]      = (length & 0x3F000) >> 12; // set cccccc
+		(stream + len)[pos]     |= 0x80; // set another flag
+		(stream + len)[pos + 1] |= 0x80; // set another flag
+		(stream + len)[pos + 2] |= 0x40; // set last flag
+		pos++;
+	}
+
+	if(length & 0xFC0 || pos > 0) // value in 6 - 11?
+	{
+		(stream + len)[pos]      = (length & 0xFC0) >> 6; // set bbbbbb
+		(stream + len)[pos]     |= 0x80; // set another flag
+		(stream + len)[pos + 1] |= 0x40; // set last flag
+		pos++;
+	}
+
+	(stream + len)[pos]  = length & 0x3F; // set aaaaaa
+	(stream + len)[pos] |= 0x40; // set last flag
+	pos++;
+
+	len += pos;
+
+	// Set Payload
+	memcpy(stream + len, payload, length);
+
+	len += length;
+
+
+	return len;
+}
+
+void CGnuProtocol::CheckGgepSize(int value)
+{
+	// Check building deconstructing packet
+	
+	// Encode ggep
+	uint32 buffsize = 1024;
+	byte* buffer = new byte[buffsize];
+	
+	packet_GGEPBlock EncBlock;
+	memcpy(EncBlock.Name, "Test", 4);
+	EncBlock.Last = true;
+
+	char* message = "HELLO!!!";
+	
+	int blocksize = Encode_GGEPBlock(EncBlock, buffer, (byte*) message, strlen(message));
+
+	// Decode ggep
+	packet_GGEPBlock DecBlock;
+	GGEPReadResult result = Decode_GGEPBlock(DecBlock, buffer, buffsize);
+
+	////////////////////////////////////////////////////////////////////////////////////////
+
+	// Checks encoding and decoding size value of ggep
+
+	int len = value;
+	uint32 final = 0;
+
+	int pos = 0;
+
+	if(len & 0x3F000) // value in 12 - 17?
+	{
+		((byte*) &final)[pos]      = (len & 0x3F000) >> 12; // set cccccc
+		((byte*) &final)[pos]     |= 0x80; // set another flag
+		((byte*) &final)[pos + 1] |= 0x80; // set another flag
+		((byte*) &final)[pos + 2] |= 0x40; // set last flag
+		pos++;
+	}
+
+	if(len & 0xFC0 || pos > 0) // value in 6 - 11?
+	{
+		((byte*) &final)[pos]      = (len & 0xFC0) >> 6; // set bbbbbb
+		((byte*) &final)[pos]     |= 0x80; // set another flag
+		((byte*) &final)[pos + 1] |= 0x40; // set last flag
+		pos++;
+	}
+
+	((byte*) &final)[pos]  = len & 0x3F; // set aaaaaa
+	((byte*) &final)[pos] |= 0x40; // set last flag
+	pos++;
+
+	// Read Payload Length
+	byte b;
+	int PayloadSize = 0;
+	int finpos = 0;
+
+	do 
+	{
+		b = ((byte*) &final)[finpos];
+		finpos++;
+		PayloadSize = (PayloadSize << 6) | (b & 0x3f);
+
+	} while (0x40 != (b & 0x40));	
+
+	ASSERT(len == PayloadSize);
 }

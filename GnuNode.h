@@ -67,6 +67,7 @@ public:
 
 	void SetConnected();
 
+	bool LetConnect();
 
 	// Receiving
 	void  FinishReceive(int BuffLength);

@@ -39,7 +39,6 @@
 
 #include "GnuShare.h"
 #include "GnuFileHash.h"
-#include "GnuAltLoc.h"
 
 #include "DnaCore.h"
 #include "DnaEvents.h"
@@ -132,7 +131,7 @@ void CGnuDownload::OnConnect(int nErrorCode)
 {
 	if(nErrorCode)
 	{
-		SetError("Push Sent (OnConnect Error " + NumtoStr(nErrorCode) + ")");	
+		SetError("OnConnect Error " + NumtoStr(nErrorCode) );	
 		StatusUpdate(TRANSFER_CLOSED);
 		
 		SendPushRequest();
@@ -358,7 +357,7 @@ void CGnuDownload::OnReceive(int nErrorCode)
 				// If good, add as alt source
 				if(200 <= Code && Code < 300)
 				{
-					SetError("Push Proxy Success");
+					SetError("Push Sent through Proxy");
 
 					HostInfo()->DirectHubs.push_back(m_ProxyAddress);
 				}
@@ -366,13 +365,14 @@ void CGnuDownload::OnReceive(int nErrorCode)
 				// If bad erase
 				else
 				{
-					SetError("Push Proxy Old");	
+					SetError("Proxy not connected to Host");	
 					SendPushRequest();
 				}
 				
 				Close();
 				return;
 			}
+
 
 			CParsedHeaders ParsedHeaders (m_Header);
 
@@ -436,19 +436,7 @@ void CGnuDownload::OnReceive(int nErrorCode)
 
 				// Add this host to our alt-loc list
 				if (!RemoteFileHash.IsEmpty() && !m_Push)
-				{
-					//Source seems ok, add to altloc list
-					AltLocation AltLoc;
-
-					AltLoc.HostPort.Host = IPtoStr(HostInfo()->Address.Host);
-					AltLoc.HostPort.Port = HostInfo()->Address.Port;
-					AltLoc.HostPort.LastSeen = CTime::GetCurrentTime() - LocalTimeZone();
-					AltLoc.Index         = HostInfo()->FileIndex;
-					AltLoc.Name          = HostInfo()->Name;
-					AltLoc.Sha1Hash      = RemoteFileHash;
-				
-					m_pShell->AddAltLocation(AltLoc);						
-				}
+					m_pShell->AddAltLocation(HostInfo()->Address);						
 			}
 
 
@@ -527,11 +515,23 @@ void CGnuDownload::OnReceive(int nErrorCode)
 							m_PausePos = EndByte + 1;
 					}
 
-					// Alt-Location
+					// Alt-Location (old format)
 					else if (HeaderName == "alt-location" || HeaderName == "x-gnutella-alternate-location")
 					{
-						if (!RemoteFileHash.IsEmpty())
-							m_pShell->AddAltLocation(HeaderValue);
+						AltLocation OldFormat = HeaderValue;
+
+						IPv4 Address;
+						Address.Host = StrtoIP(OldFormat.HostPort.Host);
+						Address.Port = OldFormat.HostPort.Port;
+
+						m_pShell->AddAltLocation(Address);
+					}
+				
+					// X-Alt
+					else if (HeaderName == "x-alt")
+					{
+						// Parse headers breaks up commas
+						m_pShell->AddAltLocation( HeaderValue );
 					}
 
 					// X-Push-Proxy
@@ -539,17 +539,12 @@ void CGnuDownload::OnReceive(int nErrorCode)
 					{
 						HostInfo()->DirectHubs.clear();
 
-						CString strAddr = ParseString(HeaderName, ',');
-
-						while( !strAddr.IsEmpty() )
+						while( !HeaderValue.IsEmpty() )
 						{
-							IPv4 PushProxy;
-							PushProxy.Host = StrtoIP( ParseString(strAddr, ':') );
-							PushProxy.Port = atoi(strAddr);
+							IPv4 PushProxy = StrtoIPv4( ParseString(HeaderValue, ',') );
 
-							HostInfo()->DirectHubs.push_back(PushProxy);
-
-							strAddr = ParseString(HeaderName, ',');
+							if(PushProxy.Port)
+								HostInfo()->DirectHubs.push_back(PushProxy);
 						}
 
 					}
@@ -727,11 +722,41 @@ void CGnuDownload::OnReceive(int nErrorCode)
 					HeaderName.MakeLower();
 					CString HeaderValue = ParsedHeaders.m_Headers[i].Value;
 					
-					if (HeaderName.Right(12) == "alt-location" || HeaderName.Right(18) == "alternate-location")
+					// Alt-Location (old format)
+					if (HeaderName == "alt-location" || HeaderName == "x-gnutella-alternate-location")
 					{
-						if (!RemoteFileHash.IsEmpty())
-							m_pShell->AddAltLocation(HeaderValue);
+						AltLocation OldFormat = HeaderValue;
+
+						IPv4 Address;
+						Address.Host = StrtoIP(OldFormat.HostPort.Host);
+						Address.Port = OldFormat.HostPort.Port;
+
+						m_pShell->AddAltLocation(Address);
 					}
+				
+					// X-Alt
+					else if (HeaderName == "x-alt")
+					{
+						// Parse headers breaks up commas
+						m_pShell->AddAltLocation( HeaderValue );
+					}
+
+					// X-Push-Proxy
+					else if (HeaderName == "x-push-proxy" && HostInfo()->Network == NETWORK_GNUTELLA)
+					{
+						HostInfo()->DirectHubs.clear();
+
+						while( !HeaderValue.IsEmpty() )
+						{
+							IPv4 PushProxy = StrtoIPv4( ParseString(HeaderValue, ',') );
+
+							if(PushProxy.Port)
+								HostInfo()->DirectHubs.push_back(PushProxy);
+						}
+
+					}
+
+					// X-Queue
 					else if (HeaderName.Right(7) == "x-queue")
 					{
 						QueueSupport   = true;
@@ -1045,7 +1070,7 @@ void CGnuDownload::SendRequest()
 
 	CString Host = HostInfo()->HostStr;
 	if( HostInfo()->HostStr.IsEmpty() )
-		Host = IPtoStr(HostInfo()->Address.Host) + ":" + NumtoStr(HostInfo()->Address.Port); 
+		Host = IPv4toStr(HostInfo()->Address); 
 		
 	if( m_pShell->m_UseProxy )
 		GetFile = "http://" + Host + GetFile;
@@ -1096,19 +1121,18 @@ void CGnuDownload::SendRequest()
 		//Do this even if not byte is downloaded yet, because there will be
 		if (!m_pNet->m_TcpFirewall && m_pShell->GetBytesCompleted() )
 		{		
-			CString LocalIP = IPtoStr( m_pNet->m_CurrentIP);
+			IPv4 LocalAddr;
+			LocalAddr.Host = m_pNet->m_CurrentIP;
+			LocalAddr.Port = m_pNet->m_CurrentPort;
 			
 			if(m_pPrefs->m_ForcedHost.S_addr)
-				LocalIP = IPtoStr(m_pPrefs->m_ForcedHost);
+				LocalAddr.Host = m_pPrefs->m_ForcedHost;
 			
-			DWORD LocalPort = m_pNet->m_CurrentPort;
-			CString AltStr = "http://" + LocalIP + ":" + NumtoStr(LocalPort) + "/uri-res/N2R?urn:sha1:" + m_pShell->m_Sha1Hash + " " + CTimeToStr(CTime::GetCurrentTime() - LocalTimeZone());
-			
-			GetFile += "Alt-Location: " + AltStr + "\r\n";
+			m_pShell->AddAltLocation(LocalAddr);
 		}
 
 		// Alt-Location
-		GetFile	+= m_pShell->GetAltLocationHeader(IPtoStr(HostInfo()->Address.Host));
+		GetFile += m_pShell->GetAltLocHeader( HostInfo()->Address.Host );
 	}
 
 	// End header
@@ -1136,9 +1160,8 @@ void CGnuDownload::SendPushProxyRequest()
 
 	CString GetProxy;
 
-	GetProxy += "/gnet/push-proxy?guid=" + EncodeBase16((byte*) &pSource->PushID, 16) + "\r\n";
-	GetProxy += "X-Node: " + IPtoStr(pSource->Address.Host) + ":" + NumtoStr(pSource->Address.Port) + "\r\n";
-	GetProxy += "User-Agent: LimeWire 4.0.3\r\n";
+	GetProxy += "HEAD /gnet/push-proxy?guid=" + EncodeBase16((byte*) &pSource->PushID, 16) + " HTTP/1.1\r\n";
+	GetProxy += "X-Node: " + IPtoStr(m_pNet->m_CurrentIP) + ":" + NumtoStr(m_pNet->m_CurrentPort) + "\r\n";
 	GetProxy += "\r\n";
 
 	Send(GetProxy, GetProxy.GetLength());
@@ -1149,6 +1172,7 @@ void CGnuDownload::SendPushProxyRequest()
 	pSource->PushSent   = true;
 	pSource->Handshake += GetProxy;
 
+	SetError("Push Proxy Connected");
 	StatusUpdate(TRANSFER_CONNECTED);
 }
 
@@ -1239,8 +1263,8 @@ bool CGnuDownload::StartDownload()
 
 	if(m_PushProxy)
 	{
-		CString TargetHost = IPtoStr( m_ProxyAddress.Host );
-		uint16	TargetPort = m_ProxyAddress.Port;
+		TargetHost = IPtoStr( m_ProxyAddress.Host );
+		TargetPort = m_ProxyAddress.Port;
 
 		SetError("Push Proxy " + TargetHost + ":" + NumtoStr(TargetPort) + "...");
 		StatusUpdate(TRANSFER_CONNECTING);
@@ -1254,7 +1278,7 @@ bool CGnuDownload::StartDownload()
 		if(ErrorCode != WSAEWOULDBLOCK)
 		{
 			// Get error code
-			SetError("Push Sent (Connect Error " + NumtoStr(ErrorCode) + ")" );
+			SetError("Connect Error " + NumtoStr(ErrorCode) );
 			
 			SendPushRequest();
 			
@@ -1267,26 +1291,35 @@ bool CGnuDownload::StartDownload()
 
 void CGnuDownload::SendPushRequest()
 {
+	// If we're behind firewall a push attempt can not be received
+	if(m_pNet->m_TcpFirewall)
+		return;
+
 	FileSource* HostSource = HostInfo();
 
 	if( HostSource->Network == NETWORK_GNUTELLA )
 	{
 		if(HostSource->DirectHubs.size())
 			DoPushProxy();
+		
 		else if( m_pNet->m_pGnu ) 
+		{
 			m_pNet->m_pGnu->m_pProtocol->Send_Push( *HostSource );
+			SetError("Gnutella Push Sent");
+		}
 	}
 
 	if( m_pNet->m_pG2 && HostSource->Network == NETWORK_G2 )
+	{
 		m_pNet->m_pG2->Send_PUSH(HostSource);
+		SetError("G2 Push Sent");
+	}
 
 	HostSource->PushSent = true;
 }
 
 void CGnuDownload::DoPushProxy()
 {
-	TRACE0( "SOCKET LIST SIZE " + NumtoStr(m_pShell->m_Sockets.size()) + "\n");
-
 	FileSource* pSource = HostInfo();
 	
 	// Create new download to talk with proxy server
@@ -1297,7 +1330,7 @@ void CGnuDownload::DoPushProxy()
 	// Get random push proxy ultrapeer
 	int index = rand() % pSource->DirectHubs.size();
 	pSock->m_ProxyAddress = pSource->DirectHubs[index];
-		
+	
 	// Erase selected ultrapeer so it isnt retried again
 	std::vector<IPv4>::iterator itProxy = pSource->DirectHubs.begin();
 	while( itProxy != pSource->DirectHubs.end() )
@@ -1310,8 +1343,6 @@ void CGnuDownload::DoPushProxy()
 		m_pShell->m_Sockets.push_back(pSock);
 	else
 		delete pSock;
-
-TRACE0( "SOCKET LIST SIZE " + NumtoStr(m_pShell->m_Sockets.size()) + "\n\n");
 }
 
 void CGnuDownload::StopDownload()
@@ -1499,7 +1530,7 @@ void CGnuDownload::Timer()
 
 		if(m_nSecsDead > TRANSFER_TIMEOUT)
 		{
-			SetError("Connect Timed Out (push sent)");
+			SetError("Attempt Timed Out");
 			HostInfo()->Status = FileSource::eFailed;
 			
 			SendPushRequest();	
@@ -1514,7 +1545,7 @@ void CGnuDownload::Timer()
 
 		if(m_nSecsDead > TRANSFER_TIMEOUT)
 		{
-			SetError("No Response (push sent)");
+			SetError("No Response");
 			SendPushRequest();
 			
 			Close();

@@ -76,6 +76,7 @@ CG2Node::CG2Node(CG2Control* pG2Comm, CString Host, uint32 Port)
 
 	m_SecsTrying = 0;
 	m_SecsDead   = 0;
+	m_SecsAlive  = 0;
 	m_CloseWait  = 0;
 
 	
@@ -264,8 +265,7 @@ void CG2Node::Timer()
 			if(m_SecsDead == 30)
 			{
 				G2_PI Ping;
-				m_pG2Comm->Send_PI(this->m_Address, Ping, this );
-				//m_pG2Comm->Send_PI(this->m_Address, Ping); 
+				m_pG2Comm->Send_PI(m_Address, Ping, this );
 			}
 
 			if(m_SecsDead > 60)
@@ -273,6 +273,31 @@ void CG2Node::Timer()
 				CloseWithReason("Minute Dead");
 				return;
 			}
+		}
+		else 
+			m_SecsDead = 0;
+
+
+		if(m_SecsAlive < 60 * 10)
+			m_SecsAlive++;
+
+		// Stable Connection
+		if(m_SecsAlive == 30)
+		{
+			G2_PI Ping;
+			m_pG2Comm->Send_PI(m_Address, Ping); // UDP Ping
+
+			// Tests ability to receive udp
+			if(m_pNet->m_UdpFirewall != UDP_FULL)
+			{
+				Ping.UdpAddress.Host = m_pNet->m_CurrentIP;
+				Ping.UdpAddress.Port = m_pNet->m_CurrentPort;
+
+				if(m_pNet->m_TcpFirewall)
+					Ping.TestFirewall = true;	
+			}
+
+			m_pG2Comm->Send_PI(m_Address, Ping, this); // TCP Ping with UDP and firewall test requests
 		}
 
 
@@ -398,8 +423,6 @@ void CG2Node::OnReceive(int nErrorCode)
 
 	// Bandwidth stats
 	m_dwSecBytes[0] += RecvLength;
-
-	m_SecsDead = 0;
 
 
 	// Connected to node, sending and receiving packets
@@ -1091,12 +1114,6 @@ void CG2Node::ParseTryHeader(CString TryHeader)
 		Hub.Address.Port = tryNode.Port;
 		m_pG2Comm->UpdateGlobal( Hub );
 		
-		/*if(m_pNet->m_UdpFirewall == UDP_BLOCK)
-		{
-			G2_PI Ping;
-			m_pG2Comm->Send_PI(Hub.Address, Ping); // Fix this
-		}*/
-
 		Address = ParseString(TryHeader, ',');
 	}
 
@@ -1160,20 +1177,10 @@ void CG2Node::SetConnected()
 	// Send TCP and UDP ping
 	G2_PI Ping;
 	Ping.Ident = m_pG2Comm->m_ClientIdent;
-	m_pG2Comm->Send_PI(this->m_Address, Ping, this); 
-	//m_pG2Comm->Send_PI(this->m_Address, Ping); 
+	m_pG2Comm->Send_PI(m_Address, Ping, this); // Makes sure not duplicate connection or loop back
+
+	// other ability tests done once stable
 	
-	// Tests ability to receive udp
-	if(m_pNet->m_UdpFirewall != UDP_FULL)
-	{
-		Ping.UdpAddress.Host = m_pNet->m_CurrentIP;
-		Ping.UdpAddress.Port = m_pNet->m_CurrentPort;
-
-		if(m_pNet->m_TcpFirewall)
-			Ping.TestFirewall = true;
-
-		m_pG2Comm->Send_PI(this->m_Address, Ping, this);
-	}
 
 	m_SendDelayLNI = true;
 

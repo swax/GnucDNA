@@ -271,9 +271,6 @@
 					RelativePath=".\DnaShare.cpp">
 				</File>
 				<File
-					RelativePath="GnuAltLoc.cpp">
-				</File>
-				<File
 					RelativePath="GnuFileHash.cpp">
 				</File>
 				<File
@@ -801,9 +798,6 @@
 				Filter="">
 				<File
 					RelativePath=".\DnaShare.h">
-				</File>
-				<File
-					RelativePath="GnuAltLoc.h">
 				</File>
 				<File
 					RelativePath="GnuFileHash.h">

@@ -45,7 +45,7 @@ public:
 	void Send_Query(byte* Packet, int length);
 	void Send_Query(GnuQuery &FileQuery, std::list<int> &MatchingNodes);
 	void Send_QueryHit(GnuQuery &FileQuery, byte* pQueryHit, DWORD ReplyLength, byte ReplyCount, CString &MetaTail);
-	void Send_Push(FileSource Download);
+	void Send_Push(FileSource Download, IPv4 Proxy=IPv4());
 	void Send_VendMsg(CGnuNode* pTCP, packet_VendMsg VendMsg, void* payload=NULL, int length=0, IPv4 Target=IPv4());
 	void Send_Bye(CGnuNode* pTCP, CString Reason);
 	void Send_StatsMsg(CGnuNode* pTCP);
@@ -54,8 +54,9 @@ public:
 	void Encode_QueryHit(GnuQuery &FileQuery, std::list<UINT> &MatchingIndexes, byte* QueryReply);
 	
 	GGEPReadResult Decode_GGEPBlock(packet_GGEPBlock &Block, byte* &stream, uint32 &length);
-
-
+	int            Encode_GGEPBlock(packet_GGEPBlock &Block, byte* stream, byte* payload, uint32 length);
+	void		   CheckGgepSize(int value);
+	
 	CGnuControl*   m_pComm;
 	CGnuCore*      m_pCore;
 	CGnuNetworks*  m_pNet;

@@ -63,7 +63,7 @@ struct HashedFile
 	int     Index;
 	int		Size;
 	CString TimeStamp;
-	std::vector<AltLocation> AltHosts;
+	std::vector<IPv4> AltHosts;
 	
 	CString HashValues[HASH_TYPES];
 	byte* TigerTree;

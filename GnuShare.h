@@ -10,7 +10,6 @@ class CGnuNetworks;
 class CGnuNode;
 
 class CGnuFileHash;
-class CGnuAltLoc;
 class CGnuWordHash;
 class CGnuMeta;
 
@@ -33,16 +32,13 @@ public:
 	CString GetFileName(int index);
 	CString GetFileHash(int index, int HashType);
 	
-	int  RunningCapacity(int);
-	int  FreeCapacity(int);
-	
 	void	ShareUpdate(UINT FileID);
 	void	ShareReload();
 
 	void HitTableRefresh();
 
 	void Timer();
-	
+
 	
 	// Functions called from share thread
 	void LoadFiles();
@@ -57,6 +53,11 @@ public:
 	bool  m_ShareReload;
 	bool  m_StopThread;
 	bool  m_BlockUpdate;
+
+	// Alt Locations
+	void    AddShareAltLocation(CString Hash, CString strAddr);
+	void    AddShareAltLocation(CString Hash, IPv4 Location);
+	CString GetShareAltLocHeader(CString Hash, IP ToIP, int HostCount=6);
 
 	// Stats
 	double m_Freq;
@@ -87,7 +88,6 @@ public:
 	CGnuCore*     m_pCore;
 	CGnuNetworks* m_pNet;
 	CGnuFileHash* m_pHash;
-	CGnuAltLoc*   m_pAltLoc;
 	CGnuWordHash* m_pWordTable;
 	CGnuMeta*	  m_pMeta;
 
@@ -103,7 +103,7 @@ struct SharedFile
 	std::basic_string<char> TimeStamp;
 	bool HashError;
 
-	std::deque<AltLocation> AltHosts;
+	std::deque<IPv4> AltHosts;
 
 	UINT  FileID;
 	UINT  Index;

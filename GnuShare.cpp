@@ -40,7 +40,6 @@
 #include "GnuTransfers.h"
 #include "GnuFileHash.h"
 #include "GnuWordHash.h"
-#include "GnuAltLoc.h"
 #include "GnuMeta.h"
 #include "GnuSchema.h"
 #include "GnuProtocol.h"
@@ -57,7 +56,6 @@ CGnuShare::CGnuShare(CGnuCore* pCore)
 {	
 	m_pCore		 = pCore;
 	m_pHash		 = NULL;
-	m_pAltLoc	 = NULL;
 	m_pWordTable = NULL;
 	m_pMeta		 = NULL;
 	m_StopThread = false;
@@ -88,11 +86,6 @@ CGnuShare::~CGnuShare()
 	if(m_pHash)
 		delete m_pHash;
 	m_pHash = NULL;
-
-
-	if(m_pAltLoc)
-		delete m_pAltLoc;
-	m_pAltLoc = NULL;
 
 
 	m_FilesAccess.Lock();
@@ -151,7 +144,6 @@ void CGnuShare::InitShare()
 	m_pNet  	 = m_pCore->m_pNet;
 	m_pMeta		 = m_pCore->m_pMeta;
 	m_pHash		 = new CGnuFileHash(this);
-	m_pAltLoc	 = new CGnuAltLoc(this);
 	m_pWordTable = new CGnuWordHash(this);
 
 
@@ -498,46 +490,6 @@ CString CGnuShare::GetFileHash(int index, int HashType)
 	return "";
 }
 
-int CGnuShare::RunningCapacity(int RemoteLeafMax)
-{	
-	int ChildCount     = 0;
-
-	if( m_pNet->m_pGnu )
-		for(int i = 0; i < m_pNet->m_pGnu->m_NodeList.size(); i++)
-			if(m_pNet->m_pGnu->m_NodeList[i]->m_Status == SOCK_CONNECTED)
-				if(m_pNet->m_pGnu->m_NodeList[i]->m_GnuNodeMode == GNU_LEAF)
-					if(m_pNet->m_pGnu->m_NodeList[i]->m_RemoteAgent.Find("GnucDNA") > 0)
-					{
-						ChildCount++;
-					}
-
-
-	return (double) ChildCount / (double) RemoteLeafMax * (double) 100;
-}
-
-int CGnuShare::FreeCapacity(int RemoteLeafMax)
-{	
-	int ChildCount     = 0;
-
-	if( m_pNet->m_pGnu )
-		for(int i = 0; i < m_pNet->m_pGnu->m_NodeList.size(); i++)
-			if(m_pNet->m_pGnu->m_NodeList[i]->m_Status == SOCK_CONNECTED)
-				if(m_pNet->m_pGnu->m_NodeList[i]->m_GnuNodeMode == GNU_LEAF)
-					if(m_pNet->m_pGnu->m_NodeList[i]->m_RemoteAgent.Find("GnucDNA") > 0)
-					{
-						ChildCount++;
-					}
-
-	int FreeSlots = m_pCore->m_pPrefs->m_MaxLeaves - ChildCount;
-	if(FreeSlots < 0)
-		FreeSlots = 0;
-
-	if(RemoteLeafMax == 0)
-		return 100;
-
-	return (double) FreeSlots / (double) RemoteLeafMax * (double) 100;
-}
-
 
 UINT ShareWorker(LPVOID pVoidShare)
 {
@@ -765,7 +717,121 @@ void CGnuShare::Timer()
 	}*/
 }
  
+void CGnuShare::AddShareAltLocation(CString Hash, CString strAddr)
+{
+	IPv4 Address;
+	Address.Host = StrtoIP( ParseString(strAddr, ':') );
+	
+	if( !strAddr.IsEmpty() )
+		Address.Port = atoi( strAddr );
+	else
+		Address.Port = 6346; // lime doesnt send port all the time
 
+	AddShareAltLocation(Hash, Address);
+}
+
+void CGnuShare::AddShareAltLocation(CString Hash, IPv4 Location)
+{
+	ASSERT(Location.Port);
+	if(Location.Port == 0)
+		return;
+
+	if( IsPrivateIP(Location.Host) )
+		return;
+
+	if( !m_pNet->NotLocal( Node( IPtoStr(Location.Host), Location.Port) ) )
+		return;
+
+
+	m_FilesAccess.Lock();
+
+		int FileIndex = 0;
+		std::map<CString, int>::iterator itShare = m_SharedHashMap.find(Hash);
+		if(itShare != m_SharedHashMap.end())
+			FileIndex = itShare->second;
+
+		if(FileIndex == 0)
+			return;
+
+
+		bool found = false;
+
+		for(int i = 0; i < m_SharedFiles[FileIndex].AltHosts.size(); i++)
+			if (Location.Host.S_addr == m_SharedFiles[FileIndex].AltHosts[i].Host.S_addr)
+				{
+					found = true;
+					break;
+				}
+
+		if(!found)
+			m_SharedFiles[FileIndex].AltHosts.push_back(Location);
+
+
+		if(m_SharedFiles[FileIndex].AltHosts.size() > 15)
+			m_SharedFiles[FileIndex].AltHosts.pop_front();
+
+	m_FilesAccess.Unlock();
+}
+
+CString CGnuShare::GetShareAltLocHeader(CString Hash, IP ToIP, int HostCount)
+{
+	m_FilesAccess.Lock();
+
+		int FileIndex = 0;
+		std::map<CString, int>::iterator itShare = m_SharedHashMap.find(Hash);
+		if(itShare != m_SharedHashMap.end())
+			FileIndex = itShare->second;
+
+		if(FileIndex == 0)
+			return "";
+
+
+		CString Header = "X-Alt: ";
+
+		int j = 0;
+
+		if(m_SharedFiles[FileIndex].AltHosts.size() < HostCount)
+			HostCount = m_SharedFiles[FileIndex].AltHosts.size(); 
+
+		std::vector<int> HostIndexes;
+
+		// Get random indexes to send to host
+		while(HostCount > 0)
+		{
+			HostCount--;
+
+			int NewIndex = rand() % m_SharedFiles[FileIndex].AltHosts.size() + 0;
+
+			if(ToIP.S_addr == m_SharedFiles[FileIndex].AltHosts[NewIndex].Host.S_addr)
+				continue;
+
+			bool found = false;
+
+			for(j = 0; j < HostIndexes.size(); j++)
+				if(HostIndexes[j] == NewIndex)
+					found = true;
+
+			if(!found)
+				HostIndexes.push_back(NewIndex);
+		}
+
+		for(j = 0; j < HostIndexes.size(); j++)
+			Header += IPv4toStr(m_SharedFiles[FileIndex].AltHosts[ HostIndexes[j] ]) + ", ";
+
+	m_FilesAccess.Unlock();
+	
+
+	if( HostIndexes.size() == 0)
+		return "";
+
+	Header.Trim(", ");
+	
+	Header += "\r\n";
+
+	
+
+	return Header;
+}
 
 
 

@@ -1,4 +1,4 @@
-GnucDNA 1.1.0.2
+GnucDNA 1.1.0.3
 	Gnutella
 		swabby: Removed support for Gnutella 0.4
 		swabby: X-Degree of 32, Max TTL of 3
@@ -8,11 +8,13 @@ GnucDNA 1.1.0.2
 		swabby: Ultrapeer mode performs Dynamic Queries on behalf of leaf
 		swabby: Leaf guided dynamic queries
 		swabby: Out of Band QueryHits
+		swabby: Full Push Proxy Support
 		swabby: TCP/UDP Connect back support
 		swabby: Pongs only sent for hosts directly connected
 	
 	jthomps: Removed mutex, moved to GnucCOM
 	swabby: Revised Gnutella/G2 SuperNode balancing system, both use same algorithm	
+	swabby: Improved NAT detection
 	swabby: Firewalled tag added to G2 Query Hit packets
 	swabby: Download re-search performed with standard search class
 	swabby: gdna namespace created to avoid inter-lib conflicts

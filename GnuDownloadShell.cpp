@@ -249,7 +249,7 @@ void CGnuDownloadShell::AddHost(FileSource HostInfo)
 	HostInfo.Error     = "";
 	HostInfo.RetryWait = 0;
 	HostInfo.Tries     = 0;
-	HostInfo.Status  = FileSource::eUntested;
+	HostInfo.Status    = FileSource::eUntested;
 
 	HostInfo.RealBytesPerSec	= 0;
 
@@ -863,6 +863,14 @@ void CGnuDownloadShell::BackupHosts()
 		Backup += "Stable="			+ NumtoStr(m_Queue[i].Stable) + "\n";
 		Backup += "ActualSpeed="	+ NumtoStr(m_Queue[i].ActualSpeed) + "\n";
 		Backup += "PushID="			+ EncodeBase16((byte*) &m_Queue[i].PushID, 16) + "\n";
+
+		CString Nodes;
+		for(int x = 0; x < m_Queue[i].DirectHubs.size(); x++)
+			Nodes += IPv4toStr( m_Queue[i].DirectHubs[x]) + ", ";
+
+		Nodes.Trim(", ");
+		if(!Nodes.IsEmpty())
+			Backup += "Direct="	+ Nodes + "\n";
 	}
 
 	BackupFile.Write(Backup, Backup.GetLength());
@@ -943,79 +951,92 @@ void CGnuDownloadShell::Erase()
 	DeleteFile(MetaPath);
 }
 
-void CGnuDownloadShell::AddAltLocation(AltLocation AltLoc)
+void CGnuDownloadShell::AddAltLocation(CString strAddr)
 {
-	if(StrtoIP(AltLoc.HostPort.Host).S_addr == m_pNet->m_CurrentIP.S_addr)
-		return;
+	// Need special function to apply default port
 
-	if(m_pPrefs->m_ForcedHost.S_addr)
-		if(StrtoIP(AltLoc.HostPort.Host).S_addr == m_pPrefs->m_ForcedHost.S_addr)
-			return;
+	IPv4 Address;
+	Address.Host = StrtoIP( ParseString(strAddr, ':') );
+	
+	if( !strAddr.IsEmpty() )
+		Address.Port = atoi( strAddr );
+	else
+		Address.Port = 6346; // lime doesnt send port all the time
 
-	bool found = false;
-
-	for(int i = 0; i < m_AltHosts.size(); i++)
-		if(AltLoc == m_AltHosts[i])
-		{
-			found = true;
-			m_AltHosts[i].HostPort.LastSeen = CTime::GetCurrentTime() - LocalTimeZone();
-			break;
-		}
-
-	if(!found)
-		m_AltHosts.push_back(AltLoc);
+	AddAltLocation(Address);
 }
 
-void CGnuDownloadShell::AddAltLocation(CString locStr)
+void CGnuDownloadShell::AddAltLocation(IPv4 Address)
 {
-	// Need to tidy up the string first
-	
-	locStr.Replace("\r\n", " "); // Change EOL to space
-	locStr.Replace("\t", " ");	 // Change TAB to space
-	locStr.Replace("  "," ");	 // Change Double space to single space
+	ASSERT(Address.Port);
+	if(Address.Port == 0)
+		return;
 
-	CString temp = ParseString(locStr);
-	
-	while (!temp.IsEmpty())
-	{
-		// we have something so try to convert to an AltLocation
-		AltLocation AltLoc = temp;
-		AltLoc.Sha1Hash    = m_Sha1Hash;
+	if( IsPrivateIP(Address.Host) )
+		return;
 
-		if (AltLoc.isValid())
+	if( !m_pNet->NotLocal( Node( IPtoStr(Address.Host), Address.Port) ) )
+		return;
+
+	for(int i = 0; i < m_AltHosts.size(); i++)
+		if(Address.Host.S_addr == m_AltHosts[i].Host.S_addr)
 		{
-			//  Make sure its not local
-			if(StrtoIP(AltLoc.HostPort.Host).S_addr == m_pNet->m_CurrentIP.S_addr)
-				return;
-
-			if(m_pPrefs->m_ForcedHost.S_addr)
-				if(StrtoIP(AltLoc.HostPort.Host).S_addr == m_pPrefs->m_ForcedHost.S_addr)
-					return;
-
-			bool LocFound   = false;
-		
-			for(int i = 0; i < m_AltHosts.size(); i++)
-				if (AltLoc == m_AltHosts[i])
-					{
-						LocFound = true;
-						break;
-					}
-				
-			if (!LocFound)
-				m_AltHosts.push_back(AltLoc);
-
-
-			while(m_AltHosts.size() > 25)
-				m_AltHosts.pop_front();
-
-
-			FileSource Info = FileSource(AltLoc);
-			Info.Size   = m_FileLength;
-			AddHost(Info);
+			m_AltHosts[i] = Address; // maybe new port
+			return;
 		}
 
-		temp = ParseString(locStr);
+	m_AltHosts.push_back(Address);
+
+	FileSource Info;
+	Info.Address  = Address;
+	Info.Size     = m_FileLength;
+	Info.Sha1Hash = m_Sha1Hash;
+
+	AddHost(Info);
+}
+
+CString CGnuDownloadShell::GetAltLocHeader(IP ToIP, int HostCount)
+{
+	CString Header = "X-Alt: ";
+
+	int j = 0;
+
+	if(m_AltHosts.size() < HostCount)
+		HostCount = m_AltHosts.size(); 
+
+	std::vector<int> HostIndexes;
+
+	// Get random indexes to send to host
+	while(HostCount > 0)
+	{
+		HostCount--;
+
+		int NewIndex = rand() % m_AltHosts.size() + 0;
+
+		if(ToIP.S_addr == m_AltHosts[NewIndex].Host.S_addr)
+			continue;
+
+		bool found = false;
+
+		for(j = 0; j < HostIndexes.size(); j++)
+			if(HostIndexes[j] == NewIndex)
+				found = true;
+
+		if(!found)
+			HostIndexes.push_back(NewIndex);
 	}
+
+	for(j = 0; j < HostIndexes.size(); j++)
+		Header += IPv4toStr(m_AltHosts[ HostIndexes[j] ]) + ", ";
+
+	if( HostIndexes.size() == 0)
+		return "";
+
+	Header.Trim(", ");
+	
+	Header += "\r\n";
+
+	return Header;
 }
 
 CString CGnuDownloadShell::GetFilePath()
@@ -1077,48 +1098,6 @@ void CGnuDownloadShell::ReSearch()
 	m_Retry     = false;
 }
 
-CString CGnuDownloadShell::GetAltLocationHeader(CString ToIP, int HostCount)
-{
-	CString Headers;
-
-	int j = 0;
-
-	if(m_AltHosts.size() < HostCount)
-		HostCount = m_AltHosts.size(); 
-
-	std::vector<int> HostIndexes;
-
-	// Get random indexes to send to host
-	while(HostCount > 0)
-	{
-		HostCount--;
-
-		int NewIndex = rand() % m_AltHosts.size() + 0;
-
-		if(ToIP == m_AltHosts[NewIndex].HostPort.Host)
-			continue;
-
-		bool found = false;
-
-		for(j = 0; j < HostIndexes.size(); j++)
-			if(HostIndexes[j] == NewIndex)
-				found = true;
-
-		if(!found)
-			HostIndexes.push_back(NewIndex);
-	}
-
-	for(j = 0; j < HostIndexes.size(); j++)
-	{
-		CString AltStr = m_AltHosts[ HostIndexes[j] ].GetString();
-
-		if(!AltStr.IsEmpty())
-			Headers += "Alt-Location: " + AltStr + "\r\n";
-	}
-
-	
-	return Headers;
-}
 
 CString CGnuDownloadShell::AvailableRangesCommaSeparated()
 {
@@ -1311,6 +1290,7 @@ bool CGnuDownloadShell::PartVerified(int PartNumber)
 				if( m_PartList[i].StartByte < pPart->StartByte + m_TreeRes)
 					m_PartList[i].Verified = true;
 			
+			tt2_init(&Tiger_Context); // frees tree memory
 			return true;
 		}
 	
@@ -1327,6 +1307,8 @@ bool CGnuDownloadShell::PartVerified(int PartNumber)
 			m_PartList[i].SourceHostID   = 0;
 		}
 
+	tt2_init(&Tiger_Context); // frees tree memory
+	
 	return false;
 }
 

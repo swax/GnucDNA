@@ -476,11 +476,16 @@ CGnuDownloadShell* CGnuTransfers::LoadDownloadHosts(CString FilePath)
 			nResult.ActualSpeed = atoi(GetBackupString("ActualSpeed", CurrentPos, Backup)) != 0;
 			DecodeBase16(GetBackupString("PushID", CurrentPos, Backup), 32, (byte*) &nResult.PushID);
 
+			CString Nodes = GetBackupString("Direct", CurrentPos, Backup);
+			while(!Nodes.IsEmpty())
+				nResult.DirectHubs.push_back( StrtoIPv4(ParseString(Nodes, ',')) );
 
 			nResult.GnuRouteID = 0;
 			nResult.Distance = 7;
 			//nResult.Icon     = m_pCore->GetIconIndex(nResult.Name);
 		
+			
+
 			Download->AddHost(nResult);
 		}
 
