@@ -41,7 +41,7 @@ public:
 	CString GetAttributeName(int AttributeID);
 
 	CString AttrMaptoFileXML( std::map<int, CString> &AttrMap );
-	CString AttrMaptoNetXML( std::map<int, CString> &AttrMap, int Index = 0 );
+	CString AttrMaptoNetXML( std::map<int, CString> &AttrMap, int Index = -1 );
 	
 
 	CGnuMeta* m_pMeta;

@@ -512,7 +512,7 @@ CString CGnuSchema::AttrMaptoNetXML( std::map<int, CString> &AttrMap, int Index 
 {	
 	CString NetXML = "<" + m_Name;
 		
-	if( Index )
+	if( Index != -1 )
 		NetXML += " index=\"" + NumtoStr(Index) + "\"";
 
 	// Add attributes

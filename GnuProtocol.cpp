@@ -307,13 +307,13 @@ void CGnuProtocol::Receive_Query(Gnu_RecvdPacket &Packet)
 		}
 
 		// Test too see routed last hop queries are correct
-#ifdef _DEBUG
+/*#ifdef _DEBUG
 		if(Query->Header.TTL == 0 && pNode->m_SupportInterQRP)
 		{
 			CString Text((char*) Query + 25);
 			TRACE0("INTER-QRP:" + Text + "\n");
 		}
-#endif
+#endif*/
 
 
 		bool OOB = false;
@@ -1354,7 +1354,7 @@ void CGnuProtocol::Send_Query(byte* Packet, int length)
 	Query->Reserved = 0;		// bit 0 to 8, Was reserved to indicate the number of max query hits expected, 0 if no maximum   
 	
 	Query->Flags = 0;
-	//if(m_pNet->m_UdpFirewall == UDP_FULL) 
+	if(m_pNet->m_UdpFirewall == UDP_FULL) 
 		Query->Flags |= 1 << 2;	// bit 10, I understand and desire Out Of Band queryhits via UDP   
 	
 	//Query->Flags |= 1 << 3;	// bit 11 I understand the H GGEP extension in queryhits

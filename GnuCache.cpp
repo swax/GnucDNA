@@ -1137,6 +1137,9 @@ bool CGnuCache::ValidURL(CString WebHost)
 	char c;
 	CString validChars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789:.-/~_";
 
+	WebHost.Replace("%3A",":");
+	WebHost.Replace("%2F","/");
+
 	if( WebHost.Find("http://") != 0 )
 		return false;
 
