@@ -538,6 +538,9 @@ UINT CGnuShare::ShareWorker(LPVOID pVoidShare)
 	CGnuNetworks* pNet      = pCore->m_pNet;
 	CGnuWordHash* pWordHash = pShare->m_pWordTable;
 	
+	// wait for saved hashes to load before loading files etc..
+	WaitForSingleObject( (HANDLE) pShare->m_HashReady, INFINITE);
+
 	// Search vars
 	GnuQuery FileQuery;
 	

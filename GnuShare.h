@@ -41,6 +41,7 @@ public:
 
 	void Timer();
 
+	CEvent m_HashReady;
 	
 	// Functions called from share thread
 	void LoadFiles();

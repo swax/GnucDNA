@@ -52,16 +52,6 @@ CGnuFileHash::CGnuFileHash(CGnuShare* pShare)
 
 	m_pHashThread = NULL;
 
-	try
-	{
-		LoadShareHashes(m_pCore->m_RunPath + "GnuHashes.ini");
-	}
-	catch(...)
-	{
-		DeleteFile(m_pCore->m_RunPath + "GnuHashes.ini");
-		LoadShareHashes(m_pCore->m_RunPath + "GnuHashes.ini");
-	}
-
 	m_StopThread  = false;
 	m_StopHashing = false;
 
@@ -79,8 +69,6 @@ CGnuFileHash::CGnuFileHash(CGnuShare* pShare)
 
 CGnuFileHash::~CGnuFileHash()
 {
-	SaveShareHashes(m_pCore->m_RunPath + "GnuHashes.ini");
-
 	for(int i = 0; i < m_HashedFiles.size(); i++) 
 		if(m_HashedFiles[i].TigerTree)
 			delete [] m_HashedFiles[i].TigerTree;
@@ -100,7 +88,22 @@ UINT HashWorker(LPVOID pVoidHash)
 	CGnuFileHash* pHash  = (CGnuFileHash*) pVoidHash;
 	CGnuShare*    pShare = (CGnuShare*) pHash->m_pShare;
 	
+	// load saved hashes 
 
+	try
+	{
+		pHash->LoadShareHashes(pHash->m_pCore->m_RunPath + "GnuHashes.ini");
+	}
+	catch(...)
+	{
+		DeleteFile(pHash->m_pCore->m_RunPath + "GnuHashes.ini");
+		pHash->LoadShareHashes(pHash->m_pCore->m_RunPath + "GnuHashes.ini");
+	}
+
+	// trigger share thread to load files
+	pShare->m_HashReady.SetEvent();
+
+	// hash files
 	LARGE_INTEGER StartTime, EndTime;
 
 	CFileLock HashFile;

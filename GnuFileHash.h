@@ -6,7 +6,7 @@ class CGnuShare;
 class CGnuCore;
 
 #define HASH_FILE_VERSION 2
-#define HASH_SAVE_INTERVAL (1 * 60)
+#define HASH_SAVE_INTERVAL (5 * 60)
 
 struct HashedFile;
 
