@@ -2,6 +2,28 @@
 
 #include "Gnushare.h"
 
+#define REGISTER_SCHEMA_CLASS(theClass, sXSDFile)		\
+											CSchemaRegistrator reg##theClass(theClass::GetSchemaInstance); \
+											CGnuSchema*	theClass::GetSchemaInstance(std::string FileName) \
+											{ \
+												std::transform(FileName.begin(), FileName.end(), FileName.begin(), tolower); \
+												if (FileName == sXSDFile) \
+													return new theClass(); \
+												else \
+													return NULL; \
+											}
+
+#define DECLARE_SCHEMA_CLASS()				static CGnuSchema*	GetSchemaInstance(std::string FileName);
+
+class CGnuSchema;
+typedef CGnuSchema* (*getSchInstanceProc)(std::string FileName);
+
+class CSchemaRegistrator
+{
+public:
+	CSchemaRegistrator(getSchInstanceProc proc);
+};
+
 struct ElementAttribute
 {
 	int AttributeID;
@@ -80,4 +102,8 @@ public:
 
 	// Temp
 	SharedFile* m_CurrentFile;
+
+	//////////////////////////////////////////////////////////////////////////
+	static	std::vector<getSchInstanceProc>	vecClassFactory;
+	static	CGnuSchema*	GetSchemaInstance(std::string FileName);
 };

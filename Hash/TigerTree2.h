@@ -12,7 +12,6 @@
  * Please see file COPYING or http://bitzi.com/publicdomain 
  * for more info.
  *
- * $Id: TigerTree2.h,v 1.2 2004/05/22 09:27:20 swabby Exp $
  */
 #pragma once
 
@@ -55,6 +54,12 @@ typedef struct tt2_context {
 	  tree = NULL;
   }
 
+  ~tt2_context()
+  {
+	  if (tree)
+		  delete [] tree;
+  }
+	
 } TT2_CONTEXT;
 
 void tt2_init(TT2_CONTEXT *ctx);

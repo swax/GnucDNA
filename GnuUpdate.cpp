@@ -206,8 +206,7 @@ UINT ResolveWorker(LPVOID pVoidUpdate)
 
 	} while(FreshHost);
 
-
-	ExitThread(0);
+	return 0;
 }
 	
 

@@ -15,6 +15,7 @@ class CGnuSchemaApp : public CGnuSchema
 public:
 	CGnuSchemaApp(void);
 	virtual ~CGnuSchemaApp(void);
+	DECLARE_SCHEMA_CLASS()
 
 	virtual void LoadData(SharedFile &File);
 

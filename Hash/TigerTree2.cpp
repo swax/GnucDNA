@@ -38,8 +38,6 @@
  *
  *    http://www.cs.technion.ac.il/~biham/Reports/Tiger/
  *
- * $Id: TigerTree2.cpp,v 1.1 2004/04/06 04:45:39 swabby Exp $
- *
  */
 
 #include "StdAfx.h"

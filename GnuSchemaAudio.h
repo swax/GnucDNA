@@ -110,6 +110,8 @@ enum ENEMPHASIS
 class CGnuSchemaAudio : public CGnuSchema
 {
 public:
+	DECLARE_SCHEMA_CLASS()
+	
 	CGnuSchemaAudio();
 	virtual ~CGnuSchemaAudio(void);
 

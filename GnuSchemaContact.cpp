@@ -26,6 +26,8 @@
 #include "StdAfx.h"
 #include "GnuSchemaContact.h"
 
+REGISTER_SCHEMA_CLASS(CGnuSchemaContact, "contact.xsd")
+
 CGnuSchemaContact::CGnuSchemaContact(void)
 {
 }

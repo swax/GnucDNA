@@ -147,7 +147,6 @@ BOOL CFileLock::Open(LPCTSTR lpszFileName, UINT nOpenFlags, bool IgnoreID3, CFil
 		SeekToBegin();
 	}
 
-
 	return FileOpened;
 }
 

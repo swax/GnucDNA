@@ -26,6 +26,8 @@
 #include "StdAfx.h"
 #include "GnuSchemaAudio.h"
 
+REGISTER_SCHEMA_CLASS(CGnuSchemaAudio, "audio.xsd")
+
 CGnuSchemaAudio::CGnuSchemaAudio(void)
 {
 	SetAttributeReadOnly("BitRate");

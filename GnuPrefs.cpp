@@ -268,19 +268,8 @@ void CGnuPrefs::LoadConfig(CString ConfigFile)
 				}
 
 				// Insert directory
-				SharedDirectory Directory;
-				Directory.Name		= RealName;
-				Directory.Recursive = Recurse;
-				Directory.Size		= 0;
-				Directory.FileCount = 0;
-
 				if(!RealName.IsEmpty())
-				{
-					Directory.DirID = m_pShare->m_NextDirID++;
-					m_pShare->m_DirIDMap[Directory.DirID] = m_pShare->m_SharedDirectories.size();
-
-					m_pShare->m_SharedDirectories.push_back(Directory);
-				}
+					m_pShare->AddSharedDir(RealName, Recurse);
 				else
 					continue;
 			}
@@ -298,6 +287,8 @@ void CGnuPrefs::LoadConfig(CString ConfigFile)
 	m_SendOnlyAvail = (0 != atoi(buffer));
 
 	// Transfer
+	CString OldPartialDir = m_PartialDir;
+	
 	GetPrivateProfileString("Transfer",	"PartialDir",		m_pCore->m_RunPath + "Partials",	buffer, 256, ConfigFile);
 	m_PartialDir = buffer;
 	GetPrivateProfileString("Transfer",  "MaxDownloads",		"5",	buffer, 256, ConfigFile);
@@ -339,9 +330,8 @@ void CGnuPrefs::LoadConfig(CString ConfigFile)
 	if(m_PartialDir == m_DownloadPath)
 		m_PartialDir = m_DownloadPath + "\\Partials";
 
-
-	m_pCore->m_pTrans->LoadDownloads();
-
+	if(OldPartialDir != m_PartialDir)
+		m_pCore->m_pTrans->LoadDownloads();
 
 	m_pShare->m_UpdateShared = true;
 	m_pShare->m_TriggerThread.SetEvent(); 

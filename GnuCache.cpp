@@ -566,10 +566,7 @@ UINT WebCacheWorker(LPVOID pVoidCache)
 				attempts--;
 
 			if ( pCache->m_StopThread )
-			{
-				ExitThread(0);
 				return 0;
-			}
 		}
 	}
 
@@ -602,10 +599,7 @@ UINT WebCacheWorker(LPVOID pVoidCache)
 				attempts--;
 
 			if(pCache->m_StopThread)
-			{
-				ExitThread(0);
 				return 0;
-			}
 		}
 		
 	}
@@ -663,10 +657,7 @@ UINT WebCacheWorker(LPVOID pVoidCache)
 				attempts--;
 			}
 			if(pCache->m_StopThread)
-			{
-				ExitThread(0);
 				return 0;
-			}
 		}
 	}	
 	// *** ADD CACHE ***
@@ -680,10 +671,7 @@ UINT WebCacheWorker(LPVOID pVoidCache)
 		CString strFile = pCache->WebCacheDoRequest(pCache->m_NewSite + "?ping=1");
 		
 		if(pCache->m_StopThread)
-		{
-			ExitThread(0);
 			return 0;
-		}
 
 		if ( strFile.Find("|") == 1 )
 			GWCVer = GWC_VERSION2;
@@ -733,10 +721,7 @@ UINT WebCacheWorker(LPVOID pVoidCache)
 				}
 
 				if(pCache->m_StopThread)
-				{
-					ExitThread(0);
 					return 0;
-				}
 			}
 
 			// Add New Cache to our list
@@ -747,14 +732,14 @@ UINT WebCacheWorker(LPVOID pVoidCache)
 
 			if(pCache->ValidURL(pCache->m_NewSite) && AddHost)
 				pCache->m_AltWebCaches.push_back( AltWebCache(pCache->m_NewSite,ALIVE,CTime::GetCurrentTime(),0,GWCVer) );
-
 		}
 		else
 		{
 			pCore->LogError("Couldn't add cache " + pCache->m_NewSite + ", did not respond correctly");
 		}
 
-		pCache->m_TotalSites=1; pCache->m_TriedSites=1;
+		pCache->m_TotalSites = 1;
+		pCache->m_TriedSites = 1;
 	}
 	// *** GET REQUEST ***
 	else if ( pCache->m_WebMode == MODE_GET )
@@ -788,10 +773,7 @@ UINT WebCacheWorker(LPVOID pVoidCache)
 				attempts--;
 
 			if(pCache->m_StopThread)
-			{
-				ExitThread(0);
 				return 0;
-			}
 		}
 
 	}
@@ -814,7 +796,7 @@ UINT WebCacheWorker(LPVOID pVoidCache)
 	
 	pCache->m_ThreadEnded = true;
 
-	ExitThread(0);
+	return 0;
 }
 
 // this function actually sends the request

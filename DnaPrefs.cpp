@@ -105,12 +105,10 @@ LONG CDnaPrefs::GetForcedPort(void)
 
 void CDnaPrefs::SetForcedPort(LONG newVal)
 {
- 
+ 	m_gnuPrefs->m_ForcedPort = newVal;
 
 	if(m_dnaCore->m_gnuCore->m_pNet)
 		m_dnaCore->m_gnuCore->m_pNet->StartListening();
-
-	m_gnuPrefs->m_ForcedPort = newVal;
 }
 
 LONG CDnaPrefs::GetSpeedStat(void)
@@ -340,7 +338,8 @@ CString CDnaPrefs::GetDownloadPath(void)
 
 void CDnaPrefs::SetDownloadPath(LPCTSTR newVal)
 {
-	  
+	CreateDirectory(newVal, NULL);
+	CreateDirectory(CString(newVal) + "\\Partials", NULL);	  
 
 	MoveFile(m_gnuPrefs->m_DownloadPath, newVal);
 	MoveFile(m_gnuPrefs->m_DownloadPath + "\\Partials", CString(newVal) + "\\Partials");

@@ -29,12 +29,6 @@
 #include "GnuShare.h"
 
 #include "GnuSchema.h"
-#include "GnuSchemaAudio.h"
-#include "GnuSchemaApp.h"
-#include "GnuSchemaImage.h"
-#include "GnuSchemaVideo.h"
-#include "GnuSchemaContact.h"
-
 #include "GnuMeta.h"
 
 
@@ -105,24 +99,7 @@ void CGnuMeta::LoadSchemaFile(CString FilePath)
 	// Determine which schema class to use
 	CGnuSchema* pSchema = NULL;
 
-	if(SchemaFile.CompareNoCase("audio.xsd") == 0)
-		pSchema = new CGnuSchemaAudio();
-
-	else if(SchemaFile.CompareNoCase("application.xsd") == 0)
-		pSchema = new CGnuSchemaApp();
-
-	else if(SchemaFile.CompareNoCase("image.xsd") == 0)
-		pSchema = new CGnuSchemaImage();
-
-	else if(SchemaFile.CompareNoCase("video.xsd") == 0)
-		pSchema = new CGnuSchemaVideo();
-
-	else if(SchemaFile.CompareNoCase("contact.xsd") == 0)
-		pSchema = new CGnuSchemaContact();
-
-	else
-		pSchema = new CGnuSchema();
-
+	pSchema = CGnuSchema::GetSchemaInstance((LPCSTR)SchemaFile);
 
 	// Check if definition already loaded
 	for(int i = 0; i < m_MetaList.size(); i++)
@@ -165,7 +142,8 @@ void CGnuMeta::LoadFileMeta(SharedFile &File)
 		{
 			m_MetaList[i]->LoadData(File);
 
-			break;
+			if (File.MetaID != 0)
+				break;
 		}
 }
 

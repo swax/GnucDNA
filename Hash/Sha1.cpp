@@ -9,7 +9,6 @@
  * Adapted to pike and some cleanup by Niels Möller.
  */
 
-/* $Id: Sha1.cpp,v 1.1 2004/04/06 04:45:39 swabby Exp $ */
 
 /* SHA: NIST's Secure Hash Algorithm */
 

@@ -520,7 +520,7 @@ void CGnuUpload::Send_HttpBusy()
 		Http503 += "<H1>Server Busy</H1>\r\n";
 		Http503 += "This server's upload max has been met, try again later.\r\n";
 		Http503 += "</BODY>\r\n";
-		Http503 += "</HTML>r\n";
+		Http503 += "</HTML>\r\n";
 	}
 			
 	// Send header

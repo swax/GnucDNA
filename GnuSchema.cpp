@@ -31,6 +31,7 @@
 #include "GnuMeta.h"
 #include "GnuSchema.h"
 
+std::vector<getSchInstanceProc>	CGnuSchema::vecClassFactory;
 
 CGnuSchema::CGnuSchema(void)
 {
@@ -580,12 +581,21 @@ void CGnuSchema::SetAttributeReadOnly(CString Name)
 			m_Attributes[i].ReadOnly = true;
 }
 
-// Opening compound storage files
-//LPSTORAGE pStorage = NULL;
-//
-//HRESULT myResult = StgOpenStorage(FilePath.AllocSysString(), NULL, STGM_SIMPLE | STGM_READ | STGM_SHARE_EXCLUSIVE , NULL, NULL, &pStorage);
-//
-//if(myResult != S_OK)
-//	return;
-//
-//pStorage->Release();
+CGnuSchema*	CGnuSchema::GetSchemaInstance(std::string FileName)
+{
+	CGnuSchema* pSchema = NULL;
+	std::vector<getSchInstanceProc>::iterator it = vecClassFactory.begin();
+
+	while (it != vecClassFactory.end() && pSchema == NULL)
+		pSchema = (*it++)(FileName);
+
+	if (!pSchema)
+		pSchema = new CGnuSchema();
+
+	return pSchema;
+}
+
+CSchemaRegistrator::CSchemaRegistrator(getSchInstanceProc proc)
+{
+	CGnuSchema::vecClassFactory.push_back(proc);
+}

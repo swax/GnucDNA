@@ -311,12 +311,15 @@ void CDnaNetwork::RemoveNode(LONG NodeID)
 
 LONG CDnaNetwork::GetNormalConnectedCount(void)
 {
-	
+	LONG Count = 0;
 
 	if( m_gnuNetwork->m_pGnu )
-		return m_gnuNetwork->m_pGnu->CountUltraConnects();
+		Count += m_gnuNetwork->m_pGnu->CountUltraConnects();
 
-	return 0;
+	if ( m_gnuNetwork->m_pG2 )
+		Count += m_gnuNetwork->m_pG2->CountHubConnects();
+
+	return Count;
 }
 
 CString CDnaNetwork::GetNodeHandshake(LONG NodeID)

@@ -27,6 +27,7 @@
 #include "meta/video.h"
 #include "GnuSchemaVideo.h"
 
+REGISTER_SCHEMA_CLASS(CGnuSchemaVideo, "video.xsd")
 
 CGnuSchemaVideo::CGnuSchemaVideo(void)
 {

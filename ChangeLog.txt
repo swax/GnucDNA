@@ -1,5 +1,9 @@
 GnucDNA 1.1.0.5
 	swabby: Fixed rare meta parsing mem leak
+	ruslan: Meta schemas made easier to add and remove
+	ruslan: Share add directory redone and event handles released
+	ruslan: GetNormalConnectedCount includes G2 Hubs
+	ruslan: ExitThread calls replaced with simple returns
 
 GnucDNA 1.1.0.4
 	swabby: Revised download re-search system
@@ -337,6 +341,7 @@ People:
 	jthomps: Jeff Thompson [jefft@threeputt.org]
 	killaw: [killaw@hotmail.com]
 	riot138: Clayton Rollins [crollins666@hotmail.com]
+	ruslan: Ruslan Vildanov [ruslanv@rapidsoft.ru]
 	swabby: John Marshall [swabby@c0re.net]
 	tor: Tor Klingberg [tor.klingberg@gmx.net]
 

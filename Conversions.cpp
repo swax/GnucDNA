@@ -609,7 +609,7 @@ CString GetVendor(CString VendorID)
 
 	if(VendorID == "MMMM") return "Morpheus v2";
 
-	if(VendorID == "MRPH") return "Morpheus v3";
+	if(VendorID == "MRPH") return "Morpheus";
 	
 	if(VendorID == "NAPS") return "NapShare";
 

@@ -27,6 +27,7 @@
 
 #include "GnuSchemaApp.h"
 
+REGISTER_SCHEMA_CLASS(CGnuSchemaApp, "application.xsd")
 
 CGnuSchemaApp::CGnuSchemaApp(void)
 {

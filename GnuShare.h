@@ -28,6 +28,8 @@ public:
 	void	StopShare(UINT);
 	void    endThreads();
 
+	bool AddSharedDir(CString strPath, bool bRecursive);
+
 	CString GetFilePath(int index);
 	CString GetFileName(int index);
 	CString GetFileHash(int index, int HashType);
@@ -44,6 +46,7 @@ public:
 	void LoadFiles();
 	void RecurseLoad(CString, CString, bool, DWORD &, DWORD &);
 	void ResetDirectories(DWORD &, LPHANDLE);
+	void ReleaseEventList(DWORD &EventCount, LPHANDLE EventList);
 
 	DWORD m_TotalLocalFiles;
 	DWORD m_TotalLocalSize;

@@ -121,10 +121,7 @@ UINT HashWorker(LPVOID pVoidHash)
 			WaitForSingleObject(pHash->m_HashEvent, INFINITE);
 
 		if(pHash->m_StopThread)
-		{
-			ExitThread(0);
 			return 0;
-		}
 
 		if(pHash->m_EverythingHashed || pHash->m_StopHashing)
 			continue;
@@ -191,7 +188,6 @@ UINT HashWorker(LPVOID pVoidHash)
 			if(pHash->m_StopThread)
 			{
 				tt2_init(&Tiger_Context);
-				ExitThread(0);
 				return 0;
 			}
 			
@@ -269,8 +265,7 @@ UINT HashWorker(LPVOID pVoidHash)
 					for(i = 0; i < pShare->m_SharedFiles.size(); i++)
 						if(pShare->m_SharedFiles[i].Index == FileIndex)
 						{
-							FileID = pShare->m_SharedFiles[i].FileID
-								;
+							FileID = pShare->m_SharedFiles[i].FileID;
 							pShare->m_SharedFiles[i].Size = FileSize;
 							
 							pShare->m_SharedFiles[i].HashValues[HASH_SHA1]      = Sha1_String;
@@ -322,6 +317,9 @@ UINT HashWorker(LPVOID pVoidHash)
 			if( EndTime.QuadPart - StartTime.QuadPart > MaxTicks)
 				break;
 		}
+	
+		if (pHash->m_StopThread)
+			return 0;
 	}
 
 	tt2_init(&Tiger_Context);
@@ -330,7 +328,7 @@ UINT HashWorker(LPVOID pVoidHash)
 
 	TRACE0("*** Hash Thread Ended\n");
 
-	ExitThread(0);
+	return 0;
 }
 
 

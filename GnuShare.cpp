@@ -125,6 +125,32 @@ CGnuShare::~CGnuShare()
 	m_pWordTable = NULL;
 }
 
+bool CGnuShare::AddSharedDir(CString strPath, bool bRecursive)
+{
+	strPath.MakeLower();
+	
+	SharedDirectory Directory;
+	Directory.Name		= strPath;
+	Directory.Recursive = bRecursive;
+	Directory.Size		= 0;
+	Directory.FileCount = 0;
+
+	bool IsNewDirectory = true;
+	
+	for (int i = 0; i < m_SharedDirectories.size(); ++i)
+		if (m_SharedDirectories[i].Name == Directory.Name)
+			IsNewDirectory = false;
+
+	if (IsNewDirectory)
+	{
+		Directory.DirID = m_NextDirID++;
+		m_DirIDMap[Directory.DirID] = m_SharedDirectories.size();
+
+		m_SharedDirectories.push_back(Directory);
+	}
+
+	return IsNewDirectory;
+}
 
 void CGnuShare::endThreads()
 {
@@ -159,15 +185,20 @@ void CGnuShare::InitShare()
 	GnuStartThread(m_pShareThread, ShareWorker, this);
 }
 
+void CGnuShare::ReleaseEventList(DWORD &EventCount, LPHANDLE EventList)
+{
+	// Close wait events on all directories
+	for(int i = 1; i < EventCount; i++)
+		FindCloseChangeNotification( EventList[i]);
+
+	EventCount = 1;
+}
+
 void CGnuShare::ResetDirectories(DWORD &EventCount, LPHANDLE EventList)
 {
 	m_FilesAccess.Lock();
 
-		// Close wait events on all directories
-		for(int i = 1; i < EventCount; i++)
-			FindCloseChangeNotification( EventList[i]);
-
-		EventCount = 1;
+		ReleaseEventList(EventCount, EventList);
 
 		// Reset partial watch
 		EventList[1] = FindFirstChangeNotification(m_pCore->m_pPrefs->m_PartialDir, false, FILE_NOTIFY_CHANGE_FILE_NAME | FILE_NOTIFY_CHANGE_DIR_NAME);
@@ -176,7 +207,7 @@ void CGnuShare::ResetDirectories(DWORD &EventCount, LPHANDLE EventList)
 			EventCount++;
 
 		// Reset wait events on all shared directories
-		for(i = 0; i < m_SharedDirectories.size(); i++)
+		for(int i = 0; i < m_SharedDirectories.size(); i++)
 		{
 			if(EventCount >= MAX_EVENTS)
 				break;
@@ -521,7 +552,6 @@ UINT CGnuShare::ShareWorker(LPVOID pVoidShare)
 		if(pShare->m_StopThread)
 		{
 			TRACE0("*** Search Thread Ended\n");
-			ExitThread(0);
 			return 0;
 		}
 
@@ -553,7 +583,6 @@ UINT CGnuShare::ShareWorker(LPVOID pVoidShare)
 			if(pShare->m_StopThread)
 			{
 				TRACE0("*** Search Thread Ended\n");
-				ExitThread(0);
 				return 0;
 			}
 
@@ -657,10 +686,10 @@ UINT CGnuShare::ShareWorker(LPVOID pVoidShare)
 		}		
 	}
 
+	pShare->ReleaseEventList(EventCount, EventList);
 
 	TRACE0("*** Search Thread Ended\n");
-	
-	ExitThread(0);
+	return 0;
 }
 
 void CGnuShare::ShareUpdate(UINT FileID)

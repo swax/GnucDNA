@@ -27,6 +27,8 @@
 #include "meta/image.h"
 #include "GnuSchemaImage.h"
 
+REGISTER_SCHEMA_CLASS(CGnuSchemaImage, "image.xsd")
+
 CGnuSchemaImage::CGnuSchemaImage(void)
 {
 	SetAttributeReadOnly("colors");
