@@ -337,15 +337,18 @@ void CDnaDownload::ReSearch(LONG DownloadID)
 
 CString CDnaDownload::GetHash(LONG DownloadID, LONG HashID)
 {
-	
-
 	CString strResult;
 
 	std::map<int, CGnuDownloadShell*>::iterator itDL = m_gnuTrans->m_DownloadMap.find(DownloadID);
 
 	if(itDL != m_gnuTrans->m_DownloadMap.end())
+	{
 		if(HashID == HASH_SHA1)
 			strResult = itDL->second->m_Sha1Hash;
+
+		if(HashID == HASH_TIGERTREE)
+			strResult = itDL->second->m_TigerHash;
+	}
 
 	return strResult;
 }

@@ -170,6 +170,8 @@ struct FileSource
 	int		  RetryWait;
 	int		  Tries;
 	bool	  TigerSupport;
+	bool	  TigerUseThex;
+	CString   TigerPath;
 	bool	  PushSent;
 
 	enum States 
@@ -231,6 +233,7 @@ struct FileSource
 		RetryWait	 = 0;
 		Tries		 = 0;
 		TigerSupport = false;
+		TigerUseThex = false;
 		PushSent     = false;
 
 		Status = States::eUntested;

@@ -39,7 +39,6 @@ public:
 	void SetError(CString);
 	void Timer();
 
-
 	FileSource* HostInfo();
 
 
@@ -60,10 +59,11 @@ public:
 	bool m_TigerRequest;
 	int  m_TigerLength;
 	int  m_TigerPos;
+	byte* m_TigerReqBuffer;
 	byte* m_tempTigerTree;
 	int	  m_tempTreeSize;
 	int	  m_tempTreeRes;
-
+	
 
 	// Queue info
 	int m_QueuePos;
@@ -120,4 +120,59 @@ public:
 	int	   m_nSecsDead;
 
 	FileSource dumbResult;
+};
+
+struct DimeRecord
+{
+	bool First;
+	bool Last;
+	bool Chunked;
+
+	byte tType;
+
+	CString Options;
+	uint16  OptionsLength;
+
+	CString ID;
+	uint16  IDLength;
+
+	CString Type;
+	uint16  TypeLength;
+
+	byte* Data;
+	int   DataLength;
+
+	DimeRecord()
+	{
+		First   = false;
+		Last    = false;
+		Chunked = false;
+
+		OptionsLength = 0;
+		IDLength      = 0;
+		TypeLength    = 0;
+
+		Data   = NULL;
+		DataLength = 0;
+	}
+};
+
+
+// DIME Stuff
+
+class DIME
+{
+public:
+	DIME(byte* pData, int length);
+
+	enum ReadResult { READ_GOOD, READ_INCOMPLETE, READ_ERROR };
+	enum RecordType { UNCHANGED, MEDIA_TYPE, ABSOLUTE_URI, UNKNOWN, NONE};
+
+	ReadResult ReadNextRecord(DimeRecord &Record);
+
+	byte* m_pData;
+	int   m_Length;
+
+	byte* m_pNextPos;
+	int   m_BytesLeft;
 };

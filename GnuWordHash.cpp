@@ -120,7 +120,7 @@ void CGnuWordHash::InsertString(std::basic_string<char> Name, int Index, bool Br
 		bool AddWord = true;
 
 		// Check if word is already in table
-		if(m_HashTable[WordHash].LocalKey)
+		if(m_HashTable[WordHash].LocalKey && Index)
 			for(j = 0; j < m_HashTable[WordHash].LocalKey->size(); j++)
 				if(m_HashTable[WordHash].LocalKey->at(j).Text.compare(CurrentWord) == 0)
 				{	
@@ -145,7 +145,7 @@ void CGnuWordHash::InsertString(std::basic_string<char> Name, int Index, bool Br
 				}
 
 		// If not add word to table
-		if(AddWord)
+		if(AddWord && Index)
 		{
 			WordData NewWord;
 			NewWord.Text = CurrentWord;

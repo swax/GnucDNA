@@ -74,6 +74,7 @@ CGnuDownload::CGnuDownload(CGnuDownloadShell* pShell, int HostID)
 	m_TigerRequest  = false;
 	m_TigerLength   = 0;
 	m_TigerPos      = 0;
+	m_TigerReqBuffer = NULL;
 	m_tempTigerTree = NULL;
 	m_tempTreeSize  = 0;
 	m_tempTreeRes   = 0;
@@ -112,6 +113,9 @@ CGnuDownload::~CGnuDownload()
 
 	if(m_hSocket != INVALID_SOCKET)
 		AsyncSelect(0);
+
+	if(m_TigerReqBuffer)
+		delete [] m_TigerReqBuffer;
 
 	if(m_tempTigerTree)
 		delete [] m_tempTigerTree;
@@ -378,28 +382,70 @@ void CGnuDownload::OnReceive(int nErrorCode)
 			CParsedHeaders ParsedHeaders (m_Header);
 
 
-			// Get Tiger Root Hash
-			CString TigerURN = ParsedHeaders.FindHeader("X-TigerTree-Path");
-			TigerURN.MakeLower();
+			// Get Correct Tiger uri
 
-			if(TigerURN.Left(39) == "/gnutella/tigertree/v3?urn:tree:tiger/:")
+			// old dna/raza X-TigerTree-Path: ...
+			// raza X-Thex-URI: /gnutella/thex/v1?urn:tree:tiger/:C2GKRKXQYZR3C2SCUGSMBRT7VOILXTGRS5A5GLY&depth=9&ed2k=0
+			// lime X-Thex-URI: /uri-res/N2X?urn:sha1:YWSC2W6KZ3ZXDM2242CDJ7S5QECLBU22;VZZE5DTQ3YLA2CTP3BJ4SCQOKU7TWDYXPTFFLGQ
+
+			CString TigerPath;
+
+			if( TigerPath.IsEmpty() )
+				TigerPath = ParsedHeaders.FindHeader("X-TigerTree-Path");
+	
+			if( TigerPath.IsEmpty() )
 			{
-				CString TigerHash = TigerURN.Mid(39);
-				TigerHash.MakeUpper();
+				TigerPath = ParsedHeaders.FindHeader("X-Thex-URI");
+				HostInfo()->TigerUseThex = true;
+			}
+			
+			if( !TigerPath.IsEmpty() )
+			{
+				CString TigerURI = TigerPath;
+				TigerURI.MakeLower();
 
-				HostInfo()->TigerSupport = true;
+				TigerPath = ParseString(TigerPath, ';');
+				TigerPath = ParseString(TigerPath, '&');
+				HostInfo()->TigerPath = TigerPath;
 				
-				if(m_pShell->m_TigerHash.IsEmpty())
-					m_pShell->m_TigerHash = TigerHash;
-				else if(m_pShell->m_TigerHash != TigerHash)
+
+				CString TigerHash;
+
+				if(TigerURI.Left(39) == "/gnutella/tigertree/v3?urn:tree:tiger/:")
+					TigerHash = TigerURI.Mid(39);
+
+				if(TigerURI.Left(34) == "/gnutella/thex/v1?urn:tree:tiger/:") // thanks shareaza
+					TigerHash = TigerURI.Mid(34); // case also has depth info
+				
+				if(TigerURI.Left(13) == "/uri-res/n2x?") // thanks limewire
 				{
-					SetError("Incorrect Tiger Hash");
-					HostInfo()->TigerSupport = false;
-					HostInfo()->Status = FileSource::eFailed;
-					Close();
-					return;
+					int semipos = TigerURI.Find(";");
+					if(semipos != -1)
+						TigerHash   = TigerURI.Mid(semipos + 1);
 				}
 
+				// trim possible amperstand
+				TigerHash = ParseString(TigerHash, '&');
+					
+
+				if( !TigerHash.IsEmpty() )
+				{
+					TigerHash.MakeUpper();
+
+					HostInfo()->TigerSupport = true;
+					
+					if(m_pShell->m_TigerHash.IsEmpty())
+						m_pShell->m_TigerHash = TigerHash;
+					else if(m_pShell->m_TigerHash != TigerHash)
+					{
+						SetError("Incorrect Tiger Hash");
+						HostInfo()->TigerSupport = false;
+						HostInfo()->Status = FileSource::eFailed;
+						Close();
+						return;
+					}
+
+				}
 			}
 
 			// Get Hash and add host as an alt-loc
@@ -656,27 +702,20 @@ void CGnuDownload::OnReceive(int nErrorCode)
 				// If Tiger Tree Transfer
 				if( m_TigerRequest )
 				{
-					m_TigerLength = ContentLength;
+					if(m_TigerReqBuffer)
+						delete [] m_TigerReqBuffer;
+
+					m_TigerLength    = ContentLength;
+					m_TigerReqBuffer = new byte[m_TigerLength];
 					
-					if( LoadTigerTree() )
-					{
-						StatusUpdate(TRANSFER_RECEIVING);
-						SetError("Receiving");
 
-						HostInfo()->RetryWait = 0;
+					StatusUpdate(TRANSFER_RECEIVING);
+					SetError("Receiving TigerTree");
 
-						if(FileBegin != -1 && BuffLength - FileBegin > 0)
-							DownloadBytes(&m_pBuff[FileBegin], BuffLength - FileBegin);
-					}
-					else
-					{
+					HostInfo()->RetryWait = 0;
 
-						HostInfo()->TigerSupport = false;
-						SetError("TigerTree Load Failed");
-						Close();	
-						return;
-					}
-					
+					if(FileBegin != -1 && BuffLength - FileBegin > 0)
+						DownloadBytes(&m_pBuff[FileBegin], BuffLength - FileBegin);
 				}
 
 				// Else Normal File Transfer
@@ -1217,7 +1256,7 @@ void CGnuDownload::SendTigerRequest()
 
 	CString GetTree;
 
-	GetTree.Format("GET /gnutella/tigertree/v3?urn:tree:tiger/:%s HTTP/1.1\r\n", m_pShell->m_TigerHash);
+	GetTree.Format("GET %s HTTP/1.1\r\n", HostInfo()->TigerPath);
 
 	// Add host header
 	CString Host; 
@@ -1235,7 +1274,10 @@ void CGnuDownload::SendTigerRequest()
 	GetTree += "Connection: Keep-Alive\r\n";
 	
 	// Accept header
-	GetTree	+= "Accept: application/tigertree-breadthfirst\r\n";
+	if( HostInfo()->TigerUseThex )
+		GetTree	+= "Accept: application/dime\r\n";
+	else
+		GetTree	+= "Accept: application/tigertree-breadthfirst\r\n";
 
 	// Range header
 	GetTree	+= "Range: bytes=0-\r\n";
@@ -1395,28 +1437,81 @@ void CGnuDownload::DownloadBytes(byte* pBuff, int nSize)
 	// If downloading tigertree
 	if( m_TigerRequest )
 	{
-		if(m_TigerPos < m_tempTreeSize)
+		// Download all data before parsing
+		if(m_TigerPos < m_TigerLength)
 		{
 			int CopySize = nSize;
-			if(m_TigerPos + CopySize > m_tempTreeSize)
-				CopySize -= (m_TigerPos + CopySize) - m_tempTreeSize;
+			if(m_TigerPos + CopySize > m_TigerLength)
+				CopySize = m_TigerLength - m_TigerPos;
 
-			memcpy(m_tempTigerTree + m_TigerPos, pBuff, CopySize);	
+			memcpy(m_TigerReqBuffer + m_TigerPos, pBuff, CopySize);	
+			m_TigerPos += CopySize;
 		}
 
-		m_TigerPos += nSize;
-
-
-		// If finished downloading tree
+		// TigerTree data downloaded
 		if(m_TigerPos == m_TigerLength)
 		{
-			// Full tree downloaded, copy over to shell to be used for verification
-			m_pShell->m_TigerTree = new byte[m_tempTreeSize];
-			memcpy(m_pShell->m_TigerTree, m_tempTigerTree, m_tempTreeSize);
-			m_pShell->m_TreeSize = m_tempTreeSize;
-			m_pShell->m_TreeRes  = m_tempTreeRes;
-			m_pShell->BackupHosts(); // Backup tree
+			bool TigerSet = false;
 
+			// THEX based uses DIME format
+			if( HostInfo()->TigerUseThex )
+			{
+				// Re-Set m_TigerLength here, used for LoadTigerTree
+				DIME ThexData(m_TigerReqBuffer, m_TigerLength);
+
+				DimeRecord CurrentRecord;
+				while( ThexData.ReadNextRecord(CurrentRecord) == DIME::READ_GOOD)
+				{	
+					if(CurrentRecord.Type == "http://open-content.net/spec/thex/breadthfirst")
+					{
+						m_TigerLength = CurrentRecord.DataLength;
+
+						if( !LoadTigerTree() )
+						{
+							HostInfo()->TigerSupport = false;
+							SetError("TigerTree Load Failed");
+							Close();	
+							return;
+						}
+
+						memcpy(m_tempTigerTree, CurrentRecord.Data, m_tempTreeSize);
+						TigerSet = true;	
+					}
+
+					if(CurrentRecord.Last)
+						break;
+				}
+
+				
+			}
+
+			// No THEX, content-length is entire tree
+			else
+			{
+				if( !LoadTigerTree() ) // uses m_TigerLength set to content-length
+				{
+					HostInfo()->TigerSupport = false;
+					SetError("TigerTree Load Failed");
+					Close();	
+					return;
+				}
+
+				memcpy(m_tempTigerTree, m_TigerReqBuffer, m_tempTreeSize);	
+				TigerSet = true;
+			}
+
+			
+			// copy over to shell to be used for verification
+			if(TigerSet)
+			{
+				m_pShell->m_TigerTree = new byte[m_tempTreeSize];
+				memcpy(m_pShell->m_TigerTree, m_tempTigerTree, m_tempTreeSize);
+				m_pShell->m_TreeSize = m_tempTreeSize;
+				m_pShell->m_TreeRes  = m_tempTreeRes;
+				m_pShell->BackupHosts(); // Backup tree
+			}
+			else
+				HostInfo()->TigerSupport = false;
 
 			if(m_KeepAlive)
 			{
@@ -1674,3 +1769,126 @@ bool CGnuDownload::LoadTigerTree()
 
 	return false;
 }
+
+
+// DIME Stuff
+
+DIME::DIME(byte* pData, int length)
+{
+	m_pData  = pData;
+	m_Length = length;
+
+	m_pNextPos  = pData;
+	m_BytesLeft = length;
+}
+
+DIME::ReadResult DIME::ReadNextRecord(DimeRecord &Record)
+{
+	Record = DimeRecord();
+
+	if(m_BytesLeft < 12)
+		return DIME::READ_INCOMPLETE;
+
+	// byte 0
+	if(*m_pNextPos >> 3 != 1) // version error
+		return DIME::READ_ERROR;
+
+	Record.First   = (*m_pNextPos >> 2) & 0x01;
+	Record.Last    = (*m_pNextPos >> 1) & 0x01;
+	Record.Chunked = *m_pNextPos & 0x01;
+
+	m_pNextPos++;
+	m_BytesLeft--;
+
+	// byte 1
+	Record.tType = *m_pNextPos >> 4;
+	m_pNextPos++;
+	m_BytesLeft--;
+
+	// byte 2 - 3
+	Record.OptionsLength = ( m_pNextPos[0] << 8 ) + m_pNextPos[1];
+	m_pNextPos  += 2;
+	m_BytesLeft -= 2;
+
+	// byte 4 - 5
+	Record.IDLength = ( m_pNextPos[0] << 8 ) + m_pNextPos[1];
+	m_pNextPos  += 2;
+	m_BytesLeft -= 2;
+
+	// byte 6 - 7
+	Record.TypeLength = ( m_pNextPos[0] << 8 ) + m_pNextPos[1];
+	m_pNextPos  += 2;
+	m_BytesLeft -= 2;
+
+	// byte 8 - 11
+	Record.DataLength = ( m_pNextPos[0] << 24 ) + ( m_pNextPos[1] << 16 ) + ( m_pNextPos[2] << 8 ) + m_pNextPos[3];
+	m_pNextPos  += 4;
+	m_BytesLeft -= 4;
+
+	// Get options
+	if(Record.OptionsLength)
+	{
+		while(Record.OptionsLength % 4 != 0)
+			Record.OptionsLength++;
+
+		if(m_BytesLeft < Record.OptionsLength)
+			return DIME::READ_INCOMPLETE;
+
+		Record.Options = CString((char*) m_pNextPos, Record.OptionsLength);
+
+		m_pNextPos  += Record.OptionsLength;
+		m_BytesLeft -= Record.OptionsLength;
+	}
+
+	// Get ID
+	if(Record.IDLength)
+	{
+		while(Record.IDLength % 4 != 0)
+			Record.IDLength++;
+
+		if(m_BytesLeft < Record.IDLength)
+			return DIME::READ_INCOMPLETE;
+
+		Record.ID = CString((char*) m_pNextPos, Record.IDLength);
+
+		m_pNextPos  += Record.IDLength;
+		m_BytesLeft -= Record.IDLength;
+	}
+
+	// Get type
+	if(Record.TypeLength)
+	{
+		while(Record.TypeLength % 4 != 0)
+			Record.TypeLength++;
+
+		if(m_BytesLeft < Record.TypeLength)
+			return DIME::READ_INCOMPLETE;
+
+		Record.Type = CString((char*) m_pNextPos, Record.TypeLength);
+
+		m_pNextPos  += Record.TypeLength;
+		m_BytesLeft -= Record.TypeLength;
+	}
+
+	// Get data
+	if(Record.DataLength)
+	{
+		uint16 PaddedLength = Record.DataLength;
+
+		while(PaddedLength % 4 != 0)
+			PaddedLength++;
+
+		if(m_BytesLeft < PaddedLength)
+			return DIME::READ_INCOMPLETE;
+
+		Record.Data = m_pNextPos;
+
+		m_pNextPos  += PaddedLength;
+		m_BytesLeft -= PaddedLength;
+	}
+
+	return DIME::READ_GOOD;
+}
+
+
+

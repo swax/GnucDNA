@@ -1,3 +1,7 @@
+GnucDNA 1.1.0.7
+	swabby: Added support for X-THEX-URI TigerTree header
+	swabby: Added support for DIME and XML based TigerTrees
+
 GnucDNA 1.1.0.6
 	swabby: Adaptive incoming bandwidth throttling
 	swabby: Fixed bug where duplicate query hits were being relayed
