@@ -2965,9 +2965,6 @@ void CGnuNode::ApplyPatchTable()
 			// low bit
 			remotePos++;
 			SetPatchBit(remotePos, Factor, PatchTable[i] & 0xF);
-			
-			byte test = PatchTable[i];
-			test++;
 		}
 		else if(m_PatchBits == 8)
 		{
