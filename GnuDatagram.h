@@ -1,30 +1,22 @@
 #pragma once
 
-
-#define GNU_RECV_BUFF    2048
-
-
 class CGnuControl;
 class CGnuProtocol;
 
 
-class CGnuDatagram : public CAsyncSocket
+class CGnuDatagram
 {
 public:
 	CGnuDatagram(CGnuControl* pComm);
 	virtual ~CGnuDatagram();
 
-	void Init();
-
 	void Timer();
 
 	// Receiving
-	virtual void OnReceive(int nErrorCode);
+	virtual void OnReceive(IPv4 Address, byte* pRecvBuff, int RecvLength);
 
 	// Sending
 	void SendPacket(IPv4 Address, byte* packet, uint32 length);
-
-	byte m_pRecvBuff[GNU_RECV_BUFF];
 
 	// Bandwidth
 	CRangeAvg m_AvgUdpDown;

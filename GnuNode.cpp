@@ -96,6 +96,7 @@ CGnuNode::CGnuNode(CGnuControl* pComm, CString Host, UINT Port)
 	m_SupportsDynQuerying  = false;
 	m_SupportsStats		   = false;
 	m_SupportsModeChange   = false;
+	m_SupportsUdpCrawl	   = false;
 
 	m_RemoteMaxTTL = 0;
 
@@ -384,6 +385,9 @@ void CGnuNode::OnConnect(int nErrorCode)
 		// X-Dynamic-Querying
 		Handshake += "X-Dynamic-Querying: 0.1\r\n";
 
+		// X-Locale-Pref
+		Handshake += "X-Locale-Pref: en\r\n";
+
 		// Vendor-Message
 		Handshake += "Vendor-Message: 0.1\r\n";
 
@@ -396,7 +400,7 @@ void CGnuNode::OnConnect(int nErrorCode)
 
 		// Bye Header
 		Handshake += "Bye-Packet: 0.1\r\n";
-
+		
 		// Authentication
 		if(m_pCore->m_dnaCore->m_dnaEvents)
 			m_pCore->m_dnaCore->m_dnaEvents->NetworkAuthenticate(m_NodeID);
@@ -591,6 +595,9 @@ void CGnuNode::ParseIncomingHandshake06(CString Data, byte* Stream, int StreamLe
 		// Parse X-Dynamic-Querying header
 		if( FindHeader("X-Dynamic-Querying") == "0.1")
 			m_SupportsDynQuerying = true;
+
+		// Parse X-Locale-Pref header
+		m_LocalPref = FindHeader("X-Locale-Pref");
 
 		// Parse Vendor-Message header
 		if( FindHeader("Vendor-Message") == "0.1")
@@ -856,6 +863,9 @@ void CGnuNode::ParseOutboundHandshake06(CString Data, byte* Stream, int StreamLe
 		// Parse X-Dynamic-Querying header
 		if( FindHeader("X-Dynamic-Querying") == "0.1")
 			m_SupportsDynQuerying = true;
+
+		// Parse X-Locale-Pref header
+		m_LocalPref = FindHeader("X-Locale-Pref");
 
 		// Parse Accept-Encoding
 		CString EncodingHeader = FindHeader("Accept-Encoding");
@@ -1165,6 +1175,9 @@ void CGnuNode::Send_ConnectOK(bool Reply)
 
 		// X-Dynamic-Querying
 		Handshake += "X-Dynamic-Querying: 0.1\r\n";
+
+		// X-Locale-Pref
+		Handshake += "X-Locale-Pref: en\r\n";
 
 		// Vendor-Message
 		Handshake += "Vendor-Message: 0.1\r\n";
@@ -1528,10 +1541,10 @@ void CGnuNode::SetConnected()
 
 	
 	// For testing protcol compatibility
-	/*if( m_RemoteAgent.Find("DNA") == -1 )
-		//if( m_RemoteAgent.Find("Lime") == -1 && m_RemoteAgent.Find("Bear") == -1 )
+	//if( m_RemoteAgent.Find("DNA") == -1 )
+		/*if( m_RemoteAgent.Find("Lime") == -1  )
 		{
-			CloseWithReason("Not DNA", false, false);
+			CloseWithReason("Not Lime", false, false);
 			return;
 		}*/
 
@@ -1593,6 +1606,7 @@ void CGnuNode::SetConnected()
 		//SupportedMessages.push_back( packet_VendIdent("LIME", 11, 2) );	// oob query
 		//SupportedMessages.push_back( packet_VendIdent("LIME", 12, 1) );	// oob query
 		SupportedMessages.push_back( packet_VendIdent("LIME", 21, 1) );	    // push proxy
+		SupportedMessages.push_back( packet_VendIdent("LIME", 6, 1) );		// udp crawler
 
 		uint16 VectorSize = SupportedMessages.size();
 
@@ -2380,7 +2394,7 @@ void CGnuNode::NodeManagement()
 				FirewallTest.Ident = packet_VendIdent("GNUC", 7, 1);
 				IPv4 SendBack;
 				SendBack.Host = m_pNet->m_CurrentIP;
-				SendBack.Port = m_pComm->m_UdpPort;
+				SendBack.Port = m_pNet->m_CurrentPort;
 				m_pProtocol->Send_VendMsg( this, FirewallTest, &SendBack, 6);
 			}
 		}

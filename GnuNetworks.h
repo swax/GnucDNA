@@ -12,6 +12,7 @@ class CG2Control;
 class CGnuSock;
 class CGnuCache;
 class CGnuSearch;
+class CUdpListener;
 
 class CGnuNetworks : public CAsyncSocketEx
 {
@@ -64,6 +65,7 @@ public:
 
 	std::vector<CGnuSock*>	m_SockList;
 
+	CUdpListener* m_pUdpSock;
 
 	// Searching
 	void EndSearch(int SearchID);

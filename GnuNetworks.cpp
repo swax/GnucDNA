@@ -37,6 +37,7 @@
 #include "G2Node.h"
 #include "G2Datagram.h"
 #include "GnuPrefs.h"
+#include "UdpListener.h"
 
 #include "GnuTransfers.h"
 #include "GnuDownloadShell.h"
@@ -50,6 +51,8 @@ CGnuNetworks::CGnuNetworks(CGnuCore* pCore)
 
 	m_pGnu = NULL;
 	m_pG2  = NULL;
+
+	m_pUdpSock = NULL;
 
 	m_NextNodeID   = 1;
 
@@ -109,6 +112,9 @@ CGnuNetworks::~CGnuNetworks(void)
 		delete m_pCache;
 		m_pCache = NULL;
 	}
+
+	if(m_pUdpSock)
+		delete m_pUdpSock;
 }
 
 void CGnuNetworks::Connect_Gnu()
@@ -332,7 +338,6 @@ bool CGnuNetworks::StartListening()
 
 	if(m_pCore->m_pPrefs->m_ForcedPort)
 		AttemptPort = m_pCore->m_pPrefs->m_ForcedPort;
-	
 
 	int	 Attempts = 0;
 	bool Success  = false;
@@ -347,14 +352,8 @@ bool CGnuNetworks::StartListening()
 			Success = true;
 			m_CurrentPort = AttemptPort;
 
-			// Set G2 to listen on same UDP port
-			if( m_pG2 )
-				m_pG2->m_pDispatch->Init();
+			m_pUdpSock = new CUdpListener(this);
 
-			// Not same port, when protocols broken out tcp/udp will be same per protocol
-			if( m_pGnu)
-				m_pGnu->m_pDatagram->Init();
-		
 			return true;	
 		}
 		else
@@ -374,6 +373,12 @@ bool CGnuNetworks::StartListening()
 void CGnuNetworks::StopListening()
 {
 	Close();
+
+	if(m_pUdpSock)
+	{
+		delete m_pUdpSock;
+		m_pUdpSock = NULL;
+	}
 }
 
 

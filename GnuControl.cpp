@@ -93,11 +93,9 @@ CGnuControl::CGnuControl(CGnuNetworks* pNet)
 	m_TcpSecBytesUp		= 0;
 
 	m_Minute = 0;
-
-	m_UdpPort = 0;
-
-	m_pDatagram = new CGnuDatagram(this);
+	
 	m_pProtocol = new CGnuProtocol(this);
+	m_pDatagram = new CGnuDatagram(this);
 
 	m_pProtocol->Init();
 }
@@ -525,11 +523,11 @@ void CGnuControl::ManageNodes()
 		if(UltraConnects < m_pPrefs->m_LeafModeConnects)
 			AddConnect(NeedDnaUltras);
 		
-		else if(UltraConnects && NeedDnaUltras)
-			AddConnect(NeedDnaUltras);
+		else if(UltraConnects && NeedDnaUltras && Connecting <= MaxHalfConnects / 2)
+			AddConnect(NeedDnaUltras); // if all thats needed are more dna, dont tax half connects
 
 		if(m_pPrefs->m_LeafModeConnects && UltraConnects > m_pPrefs->m_LeafModeConnects)
-			DropNode(GNU_ULTRAPEER, NeedDnaUltras);
+			DropNode(GNU_ULTRAPEER, NeedDnaUltras); 
 	}
 	
 
@@ -541,8 +539,8 @@ void CGnuControl::ManageNodes()
 		if(m_pPrefs->m_MinConnects && UltraConnects < m_pPrefs->m_MinConnects)
 			AddConnect(NeedDnaUltras);
 		
-		else if(UltraConnects && NeedDnaUltras)
-			AddConnect(NeedDnaUltras);
+		else if(UltraConnects && NeedDnaUltras && Connecting <= MaxHalfConnects / 2)
+			AddConnect(NeedDnaUltras); // if all thats needed are more dna, dont tax half connects
 
 
 		if(m_pPrefs->m_MaxConnects && UltraConnects > m_pPrefs->m_MaxConnects)
@@ -994,7 +992,7 @@ void CGnuControl::DynQueryTimer()
 							pQueryPacket->Flags.Set == false)
 						{
 							memcpy((byte*)pQueryPacket, &m_pNet->m_CurrentIP.S_addr, 4);
-							memcpy(((byte*)pQueryPacket) + 13, &m_pNet->m_pGnu->m_UdpPort, 2);
+							memcpy(((byte*)pQueryPacket) + 13, &m_pNet->m_CurrentPort, 2);
 							
 							pQueryPacket->Flags.Set     = true;
 							pQueryPacket->Flags.OobHits = true;

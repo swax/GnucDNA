@@ -29,6 +29,7 @@
 #include "GnuControl.h"
 #include "GnuProtocol.h"
 #include "GnuCore.h"
+#include "UdpListener.h"
 
 #include "DnaCore.h"
 #include "DnaEvents.h"
@@ -37,7 +38,8 @@
 
 CGnuDatagram::CGnuDatagram(CGnuControl* pComm)
 {
-	m_pComm = pComm;
+	m_pComm     = pComm;
+	m_pProtocol = pComm->m_pProtocol;
 
 	m_AvgUdpDown.SetRange(30);
 	m_AvgUdpUp.SetRange(30);
@@ -52,22 +54,6 @@ CGnuDatagram::~CGnuDatagram()
 
 }
 
-void CGnuDatagram::Init()
-{
-	m_pProtocol = m_pComm->m_pProtocol;
-
-	Close();
-
-	// Cant use same port, g2 already using it
-	m_pComm->m_UdpPort = m_pComm->m_pNet->m_CurrentPort + 13;
-
-	if(!Create(m_pComm->m_UdpPort, SOCK_DGRAM))
-	{
-		int error = GetLastError();
-		ASSERT(0);
-	}
-}
-
 void CGnuDatagram::Timer()
 {
 	m_AvgUdpDown.Update(m_UdpSecBytesDown);
@@ -77,32 +63,14 @@ void CGnuDatagram::Timer()
 	m_UdpSecBytesUp   = 0;
 }
 
-void CGnuDatagram::OnReceive(int nErrorCode)
+void CGnuDatagram::OnReceive(IPv4 Address, byte* pRecvBuff, int RecvLength)
 {
-	CString Host;
-	UINT    Port;
-	int RecvLength = ReceiveFrom(m_pRecvBuff, GNU_RECV_BUFF, Host, Port);
-
-	if(RecvLength == 0)
-	{
-		// Connection Closed
-		return;
-	}
-	else if(RecvLength == SOCKET_ERROR)
-	{
-		int ErrorCode = GetLastError();
-		return;
-	}
 
 	m_UdpSecBytesDown += RecvLength;
 
-	IPv4 Address;
-	Address.Host = StrtoIP(Host);
-	Address.Port = Port;
-
 	if(RecvLength >= 23)
 	{
-		Gnu_RecvdPacket Packet( Address, (packet_Header*) m_pRecvBuff, RecvLength);
+		Gnu_RecvdPacket Packet( Address, (packet_Header*) pRecvBuff, RecvLength);
 
 		if(RecvLength == 23 + Packet.Header->Payload)
 			m_pProtocol->ReceivePacket( Packet );
@@ -121,7 +89,10 @@ void CGnuDatagram::SendPacket(IPv4 Address, byte* packet, uint32 length)
 	sa.sin_port   = htons(Address.Port);
 	sa.sin_addr.S_un.S_addr = Address.Host.S_addr;
 
-	int UdpSent = SendTo( packet, length, (SOCKADDR*) &sa, sizeof(SOCKADDR) );
+	int UdpSent = 0;
+
+	if(m_pComm->m_pNet->m_pUdpSock)
+		UdpSent = m_pComm->m_pNet->m_pUdpSock->SendTo( packet, length, (SOCKADDR*) &sa, sizeof(SOCKADDR) );
 
 	m_UdpSecBytesUp += length;
 }

@@ -1,21 +1,5 @@
 
 Stop and Start share file
-when plugin system in connection should be changed to udp test method
-
-
-Test
-	Gnutella Leaf Mode / Preferencing / Upgrade Path
-	Gnutella Ultrapeer Mode / Preferencing / Upgrade Path
-	G2 Leaf Mode / Preferencing / Upgrade Path
-	G2 Hub Mode  / Preferencing / Upgrade Path
-	Version 2 UDP Connect back
-	Receiving TCP / UDP firewall tests
-
-New System 
-	Target network load at 80%
-	Prevents people who cant handle load from staying in hub mode
-	200 leaf max
-	Two connections per child G1/G2
 
 
 ----------------------------------------------------------------------

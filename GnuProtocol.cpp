@@ -931,294 +931,47 @@ void CGnuProtocol::Receive_VendMsg(Gnu_RecvdPacket &Packet)
 	{
 		// Check if a 'Messages Supported' message
 		if(VendMsg->Ident == packet_VendIdent("\0\0\0\0", 0, 0) )
-		{
-			byte* message   = ((byte*) VendMsg) + 31;
-			int	  sublength = Packet.Length - 31;
-
-			uint16 VectorSize = 0;
-			if(sublength >= 2)
-				memcpy(&VectorSize, message, 2);
-
-			if( sublength == 2 + VectorSize * 8)
-			{
-				// VMS Gnucleus 12.33.43.13: BEAR/11v1 
-				//TRACE0("VMS " + pNode->m_RemoteAgent + " " + IPtoStr(pNode->m_Address.Host) + ": ");
-
-				for(int i = 2; i < sublength; i += 8)
-				{
-					packet_VendIdent* MsgSupported = (packet_VendIdent*) (message + i);
-
-					CString Msg =  CString(MsgSupported->VendorID, 4) + "/" + NumtoStr(MsgSupported->Type) + "v" + NumtoStr(MsgSupported->Version);
-					
-					if(*MsgSupported == packet_VendIdent("BEAR", 11, 1))
-						pNode->m_SupportsLeafGuidance = true;
-
-					if(*MsgSupported == packet_VendIdent("GNUC", 60, 1))
-						pNode->m_SupportsStats = true;
-
-					if(*MsgSupported == packet_VendIdent("GNUC", 61, 1))
-						pNode->m_SupportsModeChange = true;
-
-					//TRACE0(Msg + " ");
-				}
-
-				//TRACE0("\n");
-			}
-			else
-				m_pCore->DebugLog("Gnutella", "Vendor Msg, Messages Support, VS:" + NumtoStr(VectorSize) + ", SL:" + NumtoStr(sublength));
-				
-		}
+			ReceiveVM_Supported(Packet);
 
 		// TCP Connect Back
 		if(VendMsg->Ident == packet_VendIdent("BEAR", 7, 1) )
-		{
-			if(Packet.Length - 31 != 2)
-				return;
-
-			uint16 ConnectPort = 0;
-			memcpy(&ConnectPort, ((byte*) VendMsg) + 31, 2);
-
-			CGnuNode* ConnectNode = new CGnuNode(m_pComm, IPtoStr(pNode->m_Address.Host), ConnectPort);
-			ConnectNode->m_ConnectBack = true;
-
-			if( !ConnectNode->Create() )
-			{
-				delete ConnectNode;
-				return;
-			}
-			
-			if( !ConnectNode->Connect(IPtoStr(pNode->m_Address.Host), ConnectPort) )
-				if (ConnectNode->GetLastError() != WSAEWOULDBLOCK)
-				{
-					delete ConnectNode;
-					return;
-				}
-			
-			m_pComm->m_NodeAccess.Lock();
-				m_pComm->m_NodeList.push_back(ConnectNode);
-			m_pComm->m_NodeAccess.Unlock();
-		}
+			ReceiveVM_TCPConnectBack(Packet);
 	
 		// UDP Connect Back
 		if(VendMsg->Ident == packet_VendIdent("GTKG", 7, 2))
-		{
-			if(Packet.Length - 31 != 2)
-				return;
-
-			uint16 ConnectPort = 0;
-			memcpy(&ConnectPort, ((byte*) VendMsg) + 31, 2);
-
-			IPv4 Target;
-			Target.Host = pNode->m_Address.Host;
-			Target.Port = ConnectPort;
-			Send_Ping(NULL, 1, &VendMsg->Header.Guid, Target);		
-		}
+			ReceiveVM_UDPConnectBack(Packet);
 
 		// UDP Relay Connect Back
 		if( VendMsg->Ident == packet_VendIdent("GNUC", 7, 1))
-		{
-			if(Packet.Length - 31 != 6)
-				return;
-
-			// A UDP reply needs to be indirect to verify full udp support
-
-			// Relay request to 10 leaves
-			if(m_pComm->m_GnuClientMode == GNU_ULTRAPEER)
-			{
-				int Relays = 0;
-				for(int i = 0; i < m_pComm->m_NodeList.size() && Relays < 10; i++)
-					if(m_pComm->m_NodeList[i] != pNode && m_pComm->m_NodeList[i]->m_Status == SOCK_CONNECTED && m_pComm->m_NodeList[i]->m_GnuNodeMode == GNU_LEAF)
-					{
-						m_pComm->m_NodeList[i]->SendPacket(VendMsg, Packet.Length, PACKET_VENDMSG, 1);
-						Relays++;
-					}
-			}
-			
-			// Respond udp
-			if(m_pComm->m_GnuClientMode == GNU_LEAF)
-			{
-				IPv4 Target;
-				memcpy(&Target, ((byte*) VendMsg) + 31, 6);
-
-				Send_Ping(NULL, 1, &VendMsg->Header.Guid, Target);
-			}
-		}
+			ReceiveVM_UDPRelayConnect(Packet);
 
 		// Leaf Guided Dyanic Query: Query Status Request
 		if(VendMsg->Ident == packet_VendIdent("BEAR", 11, 1) )
-		{
-			if(m_pComm->m_GnuClientMode != GNU_LEAF)
-			{
-				m_pCore->DebugLog("Gnutella", "Query Status Request Received from " + pNode->m_RemoteAgent + " while in Ultrapeer Mode");
-				return;
-			}
-
-			// Find right search by using the GUID
-			for(int i = 0; i < m_pNet->m_SearchList.size(); i++)
-				if(VendMsg->Header.Guid == m_pNet->m_SearchList[i]->m_QueryID)
-				{
-					TRACE0("VMS " + pNode->m_RemoteAgent + " " + IPtoStr(pNode->m_Address.Host) + ": Query Status Request\n");
-					CGnuSearch* pSearch = m_pNet->m_SearchList[i];
-					
-					packet_VendMsg ReplyMsg;
-					ReplyMsg.Header.Guid = VendMsg->Header.Guid;
-					ReplyMsg.Ident = packet_VendIdent("BEAR", 12, 1);
-					
-					uint16 Hits = pSearch->m_WholeList.size();
-
-					Send_VendMsg(pNode, ReplyMsg, &Hits, 2 );
-				}
-		}
+			ReceiveVM_QueryStatusReq(Packet);
 
 		// Leaf Guided Dyanic Query: Query Status Response
 		if(VendMsg->Ident == packet_VendIdent("BEAR", 12, 1) )
-		{
-			byte* message   = ((byte*) VendMsg) + 31;
-			int	  sublength = Packet.Length - 31;
-
-			if(sublength != 2)
-				return;
-
-			uint16 HitCount = 0;
-			memcpy(&HitCount, message, 2);
-
-			std::map<uint32, DynQuery*>::iterator itDyn = m_pComm->m_DynamicQueries.find( HashGuid(VendMsg->Header.Guid) );
-			if( itDyn != m_pComm->m_DynamicQueries.end() )
-			{
-				// End Query if 0xFFFF received
-				if(HitCount == 0xFFFF)
-				{
-					delete itDyn->second;
-					m_pComm->m_DynamicQueries.erase(itDyn);
-				}
-
-				// Otherwise update hit count if its greater than what we've seen
-				else if(HitCount > itDyn->second->Hits)
-					itDyn->second->Hits = HitCount;
-			}
-		}
+			ReceiveVM_QueryStatusAck(Packet);
 
 		// Push Proxy Request
 		if(VendMsg->Ident == packet_VendIdent("LIME", 21, 1) )
-		{
-			if(Packet.Length != 31)
-				return;
-
-			if(Packet.pTCP->m_GnuNodeMode != GNU_LEAF)
-				return;
-
-			m_pComm->m_PushProxyHosts[ Packet.pTCP->m_NodeID ] = VendMsg->Header.Guid;
-
-			IPv4 LocalAddr;
-			LocalAddr.Host = m_pNet->m_CurrentIP;
-			LocalAddr.Port = m_pNet->m_CurrentPort;
-
-			packet_VendMsg ProxyAck;
-			ProxyAck.Header.Guid = VendMsg->Header.Guid;
-			ProxyAck.Ident = packet_VendIdent("LIME", 22, 2);
-			Send_VendMsg(Packet.pTCP, ProxyAck, &LocalAddr, 6);
-		}
+			ReceiveVM_PushProxyReq(Packet);
 
 		// Push Proxy Acknowledgement
 		if(VendMsg->Ident == packet_VendIdent("LIME", 22, 2) )
-		{
-			byte* message   = ((byte*) VendMsg) + 31;
-			int	  sublength = Packet.Length - 31;
-
-			if(sublength != 6)
-				return;
-
-			memcpy(&pNode->m_PushProxy, message, 6);
-		}
+			ReceiveVM_PushProxyAck(Packet);
 
 		// Node Stats
 		if(VendMsg->Ident == packet_VendIdent("GNUC", 60, 1) )
-		{
-			byte* message   = ((byte*) VendMsg) + 31;
-			int	  sublength = Packet.Length - 31;
-
-			if(sublength < 13)
-				return;
-
-			packet_StatsMsg StatsMsg;
-			memcpy(&StatsMsg, message, 13);
-
-			// Values sometimes mess up in debugger for StatsMsg
-			// Once assigned everything looks right
-
-			Packet.pTCP->m_StatsRecvd  = true;
-			Packet.pTCP->m_LeafMax	   = StatsMsg.LeafMax;
-			Packet.pTCP->m_LeafCount   = StatsMsg.LeafCount;
-			Packet.pTCP->m_UpSince	   = time(NULL) - StatsMsg.Uptime;
-			Packet.pTCP->m_Cpu		   = StatsMsg.Cpu;
-			Packet.pTCP->m_Mem		   = StatsMsg.Mem;
-			Packet.pTCP->m_UltraAble   = StatsMsg.FlagUltraAble;
-			Packet.pTCP->m_Router	   = StatsMsg.FlagRouter;
-			Packet.pTCP->m_FirewallTcp = StatsMsg.FlagTcpFirewall;
-			Packet.pTCP->m_FirewallUdp = StatsMsg.FlagUdpFirewall;
-		}
+			ReceiveVM_NodeStats(Packet);
 
 		// Mode Change Request
 		if(VendMsg->Ident == packet_VendIdent("GNUC", 61, 1) )
-		{
-			byte* message   = ((byte*) VendMsg) + 31;
-			int	  sublength = Packet.Length - 31;
-
-			if(sublength < 1)
-				return;
-
-			byte Request = 0;
-			memcpy(&Request, message, 1);
-
-			// Upgrade Request
-			if(Request == 0x01)
-			{
-				packet_VendMsg AckMsg;
-				AckMsg.Header.Guid = VendMsg->Header.Guid;
-				AckMsg.Ident       = packet_VendIdent("GNUC", 62, 1);
-				
-				if( Packet.pTCP->m_GnuNodeMode != GNU_ULTRAPEER || // Make sure remote is ultrapeer
-					m_pComm->m_GnuClientMode != GNU_LEAF ||		   // Make sure we are a leaf
-					!m_pComm->UltrapeerAble())					   // Make sure we are ultrapeer able
-				{
-					byte NoAck = 0x02;
-					Send_VendMsg(Packet.pTCP, AckMsg, &NoAck, 1);
-					return;
-				}
-			
-				byte YesAck = 0x01;
-				// Send both tcp and udp to ensure it gets there	
-				Send_VendMsg(Packet.pTCP, AckMsg, &YesAck, 1);
-				Send_VendMsg(NULL, AckMsg, &YesAck, 1);
-					
-				m_pComm->SwitchGnuClientMode(GNU_ULTRAPEER);
-				return;
-			}
-		}
+			ReceiveVM_ModeChangeReq(Packet);
 
 		// Mode Change Ack
 		if(VendMsg->Ident == packet_VendIdent("GNUC", 62, 1) )
-		{
-			byte* message   = ((byte*) VendMsg) + 31;
-			int	  sublength = Packet.Length - 31;
-
-			if(sublength < 1)
-				return;
-
-			byte Ack = 0;
-			memcpy(&Ack, message, 1);
-
-			// If we sent node a request and Ack signals a yes
-			if(Packet.pTCP->m_TriedUpgrade && Ack == 0x01)
-			{
-				m_pComm->m_NextUpgrade = time(NULL) + 40*60; // Node upgrade do not upgrade another 40 mins
-				Packet.pTCP->CloseWithReason("Leaf Upgraded");
-
-				// Reset 'tried' children so next time they're eligible
-				for(int i = 0; i < m_pComm->m_NodeList.size(); i++)
-					m_pComm->m_NodeList[i]->m_TriedUpgrade = false;
-			}
-		}
+			ReceiveVM_ModeChangeAck(Packet);
 	}
 
 	// Packet received UDP
@@ -1226,78 +979,15 @@ void CGnuProtocol::Receive_VendMsg(Gnu_RecvdPacket &Packet)
 	{
 		// Out of band - Reply Num
 		if(VendMsg->Ident == packet_VendIdent("LIME", 12, 1) )
-		{
-			bool SendAck = false;
-
-			// Check if query active
-			for(int i = 0; i < m_pNet->m_SearchList.size(); i++)
-				if(VendMsg->Header.Guid == m_pNet->m_SearchList[i]->m_QueryID)
-				{
-					SendAck = true;
-					break;
-				}
-
-			// Check if OOB guid used to send dyn queries for leaves
-			std::map<uint32, GUID>::iterator itGuid = m_pComm->m_OobtoRealGuid.find( HashGuid(VendMsg->Header.Guid) );
-			if(itGuid != m_pComm->m_OobtoRealGuid.end())
-				SendAck = true;
-
-
-			if(SendAck)
-			{
-				packet_VendMsg Ack;
-				Ack.Header.Guid = VendMsg->Header.Guid;
-				Ack.Ident = packet_VendIdent("LIME", 11, 2);
-				
-				if(Packet.Length - 31 != 1)
-					return;
-
-				byte Results = 0;
-				memcpy(&Results, ((byte*) VendMsg) + 31, 1);
-
-				Send_VendMsg(NULL, Ack, &Results, 1, Packet.Source );
-			}
-		}
+			ReceiveVM_QueryHitNum(Packet);
 
 		// Out of band - Reply Ack
 		if(VendMsg->Ident == packet_VendIdent("LIME", 11, 2) )
-		{
-			m_pComm->m_OobHitsLock.Lock();
+			ReceiveVM_QueryHitReq(Packet);
 
-			// Lookup structure that has all the hits for this host
-			std::map<uint32, OobHit*>::iterator itHit = m_pComm->m_OobHits.find( HashGuid(VendMsg->Header.Guid) );
-			if(itHit != m_pComm->m_OobHits.end())
-			{
-				OobHit* pHit = itHit->second;
-
-				if(Packet.Length - 31 != 1)
-				{
-					m_pComm->m_OobHitsLock.Unlock();
-					return;
-				}
-
-				byte RequestNum = 0;
-				memcpy(&RequestNum, ((byte*) VendMsg) + 31, 1);
-
-				int HitsSent = 0;
-
-				// Send hits over UDP and only the amount the host asked for
-				for(int i = 0; i < pHit->QueryHits.size(); i++)
-					if(RequestNum == 255 || HitsSent < RequestNum)
-					{
-						m_pDatagram->SendPacket(pHit->Target, pHit->QueryHits[i], pHit->QueryHitLengths[i]);
-
-						HitsSent += ((packet_QueryHit*) pHit->QueryHits[i])->TotalHits;
-					}
-					else
-						break;
-
-				delete pHit;
-				m_pComm->m_OobHits.erase(itHit);
-			}
-
-			m_pComm->m_OobHitsLock.Unlock();
-		}
+		// Crawl Req
+		if(VendMsg->Ident == packet_VendIdent("LIME", 5, 1) )
+			ReceiveVM_CrawlReq(Packet);
 	}
 }
 
@@ -1449,6 +1139,569 @@ void CGnuProtocol::Receive_RouteTablePatch(Gnu_RecvdPacket &Packet)
 	else
 		pNode->m_CurrentSeq++;
 	
+}
+
+void CGnuProtocol::ReceiveVM_Supported(Gnu_RecvdPacket &Packet)
+{
+	packet_VendMsg* VendMsg = (packet_VendMsg*) Packet.Header;
+	
+	CGnuNode* pNode = Packet.pTCP;
+
+	byte* message   = ((byte*) VendMsg) + 31;
+	int	  sublength = Packet.Length - 31;
+
+	uint16 VectorSize = 0;
+	if(sublength >= 2)
+		memcpy(&VectorSize, message, 2);
+
+	if( sublength == 2 + VectorSize * 8)
+	{
+		// VMS Gnucleus 12.33.43.13: BEAR/11v1 
+		//TRACE0("VMS " + pNode->m_RemoteAgent + " " + IPtoStr(pNode->m_Address.Host) + ": ");
+
+		for(int i = 2; i < sublength; i += 8)
+		{
+			packet_VendIdent* MsgSupported = (packet_VendIdent*) (message + i);
+
+			CString Msg =  CString(MsgSupported->VendorID, 4) + "/" + NumtoStr(MsgSupported->Type) + "v" + NumtoStr(MsgSupported->Version);
+			
+			if(*MsgSupported == packet_VendIdent("BEAR", 11, 1))
+				pNode->m_SupportsLeafGuidance = true;
+
+			if(*MsgSupported == packet_VendIdent("GNUC", 60, 1))
+				pNode->m_SupportsStats = true;
+
+			if(*MsgSupported == packet_VendIdent("GNUC", 61, 1))
+				pNode->m_SupportsModeChange = true;
+
+			if(*MsgSupported == packet_VendIdent("LIME", 6, 1))
+				pNode->m_SupportsUdpCrawl = true;
+
+			//TRACE0(Msg + " ");
+		}
+
+		//TRACE0("\n");
+	}
+	else
+		m_pCore->DebugLog("Gnutella", "Vendor Msg, Messages Support, VS:" + NumtoStr(VectorSize) + ", SL:" + NumtoStr(sublength));
+}
+
+void CGnuProtocol::ReceiveVM_TCPConnectBack(Gnu_RecvdPacket &Packet)
+{
+	packet_VendMsg* VendMsg = (packet_VendMsg*) Packet.Header;
+	
+	CGnuNode* pNode = Packet.pTCP;
+
+	if(Packet.Length - 31 != 2)
+		return;
+
+	uint16 ConnectPort = 0;
+	memcpy(&ConnectPort, ((byte*) VendMsg) + 31, 2);
+
+	CGnuNode* ConnectNode = new CGnuNode(m_pComm, IPtoStr(pNode->m_Address.Host), ConnectPort);
+	ConnectNode->m_ConnectBack = true;
+
+	if( !ConnectNode->Create() )
+	{
+		delete ConnectNode;
+		return;
+	}
+	
+	if( !ConnectNode->Connect(IPtoStr(pNode->m_Address.Host), ConnectPort) )
+		if (ConnectNode->GetLastError() != WSAEWOULDBLOCK)
+		{
+			delete ConnectNode;
+			return;
+		}
+	
+	m_pComm->m_NodeAccess.Lock();
+		m_pComm->m_NodeList.push_back(ConnectNode);
+	m_pComm->m_NodeAccess.Unlock();
+}
+
+void CGnuProtocol::ReceiveVM_UDPConnectBack(Gnu_RecvdPacket &Packet)
+{
+	packet_VendMsg* VendMsg = (packet_VendMsg*) Packet.Header;
+	
+	CGnuNode* pNode = Packet.pTCP;
+
+	if(Packet.Length - 31 != 2)
+		return;
+
+	uint16 ConnectPort = 0;
+	memcpy(&ConnectPort, ((byte*) VendMsg) + 31, 2);
+
+	IPv4 Target;
+	Target.Host = pNode->m_Address.Host;
+	Target.Port = ConnectPort;
+	Send_Ping(NULL, 1, &VendMsg->Header.Guid, Target);		
+}
+
+void CGnuProtocol::ReceiveVM_UDPRelayConnect(Gnu_RecvdPacket &Packet)
+{
+	packet_VendMsg* VendMsg = (packet_VendMsg*) Packet.Header;
+	
+	CGnuNode* pNode = Packet.pTCP;
+
+	if(Packet.Length - 31 != 6)
+		return;
+
+	// A UDP reply needs to be indirect to verify full udp support
+
+	// Relay request to 10 leaves
+	if(m_pComm->m_GnuClientMode == GNU_ULTRAPEER)
+	{
+		int Relays = 0;
+		for(int i = 0; i < m_pComm->m_NodeList.size() && Relays < 10; i++)
+			if(m_pComm->m_NodeList[i] != pNode && m_pComm->m_NodeList[i]->m_Status == SOCK_CONNECTED && m_pComm->m_NodeList[i]->m_GnuNodeMode == GNU_LEAF)
+			{
+				m_pComm->m_NodeList[i]->SendPacket(VendMsg, Packet.Length, PACKET_VENDMSG, 1);
+				Relays++;
+			}
+	}
+	
+	// Respond udp
+	if(m_pComm->m_GnuClientMode == GNU_LEAF)
+	{
+		IPv4 Target;
+		memcpy(&Target, ((byte*) VendMsg) + 31, 6);
+
+		Send_Ping(NULL, 1, &VendMsg->Header.Guid, Target);
+	}
+}
+
+void CGnuProtocol::ReceiveVM_QueryStatusReq(Gnu_RecvdPacket &Packet)
+{
+	packet_VendMsg* VendMsg = (packet_VendMsg*) Packet.Header;
+	
+	CGnuNode* pNode = Packet.pTCP;
+
+	if(m_pComm->m_GnuClientMode != GNU_LEAF)
+	{
+		m_pCore->DebugLog("Gnutella", "Query Status Request Received from " + pNode->m_RemoteAgent + " while in Ultrapeer Mode");
+		return;
+	}
+
+	// Find right search by using the GUID
+	for(int i = 0; i < m_pNet->m_SearchList.size(); i++)
+		if(VendMsg->Header.Guid == m_pNet->m_SearchList[i]->m_QueryID)
+		{
+			TRACE0("VMS " + pNode->m_RemoteAgent + " " + IPtoStr(pNode->m_Address.Host) + ": Query Status Request\n");
+			CGnuSearch* pSearch = m_pNet->m_SearchList[i];
+			
+			packet_VendMsg ReplyMsg;
+			ReplyMsg.Header.Guid = VendMsg->Header.Guid;
+			ReplyMsg.Ident = packet_VendIdent("BEAR", 12, 1);
+			
+			uint16 Hits = pSearch->m_WholeList.size();
+
+			Send_VendMsg(pNode, ReplyMsg, &Hits, 2 );
+		}
+}
+
+void CGnuProtocol::ReceiveVM_QueryStatusAck(Gnu_RecvdPacket &Packet)
+{
+	packet_VendMsg* VendMsg = (packet_VendMsg*) Packet.Header;
+	
+	CGnuNode* pNode = Packet.pTCP;
+
+	byte* message   = ((byte*) VendMsg) + 31;
+	int	  sublength = Packet.Length - 31;
+
+	if(sublength != 2)
+		return;
+
+	uint16 HitCount = 0;
+	memcpy(&HitCount, message, 2);
+
+	std::map<uint32, DynQuery*>::iterator itDyn = m_pComm->m_DynamicQueries.find( HashGuid(VendMsg->Header.Guid) );
+	if( itDyn != m_pComm->m_DynamicQueries.end() )
+	{
+		// End Query if 0xFFFF received
+		if(HitCount == 0xFFFF)
+		{
+			delete itDyn->second;
+			m_pComm->m_DynamicQueries.erase(itDyn);
+		}
+
+		// Otherwise update hit count if its greater than what we've seen
+		else if(HitCount > itDyn->second->Hits)
+			itDyn->second->Hits = HitCount;
+	}
+}
+
+
+void CGnuProtocol::ReceiveVM_QueryHitNum(Gnu_RecvdPacket &Packet)
+{
+	packet_VendMsg* VendMsg = (packet_VendMsg*) Packet.Header;
+	
+	bool SendAck = false;
+
+	// Check if query active
+	for(int i = 0; i < m_pNet->m_SearchList.size(); i++)
+		if(VendMsg->Header.Guid == m_pNet->m_SearchList[i]->m_QueryID)
+		{
+			SendAck = true;
+			break;
+		}
+
+	// Check if OOB guid used to send dyn queries for leaves
+	std::map<uint32, GUID>::iterator itGuid = m_pComm->m_OobtoRealGuid.find( HashGuid(VendMsg->Header.Guid) );
+	if(itGuid != m_pComm->m_OobtoRealGuid.end())
+		SendAck = true;
+
+
+	if(SendAck)
+	{
+		packet_VendMsg Ack;
+		Ack.Header.Guid = VendMsg->Header.Guid;
+		Ack.Ident = packet_VendIdent("LIME", 11, 2);
+		
+		if(Packet.Length - 31 != 1)
+			return;
+
+		byte Results = 0;
+		memcpy(&Results, ((byte*) VendMsg) + 31, 1);
+
+		Send_VendMsg(NULL, Ack, &Results, 1, Packet.Source );
+	}
+}
+
+void CGnuProtocol::ReceiveVM_QueryHitReq(Gnu_RecvdPacket &Packet)
+{
+	packet_VendMsg* VendMsg = (packet_VendMsg*) Packet.Header;
+	
+	m_pComm->m_OobHitsLock.Lock();
+
+	// Lookup structure that has all the hits for this host
+	std::map<uint32, OobHit*>::iterator itHit = m_pComm->m_OobHits.find( HashGuid(VendMsg->Header.Guid) );
+	if(itHit != m_pComm->m_OobHits.end())
+	{
+		OobHit* pHit = itHit->second;
+
+		if(Packet.Length - 31 != 1)
+		{
+			m_pComm->m_OobHitsLock.Unlock();
+			return;
+		}
+
+		byte RequestNum = 0;
+		memcpy(&RequestNum, ((byte*) VendMsg) + 31, 1);
+
+		int HitsSent = 0;
+
+		// Send hits over UDP and only the amount the host asked for
+		for(int i = 0; i < pHit->QueryHits.size(); i++)
+			if(RequestNum == 255 || HitsSent < RequestNum)
+			{
+				m_pDatagram->SendPacket(pHit->Target, pHit->QueryHits[i], pHit->QueryHitLengths[i]);
+
+				HitsSent += ((packet_QueryHit*) pHit->QueryHits[i])->TotalHits;
+			}
+			else
+				break;
+
+		delete pHit;
+		m_pComm->m_OobHits.erase(itHit);
+	}
+
+	m_pComm->m_OobHitsLock.Unlock();
+}
+
+
+void CGnuProtocol::ReceiveVM_PushProxyReq(Gnu_RecvdPacket &Packet)
+{
+	packet_VendMsg* VendMsg = (packet_VendMsg*) Packet.Header;
+	
+	CGnuNode* pNode = Packet.pTCP;
+
+	if(Packet.Length != 31)
+		return;
+
+	if(Packet.pTCP->m_GnuNodeMode != GNU_LEAF)
+		return;
+
+	m_pComm->m_PushProxyHosts[ Packet.pTCP->m_NodeID ] = VendMsg->Header.Guid;
+
+	IPv4 LocalAddr;
+	LocalAddr.Host = m_pNet->m_CurrentIP;
+	LocalAddr.Port = m_pNet->m_CurrentPort;
+
+	packet_VendMsg ProxyAck;
+	ProxyAck.Header.Guid = VendMsg->Header.Guid;
+	ProxyAck.Ident = packet_VendIdent("LIME", 22, 2);
+	Send_VendMsg(Packet.pTCP, ProxyAck, &LocalAddr, 6);
+}
+
+void CGnuProtocol::ReceiveVM_PushProxyAck(Gnu_RecvdPacket &Packet)
+{
+	packet_VendMsg* VendMsg = (packet_VendMsg*) Packet.Header;
+	
+	CGnuNode* pNode = Packet.pTCP;
+
+	byte* message   = ((byte*) VendMsg) + 31;
+	int	  sublength = Packet.Length - 31;
+
+	if(sublength != 6)
+		return;
+
+	memcpy(&pNode->m_PushProxy, message, 6);
+}
+
+
+void CGnuProtocol::ReceiveVM_NodeStats(Gnu_RecvdPacket &Packet)
+{
+	packet_VendMsg* VendMsg = (packet_VendMsg*) Packet.Header;
+	
+	CGnuNode* pNode = Packet.pTCP;
+
+	byte* message   = ((byte*) VendMsg) + 31;
+	int	  sublength = Packet.Length - 31;
+
+	if(sublength < 13)
+		return;
+
+	packet_StatsMsg StatsMsg;
+	memcpy(&StatsMsg, message, 13);
+
+	// Values sometimes mess up in debugger for StatsMsg
+	// Once assigned everything looks right
+
+	Packet.pTCP->m_StatsRecvd  = true;
+	Packet.pTCP->m_LeafMax	   = StatsMsg.LeafMax;
+	Packet.pTCP->m_LeafCount   = StatsMsg.LeafCount;
+	Packet.pTCP->m_UpSince	   = time(NULL) - StatsMsg.Uptime;
+	Packet.pTCP->m_Cpu		   = StatsMsg.Cpu;
+	Packet.pTCP->m_Mem		   = StatsMsg.Mem;
+	Packet.pTCP->m_UltraAble   = StatsMsg.FlagUltraAble;
+	Packet.pTCP->m_Router	   = StatsMsg.FlagRouter;
+	Packet.pTCP->m_FirewallTcp = StatsMsg.FlagTcpFirewall;
+	Packet.pTCP->m_FirewallUdp = StatsMsg.FlagUdpFirewall;
+}
+
+
+void CGnuProtocol::ReceiveVM_ModeChangeReq(Gnu_RecvdPacket &Packet)
+{
+	packet_VendMsg* VendMsg = (packet_VendMsg*) Packet.Header;
+	
+	CGnuNode* pNode = Packet.pTCP;
+
+	byte* message   = ((byte*) VendMsg) + 31;
+	int	  sublength = Packet.Length - 31;
+
+	if(sublength < 1)
+		return;
+
+	byte Request = 0;
+	memcpy(&Request, message, 1);
+
+	// Upgrade Request
+	if(Request == 0x01)
+	{
+		packet_VendMsg AckMsg;
+		AckMsg.Header.Guid = VendMsg->Header.Guid;
+		AckMsg.Ident       = packet_VendIdent("GNUC", 62, 1);
+		
+		if( Packet.pTCP->m_GnuNodeMode != GNU_ULTRAPEER || // Make sure remote is ultrapeer
+			m_pComm->m_GnuClientMode != GNU_LEAF ||		   // Make sure we are a leaf
+			!m_pComm->UltrapeerAble())					   // Make sure we are ultrapeer able
+		{
+			byte NoAck = 0x02;
+			Send_VendMsg(Packet.pTCP, AckMsg, &NoAck, 1);
+			return;
+		}
+	
+		byte YesAck = 0x01;
+		// Send both tcp and udp to ensure it gets there	
+		Send_VendMsg(Packet.pTCP, AckMsg, &YesAck, 1);
+		Send_VendMsg(NULL, AckMsg, &YesAck, 1);
+			
+		m_pComm->SwitchGnuClientMode(GNU_ULTRAPEER);
+		return;
+	}
+}
+
+void CGnuProtocol::ReceiveVM_ModeChangeAck(Gnu_RecvdPacket &Packet)
+{
+	packet_VendMsg* VendMsg = (packet_VendMsg*) Packet.Header;
+	
+	CGnuNode* pNode = Packet.pTCP;
+
+	byte* message   = ((byte*) VendMsg) + 31;
+	int	  sublength = Packet.Length - 31;
+
+	if(sublength < 1)
+		return;
+
+	byte Ack = 0;
+	memcpy(&Ack, message, 1);
+
+	// If we sent node a request and Ack signals a yes
+	if(Packet.pTCP->m_TriedUpgrade && Ack == 0x01)
+	{
+		m_pComm->m_NextUpgrade = time(NULL) + 40*60; // Node upgrade do not upgrade another 40 mins
+		Packet.pTCP->CloseWithReason("Leaf Upgraded");
+
+		// Reset 'tried' children so next time they're eligible
+		for(int i = 0; i < m_pComm->m_NodeList.size(); i++)
+			m_pComm->m_NodeList[i]->m_TriedUpgrade = false;
+	}
+}
+
+void CGnuProtocol::ReceiveVM_CrawlReq(Gnu_RecvdPacket &Packet)
+{
+	packet_VendMsg* VendMsg = (packet_VendMsg*) Packet.Header;
+	
+	byte* message   = ((byte*) VendMsg) + 31;
+	int	  sublength = Packet.Length - 31;
+
+	if(sublength < 3)
+		return;
+
+	int  UltraMax = message[0];
+	int  LeafMax  = message[1];
+	bool Time     = message[2] & CRAWL_UPTIME;
+	bool Local    = message[2] & CRAWL_LOCAL;
+	bool NewOnly  = message[2] & CRAWL_NEW;
+	bool Agents   = message[2] & CRAWL_AGENT;
+
+	// build list of nodes to send back
+	std::vector<CGnuNode*> Ultras;
+	std::vector<CGnuNode*> Leaves;
+
+	for(int i = 0; i < m_pComm->m_NodeList.size(); i++)
+		if(m_pComm->m_NodeList[i]->m_Status == SOCK_CONNECTED)
+		{
+			CGnuNode* pNode = m_pComm->m_NodeList[i];
+			
+			if(NewOnly && !pNode->m_SupportsUdpCrawl)
+				continue;
+
+			if(pNode->m_GnuNodeMode == GNU_ULTRAPEER)
+				Ultras.push_back(pNode);
+
+			if(pNode->m_GnuNodeMode == GNU_LEAF)
+				Leaves.push_back(pNode);
+		}
+
+	// trim node lists to size remote host requested
+	while(UltraMax != 255 && Ultras.size() > UltraMax)
+		Ultras.pop_back();
+
+	while(LeafMax != 255 && Leaves.size() > LeafMax)
+		Leaves.pop_back();
+
+	// put togther user agents
+	std::string UserAgents;
+
+	if( Agents )
+	{	
+		for(i = 0; i < Ultras.size(); i++)
+			UserAgents += Ultras[i]->m_RemoteAgent + ";" ;
+		
+		for(i = 0; i < Leaves.size(); i++)
+			UserAgents += Leaves[i]->m_RemoteAgent + ";" ;
+
+		UserAgents += m_pCore->GetUserAgent();
+
+		uint16 StringSize = UserAgents.size();
+
+		// write file to compress
+		gzFile gz = gzopen("udpcrawl.tmp", "wb+");
+		gzwrite(gz, &StringSize, 2);
+		gzwrite(gz, (void*) UserAgents.c_str(), UserAgents.size());
+		gzclose(gz);
+	}
+
+	// packet size = 3 + ultras & leaves + (2 + compressed data)
+	int   ackLength = 0;
+
+	int BytesPerResult = 6;
+	BytesPerResult += (Time)  ? 2 : 0;
+	BytesPerResult += (Local) ? 2 : 0;
+
+	ackLength += 3 + (Ultras.size() + Leaves.size()) * BytesPerResult;
+
+	// add compressed size of result
+	CFile  GzFile;
+	uint16 CompressSize = 0;
+
+	if(UserAgents.size() && GzFile.Open("udpcrawl.tmp", CFile::modeRead) )
+		CompressSize = GzFile.GetLength();
+
+	if(CompressSize)
+		ackLength += 2 + CompressSize;
+
+	// create payload for packet
+	byte* payload = new byte[ackLength];
+
+	payload[0] = Ultras.size();
+	payload[1] = Leaves.size();
+	
+	byte Flags = 0;
+	Flags |= (Time)    ? CRAWL_UPTIME : 0;
+	Flags |= (Local)   ? CRAWL_LOCAL  : 0;
+	Flags |= (NewOnly) ? CRAWL_NEW	  : 0;
+	Flags |= (Agents)  ? CRAWL_AGENT  : 0;
+
+	payload[2] = Flags;
+
+	// add ultrapeers
+	int CurrentPos = 3;
+
+	for(i = 0; i < Ultras.size(); i++)
+	{
+		WriteCrawlResult(payload + CurrentPos, Ultras[i], Flags);
+		CurrentPos += BytesPerResult;		
+	}
+
+	for(i = 0; i < Leaves.size(); i++)
+	{
+		WriteCrawlResult(payload + CurrentPos, Leaves[i], Flags);
+		CurrentPos += BytesPerResult;		
+	}
+
+	if(CompressSize)
+	{
+		memcpy(payload + CurrentPos, &CompressSize, 2);
+
+		GzFile.Read(payload + CurrentPos + 2, CompressSize);
+
+		GzFile.Close();
+	}
+
+	// Build Packet
+	packet_VendMsg CrawlAck;
+	memcpy(&CrawlAck.Header.Guid, &VendMsg->Header.Guid, 16);
+	CrawlAck.Ident = packet_VendIdent("LIME", 6, 1);
+
+	Send_VendMsg( NULL, CrawlAck, payload, ackLength, Packet.Source );
+}
+
+void CGnuProtocol::WriteCrawlResult(byte* buffer, CGnuNode* pNode, byte Flags)
+{
+	memcpy(buffer, &pNode->m_Address, 6);
+		
+	int pos = 6;
+
+	if(Flags | CRAWL_UPTIME)
+	{
+		uint16 minutes = time(NULL) - pNode->m_ConnectTime.GetTime();
+		minutes /= 60;
+
+		memcpy(buffer + pos, &minutes, 2);
+		pos += 2;
+	}
+
+	if(Flags | CRAWL_LOCAL)
+	{
+		if(pNode->m_LocalPref.GetLength() == 2)
+			memcpy(buffer + pos, pNode->m_LocalPref, 2);
+		else
+			memcpy(buffer + pos, "en", 2);
+
+		pos += 2;
+	}
 }
 
 ////////////////////////////////////////////////////////////////////////

@@ -281,3 +281,10 @@ struct packet_GGEPBlock
 };
 
 #pragma pack (pop)
+
+#define CRAWL_UPTIME	0x1 // total connection time to node in minutes
+#define CRAWL_LOCAL		0x2 // local pref info
+#define CRAWL_NEW		0x4 // return only nodes that support udp pong
+#define CRAWL_AGENT		0x8 // return zipped useragen list with self at end
+
+

@@ -618,6 +618,14 @@ void CGnuFileHash::LoadShareHashes(CString HashFileName)
 			if(Ident == "TreeSize")
 			{
 				hf.TreeSize = atoi(Value);
+
+				if(hf.TreeSize % 24 != 0)
+				{
+					ASSERT(0);
+					hf.TreeSize = 0;
+					continue;
+				}
+
 				hf.TigerTree = new byte[hf.TreeSize];
 				memset(hf.TigerTree, 0, hf.TreeSize);
 			}

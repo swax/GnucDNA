@@ -69,7 +69,7 @@ CGnuSearch::CGnuSearch(CGnuNetworks* pNet)
 	{
 		memcpy(&m_QueryID, &m_pNet->m_CurrentIP.S_addr, 4);
 
-		memcpy(((byte*) &m_QueryID) + 13, &m_pNet->m_pGnu->m_UdpPort, 2);
+		memcpy(((byte*) &m_QueryID) + 13, &m_pNet->m_CurrentPort, 2);
 	}
 
 	m_BrowseNode = NULL;

@@ -150,11 +150,13 @@ public:
 	bool m_SupportsDynQuerying;
 	bool m_SupportsStats;
 	bool m_SupportsModeChange;
+	bool m_SupportsUdpCrawl;
 	
 	IPv4 m_PushProxy;
 
 	int  m_RemoteMaxTTL;
 	
+	CString m_LocalPref;
 
 	// Compression
 	bool m_dnapressionOn;

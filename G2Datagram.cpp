@@ -35,6 +35,8 @@
 #include "G2Control.h"
 #include "G2Node.h"
 #include "G2Protocol.h"
+#include "UdpListener.h"
+
 #include "G2Datagram.h"
 
 
@@ -60,9 +62,6 @@ CG2Datagram::CG2Datagram(CG2Control* pG2Comm)
 
 CG2Datagram::~CG2Datagram()
 {
-	if(m_hSocket != INVALID_SOCKET)
-		AsyncSelect(0);
-
 	while( m_RecvCache.size() )
 	{
 		delete m_RecvCache.front();
@@ -86,18 +85,6 @@ CG2Datagram::~CG2Datagram()
 		}
 
 	m_TransferPacketAccess.Unlock();
-}
-
-
-void CG2Datagram::Init()
-{
-	Close();
-
-	if(!Create(m_pG2Comm->m_pNet->m_CurrentPort, SOCK_DGRAM))
-	{
-		int error = GetLastError();
-		ASSERT(0);
-	}
 }
 
 void CG2Datagram::Timer()
@@ -160,28 +147,9 @@ void CG2Datagram::Timer()
 	FlushSendBuffer();
 }	
 
-void CG2Datagram::OnReceive(int nErrorCode)
+void CG2Datagram::OnReceive(IPv4 Address, byte* pRecvBuff, int RecvLength)
 {
-	CString Host;
-	UINT    Port;
-	int RecvLength = ReceiveFrom(m_pRecvBuff, GND_RECV_BUFF, Host, Port);
-
-	if(RecvLength == 0)
-	{
-		// Connection Closed
-		return;
-	}
-	else if(RecvLength == SOCKET_ERROR)
-	{
-		int ErrorCode = GetLastError();
-		return;
-	}
-
-	IPv4 Address;
-	Address.Host = StrtoIP(Host);
-	Address.Port = Port;
-
-	Decode_GND(Address, (GND_Header*) m_pRecvBuff, RecvLength );
+	Decode_GND(Address, (GND_Header*) pRecvBuff, RecvLength );
 }
 
 void CG2Datagram::Decode_GND(IPv4 Address, GND_Header* RecvPacket, int length)
@@ -535,7 +503,10 @@ void CG2Datagram::FlushSendBuffer()
 		sa.sin_port   = htons((*itAck).Address.Port);
 		sa.sin_addr.S_un.S_addr = (*itAck).Address.Host.S_addr;
 
-		int UdpSent = SendTo( &(*itAck).Packet, ACK_LENGTH, (SOCKADDR*) &sa, sizeof(SOCKADDR) );
+		int UdpSent = 0;
+		
+		if(m_pG2Comm->m_pNet->m_pUdpSock)
+			UdpSent = m_pG2Comm->m_pNet->m_pUdpSock->SendTo( &(*itAck).Packet, ACK_LENGTH, (SOCKADDR*) &sa, sizeof(SOCKADDR) );
 		//SendTo( &(*itAck).Packe, ACK_LENGTH, (*itAck)->Address.Port, IPtoStr((*itAck)->Address.Host));
 
 		if(UdpSent < ACK_LENGTH)
@@ -597,7 +568,10 @@ void CG2Datagram::FlushSendBuffer()
 					sa.sin_port   = htons(pPacket->Address.Port);
 					sa.sin_addr.S_un.S_addr = pPacket->Address.Host.S_addr;
 
-					int UdpSent = SendTo( pFrag->Data, pFrag->Length, (SOCKADDR*) &sa, sizeof(SOCKADDR) );
+					int UdpSent = 0;
+					
+					if(m_pG2Comm->m_pNet->m_pUdpSock)
+						UdpSent = m_pG2Comm->m_pNet->m_pUdpSock->SendTo( pFrag->Data, pFrag->Length, (SOCKADDR*) &sa, sizeof(SOCKADDR) );
 					//SendTo( pFrag->Data, pFrag->Length, pPacket->Address.Port, IPtoStr(pPacket->Address.Host));
 
 					if(UdpSent < pFrag->Length)

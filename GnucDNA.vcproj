@@ -197,6 +197,9 @@
 				<File
 					RelativePath="GnuTransfers.cpp">
 				</File>
+				<File
+					RelativePath=".\UdpListener.cpp">
+				</File>
 				<Filter
 					Name="G1"
 					Filter="">
@@ -751,6 +754,9 @@
 				</File>
 				<File
 					RelativePath="GnuTransfers.h">
+				</File>
+				<File
+					RelativePath=".\UdpListener.h">
 				</File>
 				<Filter
 					Name="G1"

@@ -81,8 +81,6 @@ public:
 
 	// Network
 	CString  m_NetworkName;
-	
-	int m_UdpPort;
 
 	std::map<uint32, bool> m_TriedConnects;
 

@@ -5,7 +5,6 @@
 #define UDP_HUB_LIMIT   (10 * 1024) 
 #define UDP_CHILD_LIMIT ( 4 * 1024)
 
-#define GND_RECV_BUFF    2048
 #define GND_PACKET_BUFF 65536
 
 #define GND_MTU 500
@@ -25,22 +24,18 @@ struct GND_Packet;
 struct GND_Fragment;
 struct GND_Ack;
 
-class CG2Datagram : public CAsyncSocket
+class CG2Datagram
 {
 public:
 	CG2Datagram(CG2Control* pG2Comm);
 	virtual ~CG2Datagram();
-
-	void Init();
-
 	void Timer();
 
 	// Receiving
-	virtual void OnReceive(int nErrorCode);
+	virtual void OnReceive(IPv4 Address, byte* pRecvBuff, int RecvLength);
 	void Decode_GND(IPv4 Address, GND_Header* packet, int length);
 	void ProcessACK(GND_Header* Packet);
 
-	byte m_pRecvBuff[GND_RECV_BUFF];
 	byte m_pRecvPacketBuff[GND_PACKET_BUFF];
 	byte m_pSendPacketBuff[GND_PACKET_BUFF];
 

@@ -31,8 +31,32 @@ public:
 	void Receive_Bye(Gnu_RecvdPacket &Packet);
 	void Receive_Unknown(Gnu_RecvdPacket &Packet);
 
+	void ReceiveVM_Supported(Gnu_RecvdPacket &Packet);
+
+	void ReceiveVM_TCPConnectBack(Gnu_RecvdPacket &Packet);
+	void ReceiveVM_UDPConnectBack(Gnu_RecvdPacket &Packet);
+	void ReceiveVM_UDPRelayConnect(Gnu_RecvdPacket &Packet);
+
+	void ReceiveVM_QueryStatusReq(Gnu_RecvdPacket &Packet);
+	void ReceiveVM_QueryStatusAck(Gnu_RecvdPacket &Packet);
+
+	void ReceiveVM_QueryHitNum(Gnu_RecvdPacket &Packet);
+	void ReceiveVM_QueryHitReq(Gnu_RecvdPacket &Packet);
+
+	void ReceiveVM_PushProxyReq(Gnu_RecvdPacket &Packet);
+	void ReceiveVM_PushProxyAck(Gnu_RecvdPacket &Packet);
+
+	void ReceiveVM_NodeStats(Gnu_RecvdPacket &Packet);
+
+	void ReceiveVM_ModeChangeReq(Gnu_RecvdPacket &Packet);
+	void ReceiveVM_ModeChangeAck(Gnu_RecvdPacket &Packet);
+
+	void ReceiveVM_CrawlReq(Gnu_RecvdPacket &Packet);
+
 	void PacketError(CString Type, CString Error, byte* packet, int length);
 
+	void WriteCrawlResult(byte* buffer, CGnuNode* pNode, byte Flags);
+	
 	// Recv QHT
 	void Receive_RouteTableReset(Gnu_RecvdPacket &Packet);
 	void Receive_RouteTablePatch(Gnu_RecvdPacket &Packet);
