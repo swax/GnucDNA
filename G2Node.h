@@ -26,10 +26,10 @@ Total  740k
 #define G2_PACKET_BUFF  (65536+1024)
 #define G2_ZSTREAM_BUFF 16384
 
-#define QHT_TIMEOUT       3*60
+#define QHT_TIMEOUT       (3*60)
 #define LNI_TIMEOUT       60
 #define KHL_TIMEOUT_HUB   60
-#define KHL_TIMEOUT_CHILD 5*60
+#define KHL_TIMEOUT_CHILD (5*60)
 
 
 class CGnuCore;

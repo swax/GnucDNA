@@ -661,14 +661,14 @@ CG2Node* CG2Control::GetRandHub()
 		int hubCurrent = 0;
 
 		for(int i = 0; i < m_G2NodeList.size(); i++)
-		if(m_G2NodeList[i]->m_Status == SOCK_CONNECTED)
-			if(m_G2NodeList[i]->m_NodeMode == G2_HUB)
-			{
-				if( hubCurrent == hubReturn)
-					return m_G2NodeList[i];
-				else
-					hubCurrent++;
-			}
+			if(m_G2NodeList[i]->m_Status == SOCK_CONNECTED)
+				if(m_G2NodeList[i]->m_NodeMode == G2_HUB)
+				{
+					if( hubCurrent == hubReturn)
+						return m_G2NodeList[i];
+					else
+						hubCurrent++;
+				}
 	}
 
 	return NULL;

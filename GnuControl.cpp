@@ -121,6 +121,13 @@ CGnuControl::~CGnuControl()
 		}
 
 	m_NodeAccess.Unlock();
+
+	std::map<uint32, DynQuery*>::iterator itDyn = m_DynamicQueries.begin();
+	while(itDyn != m_DynamicQueries.end())
+	{
+		delete itDyn->second;
+		itDyn = m_DynamicQueries.erase(itDyn);
+	}
 }
 
 
@@ -700,6 +707,8 @@ void CGnuControl::Timer()
 	
 	ManageNodes();
 
+	DynQueryTimer();
+
 	/*m_Minute++;
 
 	if(m_Minute == 60)
@@ -1073,4 +1082,134 @@ void CGnuControl::StopSearch(GUID SearchGuid)
 			m_NodeList[i]->m_Status == SOCK_CONNECTED &&
 			m_NodeList[i]->m_SupportsVendorMsg)
 			m_NodeList[i]->Send_VendMsg( ReplyMsg, (byte*) &Hits, 2 );
+}
+
+void CGnuControl::AddDynQuery(DynQuery* pQuery)
+{
+	packet_Query* pPacket = (packet_Query*) pQuery->Packet;
+
+	std::map<uint32, DynQuery*>::iterator itDyn = m_DynamicQueries.find( HashGuid(pPacket->Header.Guid) );
+	if( itDyn != m_DynamicQueries.end() )
+	{
+		delete pQuery;
+		return;
+	}
+		
+	// Search for other queries started by this node
+	int InProgress = 0;
+	int OldestAge  = 0;
+	std::map<uint32, DynQuery*>::iterator itOldest;
+	 
+	for(itDyn = m_DynamicQueries.begin(); itDyn != m_DynamicQueries.end(); itDyn++)
+		if(itDyn->second->NodeID == pQuery->NodeID)
+		{
+			InProgress++;
+
+			if(itDyn->second->Secs > OldestAge)
+			{
+				OldestAge = itDyn->second->Secs;
+				itOldest  = itDyn;
+			}
+		}
+
+	// If too many in progress, end oldest search and start this new one
+	if(InProgress > DQ_MAX_QUERIES)
+	{
+		delete itOldest->second;
+		m_DynamicQueries.erase(itOldest);
+	}
+
+	// Dynamic Query ID:15 Created
+	TRACE0("Dynamic Query ID:" + NumtoStr(pQuery->NodeID) + " Created\n");
+	m_DynamicQueries[ HashGuid(pPacket->Header.Guid) ] = pQuery;
+}
+
+void CGnuControl::DynQueryTimer()
+{
+	std::map<uint32, DynQuery*>::iterator itDyn = m_DynamicQueries.begin();
+	while(itDyn != m_DynamicQueries.end())
+	{
+		DynQuery* pQuery = itDyn->second;
+
+		std::map<int, CGnuNode*>::iterator itNode = m_NodeIDMap.find(pQuery->NodeID);
+		
+		if(itNode == m_NodeIDMap.end()   ||   // Leaf disconnected
+		   pQuery->Hits > DQ_TARGET_HITS ||   // Target hits reached
+		   pQuery->Secs > DQ_QUERY_TIMEOUT )  // Query's time over
+		{
+			delete pQuery;
+			itDyn = m_DynamicQueries.erase(itDyn);
+			continue;
+		}
+
+	
+		pQuery->Secs++;	// Increase time query has been alive
+		
+
+		// Send query to node each interval
+		if(pQuery->Secs % DQ_QUERY_INTERVAL == 0)
+		{
+			int Attempts = 0;
+			while(Attempts < 10)
+			{
+				// Pick random ultrapeer to query next
+				CGnuNode* pUltra = GetRandUltrapeer();
+
+				std::map<int, bool>::iterator itQueried = pQuery->NodesQueried.find(pUltra->m_NodeID);
+				if(itQueried == pQuery->NodesQueried.end())
+				{
+					pUltra->SendPacket(pQuery->Packet, pQuery->PacketLength, PACKET_QUERY, MAX_TTL);
+
+					pQuery->NodesQueried[pUltra->m_NodeID] = true;
+					break;
+				}
+
+				Attempts++;
+			}
+		}
+		
+
+		// Send request to leaf to update hit count each interval
+		if(pQuery->Secs % DQ_UPDATE_INTERVAL == 0 && itNode->second->m_SupportsLeafGuidance)
+		{
+			CGnuNode* pLeaf = itNode->second;
+
+			packet_VendMsg StatusReq;
+			memcpy(&StatusReq.Header.Guid, pQuery->Packet, 16);
+			StatusReq.Ident = packet_VendIdent("BEAR", 11, 1);
+			pLeaf->Send_VendMsg( StatusReq );
+		}
+
+
+		itDyn++;
+	}
+}
+
+
+CGnuNode* CGnuControl::GetRandUltrapeer()
+{
+	int Ultrapeers = 0;
+
+	for(int i = 0; i < m_NodeList.size(); i++)
+		if(m_NodeList[i]->m_Status == SOCK_CONNECTED)
+			if(m_NodeList[i]->m_GnuNodeMode == GNU_ULTRAPEER)
+				Ultrapeers++;
+
+	if(Ultrapeers)
+	{
+		int upReturn = rand() % Ultrapeers;
+		int upCurrent = 0;
+
+		for(int i = 0; i < m_NodeList.size(); i++)
+			if(m_NodeList[i]->m_Status == SOCK_CONNECTED)
+				if(m_NodeList[i]->m_GnuNodeMode == GNU_ULTRAPEER)
+				{
+					if( upCurrent == upReturn)
+						return m_NodeList[i];
+					else
+						upCurrent++;
+				}
+	}
+
+	return NULL;
 }

@@ -6,6 +6,7 @@
 #include "GnuShare.h"
 
 struct key_Value;
+struct DynQuery;
 
 class CGnuNetworks;
 class CGnuLocal;
@@ -19,6 +20,8 @@ class CGnuShare;
 
 #define GNU_ULTRAPEER 1
 #define GNU_LEAF	  2
+
+#define MAX_TTL 3
 
 class CGnuControl
 {
@@ -60,6 +63,7 @@ public:
 	void RemoveNode(CGnuNode*);
 	CGnuNode* FindNode(CString, UINT);
 
+	CGnuNode* GetRandUltrapeer();
 
 	// Socket Counts
 	int	 CountSuperConnects();
@@ -89,6 +93,12 @@ public:
 	void DropLeaf();
 	
 	void ShareUpdate();
+
+	// Dynamic Queries
+	void AddDynQuery(DynQuery* pQuery);
+	void DynQueryTimer();
+
+	std::map<uint32, DynQuery*> m_DynamicQueries;
 
 	// Network
 	CString  m_NetworkName;
@@ -132,4 +142,48 @@ public:
 	CGnuCache*     m_pCache;
 	CGnuTransfers* m_pTrans;
 	CGnuShare*	   m_pShare;
+};
+
+
+#define DQ_TARGET_HITS		50		// Number of hits to obtain for leaf
+#define DQ_QUERY_TIMEOUT	(3*60)  // Time a dyn query lives for
+#define DQ_QUERY_INTERVAL	7       // Interval to send next query out
+#define DQ_UPDATE_INTERVAL	5       // Interval to ask leaf for a hit update
+#define DQ_MAX_QUERIES      4		// Simultaneous qeueries by 1 node
+
+struct DynQuery
+{
+	int NodeID;
+
+	byte* Packet;
+	int   PacketLength;
+
+	std::map<int, bool> NodesQueried;
+
+	int Secs;
+	int Hits;
+
+	DynQuery(int nodeID, byte* packet, int length)
+	{
+		NodeID = nodeID;
+
+		Packet = new byte[length];
+		memcpy(Packet, packet, length);
+
+		PacketLength = length;
+
+		Secs = 0;
+		Hits = 0;
+	};
+
+	~DynQuery()
+	{
+		// Dynamic Query ID:15 Destroyed, Secs:30, Hits:15
+		TRACE0("Dynamic Query ID:" + NumtoStr(NodeID) + " Destroyed, Secs:" + NumtoStr(Secs) + ", Hits:" + NumtoStr(Hits) + "\n");
+
+		if(Packet)
+			delete [] Packet;
+
+		Packet = NULL;
+	};
 };

@@ -1,13 +1,11 @@
 
-Ultrapeer Side: Leaf Guided Dynamic Query
-Dynamic Querying
 Recv/Send Out of band hits
 Push Proxy 
 
 Test
     Download re-search, stop and start
 	Verify 'Supported Messages' correctly formatted
-	Verify last hop queriest are being sent out
+
 	
 Gnutella
     No upgrade to ultrapeer

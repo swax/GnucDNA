@@ -17,6 +17,7 @@
 
 #include "GnuPackets.h"
 #include "GnuShare.h"
+#include "GnuControl.h"
 
 #define REQUERY_WAIT 30
 
@@ -27,10 +28,8 @@
 #define LEAF_THROTTLE_IN  1000
 #define LEAF_THROTTLE_OUT 1000
 
-#define PATCH_TIMEOUT  3*60
+#define PATCH_TIMEOUT  (3*60)
 #define PATCH_PART_MAXSIZE 2048
-
-#define MAX_TTL 3
 
 class CGnuNetworks;
 class CGnuTransfers;

@@ -1,10 +1,14 @@
 GnucDNA 1.1.0.1
-	swabby: Removed support for Gnutella 0.4
-	swabby: Gnutella X-Degree of 32
-	swabby: Gnutella Inter-Ultrapeer Query Routing
-	swabby: Gnutella support for unknown and variable packet sizes
-	swabby: Gnutella pongs only sent for hosts directly connected
-	swabby: Gnutella vendor message support
+	Gnutella
+		swabby: Removed support for Gnutella 0.4
+		swabby: X-Degree of 32, Max TTL of 3
+		swabby: Inter-Ultrapeer Query Routing
+		swabby: Support for unknown and variable packet sizes
+		swabby: Vendor message support
+		swabby: Ultrapeer mode performs Dynamic Queries on behalf of leaf
+		swabby: Leaf guided dynamic queries
+		swabby: Pongs only sent for hosts directly connected
+		
 	swabby: Download re-search performed with standard search class
 	jthomps: Removed mutex, moved to GnucCOM
 	

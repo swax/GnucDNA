@@ -12,7 +12,7 @@
  * Please see file COPYING or http://bitzi.com/publicdomain 
  * for more info.
  *
- * $Id: TigerTree2.h,v 1.1 2004/04/06 04:45:39 swabby Exp $
+ * $Id: TigerTree2.h,v 1.2 2004/05/22 09:27:20 swabby Exp $
  */
 #pragma once
 
@@ -28,12 +28,12 @@
 #define NODESIZE (TIGERSIZE*2)
 
 /* Byte size of lowest recorded node in tree */
-#define TREE_RESOLUTION 128 * 1024
+#define TREE_RESOLUTION (128 * 1024)
 
 /* default size of interim values stack, in TIGERSIZE
  * blocks. If this overflows (as it will for input
  * longer than 2^64 in size), havoc may ensue. */
-#define STACKSIZE TIGERSIZE*56
+#define STACKSIZE (TIGERSIZE*56)
 
 typedef struct tt2_context {
   word64 count;                   /* total blocks processed */

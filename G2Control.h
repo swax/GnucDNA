@@ -21,12 +21,12 @@ class CG2Node;
 #define PACKETS_PER_SEC  8
 #define ALT_HOST_MAX     5
 
-#define ROUTE_EXPIRE	3 * 60
-#define QA_QUERY_RETRY  5 * 60 // Each node with 10 connects, 30 secs between search of cluster
+#define ROUTE_EXPIRE	(3 * 60)
+#define QA_QUERY_RETRY  (5 * 60) // Each node with 10 connects, 30 secs between search of cluster
 
-#define CLEAN_ROUTES  3 * 60
-#define CLEAN_KEYS    1 * 60
-#define CLEAN_GLOBAL  5 * 60
+#define CLEAN_ROUTES  (3 * 60)
+#define CLEAN_KEYS    (1 * 60)
+#define CLEAN_GLOBAL  (5 * 60)
 
 #define MAX_ROUTES	 20000
 #define MAX_KEYS	 50000
@@ -38,7 +38,7 @@ class CG2Node;
 #define OPT_BANDWIDTH_DOWN 512 // 512 kilobits // use ping?
 #define OPT_BANDWIDTH_UP   512 // 512 kilobits
 #define OPT_LEAFMAX		   500   // 500 Children
-#define OPT_UPTIME		   6 * 60 * 60 // 6 hours
+#define OPT_UPTIME		   (6 * 60 * 60) // 6 hours
 
 #define AVG_DNA   0
 #define AVG_TOTAL 1

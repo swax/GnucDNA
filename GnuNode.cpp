@@ -38,7 +38,6 @@
 #include "GnuSearch.h"
 #include "GnuCache.h"
 #include "GnuRouting.h"
-#include "GnuControl.h"
 #include "G2Control.h"
 #include "GnuWordHash.h"
 #include "GnuMeta.h"
@@ -1525,6 +1524,14 @@ void CGnuNode::SetConnected()
 	m_StatusText = "Connected";
 	m_pComm->NodeUpdate(this);
 
+	// For testing protcol compatibility
+	//if( m_RemoteAgent.Find("1.1.0.0") == -1 )
+	//	if( m_RemoteAgent.Find("Lime") == -1 && m_RemoteAgent.Find("Bear") == -1 )
+	//	{
+	//		CloseWithReason("Not DNA");
+	//		return;
+	//	}
+
 	// Setup inflate if remote host supports it
 	if(m_InflateRecv)
 	{
@@ -1570,10 +1577,28 @@ void CGnuNode::SetConnected()
 
 	if(m_SupportsVendorMsg)
 	{
-		packet_VendMsg VendMsg;
-		GnuCreateGuid(&VendMsg.Header.Guid);
-		VendMsg.Ident = packet_VendIdent("\0\0\0\0", 0, 0);
-		Send_VendMsg( VendMsg );
+		// Put together vector of support message types
+		std::vector<packet_VendIdent> SupportedMessages;
+		SupportedMessages.push_back( packet_VendIdent("BEAR", 11, 1) );
+		SupportedMessages.push_back( packet_VendIdent("BEAR", 12, 1) );
+
+		uint16 VectorSize = SupportedMessages.size();
+
+		int   length  = 2 + VectorSize * 8;
+		byte* payload = new byte[length];
+
+		memcpy(payload, &VectorSize, 2);
+
+		for(int i = 0; i < VectorSize; i++)
+			memcpy(payload + 2 + (i * 8), &SupportedMessages[i], 8);
+
+
+		packet_VendMsg SupportedMsg;
+		GnuCreateGuid(&SupportedMsg.Header.Guid);
+		SupportedMsg.Ident = packet_VendIdent("\0\0\0\0", 0, 0);
+		Send_VendMsg( SupportedMsg, payload, length );
+
+		delete [] payload;
 	}
 }
 
@@ -2388,15 +2413,19 @@ void CGnuNode::Receive_Query(packet_Query* Query, int nLength)
 				Query->Header.TTL = MAX_TTL;   
 
 			// Received from Leaf
-			else if( m_GnuNodeMode == GNU_LEAF )
+			if( m_GnuNodeMode == GNU_LEAF )
 			{
-				// Keep TTL the Same
-
-				m_pComm->Broadcast_Query(Query, nLength, this);
+				// Keep TTL the Same from leaf to UP to dyn query list
+				m_pComm->AddDynQuery( new DynQuery(m_NodeID, (byte*) Query, nLength) );
+				
+		
+				// Change ttl after its added to dyn query list
+				// So query initially sent to other chilren and immediate UPs based on QRTs
+				Query->Header.TTL = 1;
 			}
 
 			// Received from Ultrapeer
-			else if( m_GnuNodeMode == GNU_ULTRAPEER)
+			if( m_GnuNodeMode == GNU_ULTRAPEER)
 			{
 				if(Query->Header.TTL != 0)
 					Query->Header.TTL--;
@@ -2593,6 +2622,11 @@ void CGnuNode::Receive_QueryHit(packet_QueryHit* QueryHit, DWORD nLength)
 					QueryHit->Header.TTL++;
 
 				m_pComm->Route_QueryHit(QueryHit, nLength, RouteID);
+
+				// Update dyn query
+				std::map<uint32, DynQuery*>::iterator itDyn = m_pComm->m_DynamicQueries.find( HashGuid(QueryHit->Header.Guid) );
+				if( itDyn != m_pComm->m_DynamicQueries.end() )
+					itDyn->second->Hits += QueryHit->TotalHits;
 			}
 
 		AddGoodStat(QueryHit->Header.Function);
@@ -3036,7 +3070,7 @@ void CGnuNode::Receive_VendMsg(packet_VendMsg* VendMsg, int nLength)
 		if( sublength == 2 + VectorSize * 8)
 		{
 			// VMS Gnucleus 12.33.43.13: BEAR/11v1 
-			TRACE0("VMS " + m_RemoteAgent + " " + m_HostIP + ": ");
+			//TRACE0("VMS " + m_RemoteAgent + " " + m_HostIP + ": ");
 
 			for(int i = 2; i < sublength; i += 8)
 			{
@@ -3047,10 +3081,10 @@ void CGnuNode::Receive_VendMsg(packet_VendMsg* VendMsg, int nLength)
 				if(Msg == "BEAR/11v1")
 					m_SupportsLeafGuidance = true;
 
-				TRACE0(Msg + " ");
+				//TRACE0(Msg + " ");
 			}
 
-			TRACE0("\n");
+			//TRACE0("\n");
 		}
 		else
 			m_pCore->DebugLog("Gnutella", "Vendor Msg, Messages Support, VS:" + NumtoStr(VectorSize) + ", SL:" + NumtoStr(sublength));
@@ -3081,6 +3115,34 @@ void CGnuNode::Receive_VendMsg(packet_VendMsg* VendMsg, int nLength)
 
 				Send_VendMsg( ReplyMsg, (byte*) &Hits, 2 );
 			}
+	}
+
+	// Leaf Guided Dyanic Query: Query Status Response
+	if( memcmp(VendMsg->Ident.VendorID, "BEAR", 4) == 0 && VendMsg->Ident.Type == 12 && VendMsg->Ident.Version <= 1)
+	{
+		byte* message   = ((byte*) VendMsg) + 31;
+		int	  sublength = nLength - 31;
+
+		if(sublength != 2)
+			return;
+
+		uint16 HitCount = 0;
+		memcpy(&HitCount, message, 2);
+
+		std::map<uint32, DynQuery*>::iterator itDyn = m_pComm->m_DynamicQueries.find( HashGuid(VendMsg->Header.Guid) );
+		if( itDyn != m_pComm->m_DynamicQueries.end() )
+		{
+			// End Query if 0xFFFF received
+			if(HitCount == 0xFFFF)
+			{
+				delete itDyn->second;
+				m_pComm->m_DynamicQueries.erase(itDyn);
+			}
+
+			// Otherwise update hit count if its greater than what we've seen
+			else if(HitCount > itDyn->second->Hits)
+				itDyn->second->Hits = HitCount;
+		}
 	}
 
 }
@@ -3445,50 +3507,21 @@ void CGnuNode::Send_VendMsg(packet_VendMsg VendMsg, byte* payload, int length)
 	VendMsg.Header.Function	= 0x31;
 	VendMsg.Header.TTL		= 1;
 	VendMsg.Header.Hops		= 0;
-	VendMsg.Header.Payload	= 8;
+	VendMsg.Header.Payload	= 8 + length;
 
-	// Messages Supported
-	if( memcmp(VendMsg.Ident.VendorID, "\0\0\0\0", 4) == 0 && VendMsg.Ident.Type == 0 && VendMsg.Ident.Version == 0)
-	{
-		// Put together vector of support message types
-		std::vector<packet_VendIdent> SupportedMessages;
-		
-		SupportedMessages.push_back( packet_VendIdent("BEAR", 11, 1) );
-		SupportedMessages.push_back( packet_VendIdent("BEAR", 12, 1) );
+	// Build packet
+	FinalLength = 31 + length;
+	FinalPacket = new byte[FinalLength];
 
-		uint16 VectorSize = SupportedMessages.size();
+	memcpy(FinalPacket, &VendMsg, 31);
 
-		VendMsg.Header.Payload = 8 + 2 + VectorSize * 8;
-		
-		// Build packet
-		FinalLength = 31 + 2 + VectorSize * 8;
-		FinalPacket = new byte[FinalLength];
-
-		memcpy(FinalPacket, &VendMsg, 31);
-		memcpy(FinalPacket + 31, &VectorSize, 2);
-
-		for(int i = 0; i < VectorSize; i++)
-			memcpy(FinalPacket + 31 + 2 + (i * 8), &SupportedMessages[i], 8);
-	}
-	
-	else if(payload && length)
-	{
-		VendMsg.Header.Payload = 8 + length;
-
-		// Build packet
-		FinalLength = 31 + length;
-		FinalPacket = new byte[FinalLength];
-
-		memcpy(FinalPacket, &VendMsg, 31);
+	if(payload)
 		memcpy(FinalPacket + 31, payload, length);
-	}
 
-	if(FinalPacket)
-	{
-		SendPacket(FinalPacket, FinalLength, PACKET_VENDMSG, VendMsg.Header.Hops);
-		delete [] FinalPacket;
-		FinalPacket = NULL;
-	}
+	SendPacket(FinalPacket, FinalLength, PACKET_VENDMSG, VendMsg.Header.Hops);
+	
+	delete [] FinalPacket;
+	FinalPacket = NULL;
 }
 
 bool CGnuNode::GetAlternateHostList(CString &HostList)
