@@ -1,19 +1,5 @@
-verify webcache tried
-trywebcache(address, network)
-verify x-dna header given g1/g2
-fast connectoin with no cache or bad load cache
+drop older version dna before newer one when in leaf mode
 
-add trywebcache method to be safe
-	does an add and an attempt
-	
-get nodes from single cache, ips added to both g1/g2
-dont load webcache file
-add method to com to force try cache taking url parameter
-
-verify g1/g2 sending leaf counts
-
-webcache
-	filter client name
 
 Stop and Start share file
 when plugin system in connection should be changed to udp test method

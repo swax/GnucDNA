@@ -105,7 +105,6 @@ public:
 
 
 	// Other
-	bool GetAlternateHostList(CString &);
 	bool GetTryUltrapeers(CString &, bool);
 
 	void  Timer();

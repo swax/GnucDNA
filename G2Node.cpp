@@ -575,11 +575,13 @@ void CG2Node::ParseOutboundHandshake(CString Data, byte* Stream, int StreamLengt
 	if( m_RemoteAgent.IsEmpty() )
 		m_RemoteAgent = FindHeader("User-Agent");
 		
+	
+	/* Not a problem yet like gnutella, shareaza doesnt send useragent on fail	
 	if( !ValidAgent(m_RemoteAgent) )
 	{
 		CloseWithReason("Client Not Valid");
 		return;
-	}
+	}*/
 
 
 	// Parse X-Try-Hubs header

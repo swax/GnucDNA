@@ -581,16 +581,18 @@ bool CG2Control::ConnectFromCache(std::list<Node> &Cache, bool Perm)
 		for(int i = 0; itNode != Cache.end(); itNode++, i++)
 			if(i == CachePos)
 			{
+				Node TryNode = *itNode;
+
 				if( !Perm )
 					Cache.erase(itNode);
 
-				std::map<uint32, bool>::iterator itAddr = m_TriedConnects.find( StrtoIP((*itNode).Host).S_addr );
+				std::map<uint32, bool>::iterator itAddr = m_TriedConnects.find( StrtoIP(TryNode.Host).S_addr );
 				if(itAddr != m_TriedConnects.end())
 					break;
 
-				m_TriedConnects[ StrtoIP((*itNode).Host).S_addr ] = true;
+				m_TriedConnects[ StrtoIP(TryNode.Host).S_addr ] = true;
 
-				CreateNode( *itNode );
+				CreateNode( TryNode );
 
 				return true;
 			}

@@ -1003,7 +1003,7 @@ void CGnuNode::ParseOutboundHandshake06(CString Data, byte* Stream, int StreamLe
 		StatusLine.Replace( m_NetworkName + "/0.6 ", "");
 
 		
-		CloseWithReason(StatusLine, true);
+		CloseWithReason(StatusLine, 200, true);
 		return;
 	}
 }
