@@ -1407,7 +1407,10 @@ void CG2Control::Receive_PI(G2_RecvdPacket &PacketPI)
 						PacketPI.pTCP->CloseWithReason("Duplicate Connection");
 
 				if(PacketPI.pTCP->m_Status == SOCK_CLOSED)
+				{
 					m_pCache->RemoveIP( IPtoStr(PacketPI.pTCP->m_Address.Host), NETWORK_G2);
+					m_pCache->RemoveIP( IPtoStr(PacketPI.pTCP->m_Address.Host), NETWORK_GNUTELLA);
+				}
 
 				PacketPI.pTCP->m_RemoteIdent = Ping.Ident;
 			}
