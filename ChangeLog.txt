@@ -1,27 +1,35 @@
-GnucDNA 1.1.0.3
-	Gnutella
-		swabby: Removed support for Gnutella 0.4
-		swabby: X-Degree of 32, Max TTL of 3
-		swabby: Inter-Ultrapeer Query Routing
-		swabby: Support for unknown and variable packet sizes
-		swabby: Vendor message support
-		swabby: Ultrapeer mode performs Dynamic Queries on behalf of leaf
-		swabby: Leaf guided dynamic queries
-		swabby: Out of Band QueryHits
-		swabby: Full Push Proxy Support
-		swabby: TCP/UDP Connect back support
-		swabby: Pongs only sent for hosts directly connected
+GnucDNA 1.1.0.4
+	swabby: Revised download research system
+	fred: Fixed bug GWebCache not updating
 	
-	jthomps: Removed mutex, moved to GnucCOM
-	swabby: Revised Gnutella/G2 SuperNode balancing system, both use same algorithm	
-	swabby: Improved NAT detection
+GnucDNA 1.1.0.3
+	swabby: Full Push Proxy Support
+	swabby: Revised Gnutella/G2 SuperNode balancing system
 	swabby: Firewalled tag added to G2 Query Hit packets
-	swabby: Download re-search performed with standard search class
+	swabby: Improved NAT detection
+	
+GnucDNA 1.1.0.2
 	swabby: gdna namespace created to avoid inter-lib conflicts
+	swabby: TCP/UDP Connect back support
+	fred: Valid URL parsing fix
+	
+GnucDNA 1.1.0.1
+	Gnutella
+	swabby: Removed support for Gnutella 0.4
+	swabby: X-Degree of 32, Max TTL of 3
+	swabby: Inter-Ultrapeer Query Routing
+	swabby: Support for unknown and variable packet sizes
+	swabby: Vendor message support
+	swabby: Ultrapeer mode performs Dynamic Queries on behalf of leaf
+	swabby: Leaf guided dynamic queries
+	swabby: Out of Band QueryHits
+	swabby: Pongs only sent for hosts directly connected
+	swabby: Download re-search performed with standard search class
 	
 GnucDNA 1.1.0.0
 	swabby: Moved to new GnucDNAr3 code base
 	swabby: GnucDNA is now only a pure library
+	jthomps: Removed mutex, moved to GnucCOM
 
 GnucDNA 1.0.2.7
 	swabby: Support for authentication over transfers
@@ -320,6 +328,7 @@ People:
     californiakidd: Jonathan Ballard 
 	henrik: Henrik Backe [backe@swipnet.se]
 	egor: Egor Shokurov [egors@dev.netreflector.com]
+	fred: Fred Decker [fred.decker@sbcglobal.net]
 	fv: Florian [napalm@arnet.com.ar]
 	icehenge: Nigel Heath [nigel@icehenge.freeserve.co.uk]
 	jthomps: Jeff Thompson [jefft@threeputt.org]

@@ -116,15 +116,19 @@ public:
 	int		m_TreeRes;
 	//CString m_BitprintHash;
 
-	CString     m_Search;
-	int         m_SearchID;
-
 	CString m_MetaXml; // used because meta loaded after transfers loaded
 	int m_MetaID;
 	std::map<int, CString> m_AttributeMap;
 
 	std::vector<CGnuDownload*> m_Sockets;
 
+	// Researching
+	CString     m_Search;
+	int         m_SearchID;
+
+	uint64	m_NextReSearch;
+	int		m_ReSearchInterval;
+	
 
 	// File info
 	CFileLock m_File;

@@ -52,6 +52,8 @@ CGnuTransfers::CGnuTransfers()
 
 	m_NextDownloadID = 1;
 	m_NextUploadID = 1;
+
+	m_NextReSearch = 0;
 }
 
 void CGnuTransfers::InitTransfers(CGnuCore* pCore)
@@ -64,6 +66,8 @@ void CGnuTransfers::InitTransfers(CGnuCore* pCore)
 	LoadDownloads();
 
 	m_UploadQueue.Init(this);
+
+	m_Minute = 0;
 }
 
 CGnuTransfers::~CGnuTransfers(void)
@@ -149,6 +153,54 @@ void CGnuTransfers::Timer()
 {
 	ManageDownloads();
 	ManageUploads();
+
+	m_Minute++;
+	if(m_Minute == 60)
+	{
+		MinuteTimer();
+		m_Minute = 0; 
+	}
+}
+
+
+void CGnuTransfers::MinuteTimer()
+{
+	//	Make sure 5 mins have passed since last research
+	if(time(NULL) < m_NextReSearch)
+		return;
+
+
+	CGnuDownloadShell *pSelected = NULL;
+
+	uint64 LowestNextResearch = 0;
+
+	for(int i = 0; i < m_DownloadList.size(); i++)
+	{
+		CGnuDownloadShell *pDown = m_DownloadList[i];
+		
+		// Dont research pending or done
+		if(pDown->m_ShellStatus != CGnuDownloadShell::ePending &&
+		   pDown->m_ShellStatus != CGnuDownloadShell::eDone)
+		{
+			ASSERT(pDown->m_NextReSearch != 0);
+
+			// Find the download most over due for a re-search
+			if(LowestNextResearch == 0 || pDown->m_NextReSearch < LowestNextResearch)
+			{
+				pSelected = pDown;
+				LowestNextResearch =  pDown->m_NextReSearch;
+			}
+		}
+	}
+
+	// check time to see if good to do re-search
+	if(pSelected && time(NULL) > pSelected->m_NextReSearch)
+	{
+		pSelected->ReSearch();
+
+		m_NextReSearch = time(NULL) + (5*60); // dont any researching for 5 mins
+
+	}     
 }
 
 void CGnuTransfers::ManageDownloads()

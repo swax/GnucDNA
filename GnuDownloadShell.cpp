@@ -84,11 +84,15 @@ CGnuDownloadShell::CGnuDownloadShell(CGnuTransfers* pTrans)
 
 	m_NextHostID  = 1;
 
-	m_SearchID = 0;
-
 	m_BackupBytes = 0;
 	m_BackupHosts = 0;
 	m_BackupInterval = 0;
+	
+	// Research
+	m_SearchID = 0;
+
+	m_NextReSearch		= 0;
+	m_ReSearchInterval	= 0;
 
 	// Tiger Tree
 	m_TigerTree = NULL;
@@ -361,6 +365,9 @@ void CGnuDownloadShell::Start()
 		m_ShellStatus = eActive;
 
 		m_Cooling   = 0;
+
+		m_ReSearchInterval	= 15;
+		m_NextReSearch		= time(NULL) + (60 * 10);
 	}
 }
 
@@ -1093,9 +1100,18 @@ void CGnuDownloadShell::ReSearch()
 	pSearch->SendHashQuery("", HASH_SHA1, m_Sha1Hash);
 
 
-	Start(); 
-	
-	m_Retry     = false;
+	m_ShellStatus	= eActive;
+	m_Retry			= false;
+	m_Cooling		= 0;
+	m_HostTryPos	= 1;
+
+	// research done at 15m, 30m, 1h, 2h, 4h, 8h, 8h...
+	if(m_ReSearchInterval < 8 * 60)
+		m_ReSearchInterval *= 2;
+	else
+		m_ReSearchInterval = 8 * 60;
+
+	m_NextReSearch = time(NULL) + (60 * m_ReSearchInterval); 
 }
 
 

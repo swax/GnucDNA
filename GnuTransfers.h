@@ -27,6 +27,7 @@ public:
 	CString GetBackupString(CString Property, int &StartPos, CString &Backup);
 	
 	void Timer();
+	void MinuteTimer();
 	void ManageDownloads();
 	void ManageUploads();
 
@@ -61,6 +62,8 @@ public:
 	std::map<int, CGnuUploadShell*> m_UploadMap;
 	int m_NextUploadID;
 
+	int m_Minute;
+	uint64 m_NextReSearch;
 
 	//Upload queuing
 	CUploadQueue  m_UploadQueue;	// Queue of pending uploads

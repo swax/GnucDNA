@@ -344,7 +344,9 @@ void CG2Control::Timer()
 
 void CG2Control::HourlyTimer()
 {
-	
+	// Web Cache check in
+	if(m_ClientMode == G2_HUB && !m_pNet->m_TcpFirewall)
+		m_pCache->WebCacheUpdate();
 }
 
 void CG2Control::TrimMaps()
