@@ -618,6 +618,7 @@ LONG CDnaDownload::DownloadFile(LPCTSTR Name, LONG Size, LONG HashID, LPCTSTR Ha
 	m_gnuTrans->m_DownloadAccess.Unlock();
 
 	// Go through search list to look for hosts
+	Download->Start();
 	Download->ReSearch();
 	Download->BackupHosts();
 	Download->BackupParts();

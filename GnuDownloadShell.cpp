@@ -446,7 +446,7 @@ void CGnuDownloadShell::Timer()
 	// If this download is activated
 	else if(m_ShellStatus == eActive)
 	{
-		if( !AllPartsActive() ) // Do not combine with below, avoid trynexthost()
+		if( !AllPartsActive() || m_FileLength == 0) // Do not combine with below, avoid trynexthost()
 		{
 			if( IsDownloading() )
 			{

@@ -351,6 +351,7 @@ void CGnuDownload::OnReceive(int nErrorCode)
 				return;
 			}
 	
+
 			// Response from push proxy server
 			if(m_PushProxy)
 			{
@@ -469,14 +470,120 @@ void CGnuDownload::OnReceive(int nErrorCode)
 				}
 			}
 
+			// Server Name
+			CString ServerName = ParsedHeaders.FindHeader("Server");
+			if( !ServerName.IsEmpty() )
+			{
+				m_ServerName       = ServerName;
+				HostInfo()->Vendor = ServerName;
+			}
+
+			// User Agent
+			CString UserAgent = ParsedHeaders.FindHeader("User-Agent");
+			if( !UserAgent.IsEmpty() )
+			{
+				m_ServerName       = UserAgent;
+				HostInfo()->Vendor = UserAgent;
+			}
 
 			// Success code
 			if( (200 <= Code && Code < 300) || Code == 302 )
 			{		
 				int ContentLength = 0, RemoteFileSize = 0, StartByte = 0, EndByte = 0;
 
+				// Conent-Length
+				CString strContentLength = ParsedHeaders.FindHeader("Content-Length");
+				if( !strContentLength.IsEmpty() )
+				{
+					ContentLength = atol(strContentLength);
 
-				// Go through all headers
+					if(m_pShell->m_FileLength == 0)
+					{
+						m_pShell->m_FileLength = ContentLength;
+						m_pShell->CreatePartList();	
+						SendRequest();
+						return;
+					}
+				}
+
+				// Content-Range
+				CString ContentRange = ParsedHeaders.FindHeader("Content-Range");
+				if( !ContentRange.IsEmpty() )
+				{
+					ContentRange.MakeLower();
+
+					ContentRange.Replace("bytes=", "bytes ");	//Some wrongly send bytes=x-y/z in Content-Range header
+					
+					if(ContentRange.Find("*") != -1)
+					{
+						sscanf(ContentRange, "bytes */%ld", &RemoteFileSize);
+						StartByte = m_PausePos - ContentLength;
+						EndByte   = m_PausePos - 1;
+					}
+					else
+						sscanf(ContentRange, "bytes %ld-%ld/%ld", &StartByte, &EndByte, &RemoteFileSize);
+					
+					// Usually DownloadFile with unknown size
+					if( m_pShell->m_FileLength == 0 && RemoteFileSize)
+					{
+						m_pShell->m_FileLength = RemoteFileSize;
+						m_pShell->CreatePartList();	
+						SendRequest();
+						return;
+					}	
+
+					if (EndByte > m_StartPos && EndByte < m_PausePos - 1)
+						m_PausePos = EndByte + 1;
+				}
+
+
+				// Location header (redirected)
+				CString Location = ParsedHeaders.FindHeader("Location");
+				if( !Location.IsEmpty() )
+				{
+					FileSource WebSource; 
+					m_pShell->URLtoSource(WebSource, Location);
+
+					m_pShell->AddHost( WebSource );
+
+					SetError("Redirected");
+					Close();
+					return;
+				}
+
+				// Connection Header
+				CString ConnectType = ParsedHeaders.FindHeader("Connection");
+				if( !ConnectType.IsEmpty() )
+				{
+					ConnectType.MakeLower();
+
+					if(ConnectType == "keep-alive")
+						m_KeepAlive = true;
+					
+					if(ConnectType == "close")
+						m_KeepAlive = false;
+				}
+
+				// Authorization
+				CString AuthChallenge = ParsedHeaders.FindHeader("X-Auth-Challenge");
+				if( !AuthChallenge.IsEmpty() )
+				{
+					m_RemoteChallenge = AuthChallenge;
+					if(m_pNet->m_pCore->m_dnaCore->m_dnaEvents)
+						m_pNet->m_pCore->m_dnaCore->m_dnaEvents->DownloadChallenge(m_pShell->m_DownloadID, m_HostID, m_RemoteChallenge);
+				
+					// Send Answer to Challenge
+					if( !m_RemoteChallengeAnswer.IsEmpty() )
+					{
+						CString AuthResponse = "AUTH\r\n";
+						AuthResponse += "X-Auth-Response: " + m_RemoteChallengeAnswer + "\r\n";
+						AuthResponse += "\r\n";
+						Send(AuthResponse, AuthResponse.GetLength());
+					}
+				}
+
+
+				// Go through repeating headers
 				for (i = 0; i < ParsedHeaders.m_Headers.size(); i++)
 				{
 					CString HeaderName  = ParsedHeaders.m_Headers[i].Name;
@@ -484,39 +591,9 @@ void CGnuDownload::OnReceive(int nErrorCode)
 
 					HeaderName.MakeLower();
 					
-					// Conent-Length
-					if (HeaderName == "content-length")
-						ContentLength = atol(HeaderValue);
-
-					// Content-Range
-					else if (HeaderName == "content-range")
-					{
-						HeaderValue.MakeLower();
-
-						HeaderValue.Replace("bytes=", "bytes ");	//Some wrongly send bytes=x-y/z in Content-Range header
-						
-						if(HeaderValue.Find("*") != -1)
-						{
-							sscanf(HeaderValue, "bytes */%ld", &RemoteFileSize);
-							StartByte = m_PausePos - ContentLength;
-							EndByte   = m_PausePos - 1;
-						}
-						else
-							sscanf(HeaderValue, "bytes %ld-%ld/%ld", &StartByte, &EndByte, &RemoteFileSize);
-						
-						// Usually DownloadFile with unknown size
-						if( m_pShell->m_FileLength == 0 && RemoteFileSize)
-						{
-							m_pShell->m_FileLength = RemoteFileSize;
-							m_pShell->CreatePartList();			
-						}	
-
-						if (EndByte > m_StartPos && EndByte < m_PausePos - 1)
-							m_PausePos = EndByte + 1;
-					}
-
+					
 					// Alt-Location (old format)
-					else if (HeaderName == "alt-location" || HeaderName == "x-gnutella-alternate-location")
+					if (HeaderName == "alt-location" || HeaderName == "x-gnutella-alternate-location")
 					{
 						AltLocation OldFormat = HeaderValue;
 
@@ -554,64 +631,6 @@ void CGnuDownload::OnReceive(int nErrorCode)
 						if(!found)
 							HostInfo()->DirectHubs.push_back(PushProxy);
 					}
-
-					// Location header (redirected)
-					else if (HeaderName == "location")
-					{
-						FileSource WebSource; 
-						m_pShell->URLtoSource(WebSource, HeaderValue);
-
-						m_pShell->AddHost( WebSource );
-
-						SetError("Redirected");
-						Close();
-						return;
-					}
-
-					// Connection Header
-					else if (HeaderName == "connection")
-					{
-						HeaderValue.MakeLower();
-
-						if(HeaderValue == "keep-alive")
-							m_KeepAlive = true;
-						
-						if(HeaderValue == "close")
-							m_KeepAlive = false;
-					}
-
-					// Server type
-					else if (HeaderName == "server")
-					{
-						m_ServerName = HeaderValue;
-						HostInfo()->Vendor = m_ServerName;
-					}
-
-					// Client name
-					else if (HeaderName == "user-agent")
-					{
-						m_ServerName = HeaderValue;
-						HostInfo()->Vendor = m_ServerName;
-					}
-
-					// Authorization
-					else if (HeaderName == "x-auth-challenge" && !HeaderValue.IsEmpty())
-					{
-						m_RemoteChallenge = HeaderValue;
-						if(m_pNet->m_pCore->m_dnaCore->m_dnaEvents)
-							m_pNet->m_pCore->m_dnaCore->m_dnaEvents->DownloadChallenge(m_pShell->m_DownloadID, m_HostID, m_RemoteChallenge);
-					
-						// Send Answer to Challenge
-						if( !m_RemoteChallengeAnswer.IsEmpty() )
-						{
-							CString AuthResponse = "AUTH\r\n";
-							AuthResponse += "X-Auth-Response: " + m_RemoteChallengeAnswer + "\r\n";
-							AuthResponse += "\r\n";
-							Send(AuthResponse, AuthResponse.GetLength());
-						}
-					}
-
-					// Other headers - add here
 				}
 
 				
@@ -1001,6 +1020,9 @@ bool CGnuDownload::ByteIsInRanges(int StartByte )
 
 void CGnuDownload::SendRequest()
 {
+	HostInfo()->Handshake = "";
+	m_Header = "";
+
 	m_DoHead = false;	//For GetStartPosPartial (GetStartPos would set this to true)
 	m_TigerRequest = false;
 
@@ -1044,10 +1066,11 @@ void CGnuDownload::SendRequest()
 	// Get file start pos
 	if( !GetStartPos() )
 	{
-		if( HostInfo()->AvailableRanges.size() )
+		if( HostInfo()->AvailableRanges.size() || m_pShell->m_FileLength == 0)
 			m_DoHead = true;
 		else
 		{
+			SetError("Could not find a start pos");
 			Close();
 			return;
 		}
@@ -1397,9 +1420,6 @@ void CGnuDownload::DownloadBytes(byte* pBuff, int nSize)
 
 			if(m_KeepAlive)
 			{
-				HostInfo()->Handshake = "";
-				m_Header = "";
-
 				if( !m_pShell->CheckCompletion() )
 				{
 					StatusUpdate(TRANSFER_CONNECTED);
@@ -1476,9 +1496,6 @@ void CGnuDownload::DownloadBytes(byte* pBuff, int nSize)
 
 		if(m_KeepAlive)
 		{
-			HostInfo()->Handshake = "";
-			m_Header = "";
-
 			if( !m_pShell->CheckCompletion() )
 			{
 				StatusUpdate(TRANSFER_CONNECTED);
@@ -1600,8 +1617,6 @@ void CGnuDownload::Timer()
 			//Time to send a queue update again
 			TRACE0("Q> Repolling queue. File:" + HostInfo()->Name + " IP:" + IPtoStr(HostInfo()->Address.Host) + "\n");	//TODO: Tor: Remove (QueueTrace)
 			
-			HostInfo()->Handshake = "";
-			m_Header = "";
 			SendRequest();
 		}
 	}
