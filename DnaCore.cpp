@@ -56,9 +56,6 @@ CDnaCore::CDnaCore()
 {
 	AfxSocketInit();
 
-	CreateMutex(NULL, false, "GnucDNA_Mutex");
-
-
 	m_Loaded = false;
 
 	Load();

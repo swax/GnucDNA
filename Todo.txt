@@ -1,12 +1,16 @@
 
-Test
-	Verify DNA Leaf -> LimeWire UP, DNA Leaf -> BearShare UP, DNA Leaf -> DNA UP
-	Verify Changes in shar
-   Connect to ultrapeers and leaf mode, verify forwarded queries match shared files
-   Verify stopping shared files, cuts forwarded queries
-   Verify Queries forwarded and not forwarded last hop
-   Verify receiving last hop queries only for files shared
+Set minspeed field of query
+Handle UDP gnutella incoming
+Send UDP response
+Handle UDP gnutella results
 
+Read minspeed in queries
+Send udp test to host
+Receive udp reply
+Send udp results
+
+No handshake header for out of band
+x-dynamic-query for staggard queries
 
 Gnu Questions
 	Why does limewire make 6 connects in leaf mode?

@@ -73,7 +73,7 @@
 
 
 // DNA Build Options, only define one
-#define DNA_VERSION "1.0.2.6"
+#define DNA_VERSION "1.1.0.0"
 
 #define BUILD_STATIC           // Compiling or using DNA as library
 //#define BUILD_DYNAMIC_DNA    // Compiling DNA as DLL

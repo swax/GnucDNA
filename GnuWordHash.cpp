@@ -291,9 +291,11 @@ void CGnuWordHash::LookupQuery(GnuQuery &FileQuery, std::list<UINT> &Indexes, st
 		CString Term = FileQuery.Terms[i];
 		Term.MakeLower();
 
-		if( Term.Left(4) == "urn:" && Term.GetLength() > 4)
-			Keywords.push_back( (LPCTSTR) Term ) ;
-
+		if( Term.Left(4) == "urn:")
+		{
+			if(Term.GetLength() > 4)
+				Keywords.push_back( (LPCTSTR) Term ) ;
+		}
 		else if( Term.Left(1) == "<" )
 			BreakupMeta( Term, Keywords);
 

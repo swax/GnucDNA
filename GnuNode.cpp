@@ -2027,6 +2027,13 @@ void CGnuNode::Receive_Ping(packet_Ping* Ping, int nLength)
 		return;
 	}
 
+	// Ping not useful anymore except for keep alives
+	if(Ping->Header.Hops > 1)
+	{
+		m_pComm->PacketIncoming(m_NodeID, (byte*) Ping, nLength, ERROR_HOPS, false);
+		return;
+	}
+
 	int RouteID	     = m_pComm->m_TableRouting.FindValue(Ping->Header.Guid);
 	int LocalRouteID = m_pComm->m_TableLocal.FindValue(Ping->Header.Guid);
 
@@ -2402,12 +2409,15 @@ void CGnuNode::Receive_Query(packet_Query* Query, int nLength)
 			}
 		}
 
+		// Test too see routed last hop queries are correct
+/*#ifdef _DEBUG
 		if(Query->Header.TTL == 0 && m_SupportInterQRP)
 		{
 			CString Text((char*) Query + 25);
-			TRACE0("QUERY:" + Text + "\n");
+			TRACE0("INTER-QRP:" + Text + "\n");
 		}
-			
+#endif*/
+
 		// Queue to be compared with local files
 		GnuQuery G1Query;
 		G1Query.Network    = NETWORK_GNUTELLA;
@@ -2427,7 +2437,7 @@ void CGnuNode::Receive_Query(packet_Query* Query, int nLength)
 		}
 
 		G1Query.Terms.push_back( CString((char*) Query + 25, TextSize) );
-		
+
 		while(!ExtendedQuery.IsEmpty())
 			G1Query.Terms.push_back( ParseString(ExtendedQuery, 0x1C) );
 
@@ -2786,7 +2796,7 @@ void CGnuNode::Receive_RouteTableReset(packet_RouteTableReset* TableReset, UINT 
 		return;
 	}
 
-	if(m_GnuNodeMode != GNU_ULTRAPEER)		   		 
+	if(m_pComm->m_GnuClientMode != GNU_ULTRAPEER)	   		 
 	{
 		m_pCore->DebugLog("Gnutella", "Table Reset Received while in Leaf Mode");
 		return;
@@ -2815,7 +2825,7 @@ void CGnuNode::Receive_RouteTablePatch(packet_RouteTablePatch* TablePatch, UINT 
 		return;
 	}
 
-	if(m_GnuNodeMode != GNU_ULTRAPEER)		   		 
+	if(m_pComm->m_GnuClientMode != GNU_ULTRAPEER)		   		 
 	{
 		m_pCore->DebugLog("Gnutella", "Table Patch Received while in Leaf Mode");
 		return;
@@ -2946,6 +2956,8 @@ void CGnuNode::ApplyPatchTable()
 	{
 		if(m_PatchBits == 4)
 		{
+			
+
 			// high bit
 			remotePos = i * 2;
 			SetPatchBit(remotePos, Factor, PatchTable[i] >> 4);
@@ -2953,6 +2965,9 @@ void CGnuNode::ApplyPatchTable()
 			// low bit
 			remotePos++;
 			SetPatchBit(remotePos, Factor, PatchTable[i] & 0xF);
+			
+			byte test = PatchTable[i];
+			test++;
 		}
 		else if(m_PatchBits == 8)
 		{
@@ -2967,7 +2982,9 @@ void CGnuNode::ApplyPatchTable()
 	// Patch table for node modified, if node a child update inter-hub QHT
 	if( m_GnuNodeMode == GNU_LEAF )
 		for( i = 0; i < m_pComm->m_NodeList.size(); i++)
-			if(m_pComm->m_NodeList[i]->m_GnuNodeMode == GNU_ULTRAPEER && m_pComm->m_NodeList[i]->m_Status == SOCK_CONNECTED)
+			if(m_pComm->m_NodeList[i]->m_GnuNodeMode == GNU_ULTRAPEER && 
+				m_pComm->m_NodeList[i]->m_SupportInterQRP &&
+				m_pComm->m_NodeList[i]->m_Status == SOCK_CONNECTED)
 				m_pComm->m_NodeList[i]->m_SendDelayPatch = true;
 }
 
@@ -3239,8 +3256,7 @@ void CGnuNode::Send_PatchTable()
 		// Find what changed and build a 4 bit patch table for it
 		for(byte mask = 1; mask != 0; mask *= 2)
 		{ 
-			pos++;
-
+			
 			// No change
 			if( (PatchTable[i] & mask) == (m_LocalHitTable[i] & mask) )
 			{
@@ -3262,6 +3278,8 @@ void CGnuNode::Send_PatchTable()
 				else
 					FourBitPatch[pos / 2] |= 1;  // low 1
 			}
+			
+			pos++;
 		}
 
 		m_LocalHitTable[i] = PatchTable[i];

@@ -68,7 +68,11 @@ CGnuControl::CGnuControl(CGnuNetworks* pNet)
 
 	m_NetworkName		= "GNUTELLA";
 
-	m_GnuClientMode   = GNU_ULTRAPEER;
+//#ifdef _DEBUG
+	m_GnuClientMode = GNU_ULTRAPEER;
+//#else
+//	m_GnuClientMode = GNU_LEAF;
+//#endif
 
 	m_ForcedUltrapeer = false;
 	
@@ -178,7 +182,22 @@ void CGnuControl::Broadcast_LocalQuery(byte* Packet, int length)
 	Query->Header.Hops		= 0;
 	Query->Header.TTL		= MAX_TTL;
 	Query->Header.Payload	= length - 23;
-	Query->Speed			= 0;
+
+
+	// New MinSpeed Field
+	Query->Speed = 0;		 // bit 0 to 8, Was reserved to indicate the number of max query hits expected, 0 if no maximum   
+	/*Query->Speed |= 1 << 10; // bit 10, I understand and desire Out Of Band queryhits via UDP   
+	
+	//Query->Speed |= 1 << 13; // bit 11 I understand the H GGEP extension in queryhits
+	//Query->Speed |= 1 << 13; // bit 12 Leaf guided dynamic querying   
+
+	Query->Speed |= 1 << 13; // bit 13, I understand and want XML metadata in query hits   
+		
+	//if(m_pNet->m_TcpFirewall)
+		Query->Speed |= 1 << 14; // bit 14, I am firewalled, please reply only if not firewalled 
+
+	Query->Speed |= 1 << 15; // bit 15, Special meaning of the minspeed field, has to be always set.  
+*/
 
 	m_TableLocal.Insert(Query->Header.Guid, 0);
 
@@ -190,6 +209,54 @@ void CGnuControl::Broadcast_LocalQuery(byte* Packet, int length)
 		if(p->m_Status == SOCK_CONNECTED)
 			p->SendPacket(Packet, length, PACKET_QUERY, Query->Header.Hops);
 	}
+
+// Test sending query to leaf based on hash table
+// Make sure debug in UP mode, above uncommented
+/*#ifdef _DEBUG
+	
+	// Inspect
+	int QuerySize  = Query->Header.Payload - 2;
+	int TextSize   = strlen((char*) Query + 25) + 1;
+
+	CString ExtendedQuery;
+
+	if (TextSize < QuerySize)
+	{
+		int ExtendedSize = strlen((char*) Query + 25 + TextSize);
+	
+		if(ExtendedSize)
+			ExtendedQuery = CString((char*) Query + 25 + TextSize, ExtendedSize);
+	}
+
+	// Queue to be compared with local files
+	GnuQuery G1Query;
+	G1Query.Network    = NETWORK_GNUTELLA;
+	G1Query.OriginID   = 0;
+	G1Query.SearchGuid = Query->Header.Guid;
+
+	if(m_GnuClientMode == GNU_ULTRAPEER)
+	{
+		G1Query.Forward = true;
+
+		memcpy(G1Query.Packet, (byte*) Query, length);
+		G1Query.PacketSize = length;
+	}
+
+	G1Query.Terms.push_back( CString((char*) Query + 25, TextSize) );
+
+	while(!ExtendedQuery.IsEmpty())
+		G1Query.Terms.push_back( ParseString(ExtendedQuery, 0x1C) );
+
+
+	m_pShare->m_QueueAccess.Lock();
+		m_pShare->m_PendingQueries.push_front(G1Query);	
+	m_pShare->m_QueueAccess.Unlock();
+
+
+	m_pShare->m_TriggerThread.SetEvent();
+
+#endif*/
+
 }
 
 
@@ -438,6 +505,8 @@ void CGnuControl::Forward_Query(GnuQuery &FileQuery, std::list<int> &MatchingNod
 	packet_Query* pQuery = (packet_Query*) FileQuery.Packet;
 	if(pQuery->Header.TTL == 0)
 		pQuery->Header.TTL++;
+	if(pQuery->Header.Hops == MAX_TTL)
+		pQuery->Header.Hops--;
 
 	std::list<int>::iterator  itNodeID;
 

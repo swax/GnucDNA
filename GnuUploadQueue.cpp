@@ -273,23 +273,26 @@ void CUploadQueue::DebugReport()
 	
 	m_Minute = 0;
 
-	std::list<UploadQueueItem>::iterator  itItem;
-	
-	TRACE0("\nQ> Minute Report\n");
+	if(m_WaitList.size() || m_Queue.size() || m_PassList.size())
+	{
+		std::list<UploadQueueItem>::iterator  itItem;
+		
+		TRACE0("\nQ> Minute Report\n");
 
-	int i = 0;
-	for(itItem = m_WaitList.begin(); itItem != m_WaitList.end(); itItem++, i++)
-		TRACE0("Q> Wait " + NumtoStr(i + 1) + ": " + IPtoStr((*itItem).Host) + (*itItem).RequestURI + " ttl=" + NumtoStr((*itItem).SecsLeft) + "\n");
+		int i = 0;
+		for(itItem = m_WaitList.begin(); itItem != m_WaitList.end(); itItem++, i++)
+			TRACE0("Q> Wait " + NumtoStr(i + 1) + ": " + IPtoStr((*itItem).Host) + (*itItem).RequestURI + " ttl=" + NumtoStr((*itItem).SecsLeft) + "\n");
 
-	i = 0;
-	for(itItem = m_Queue.begin(); itItem != m_Queue.end(); itItem++, i++)
-		TRACE0("Q> Queue " + NumtoStr(i + 1) + ": " + IPtoStr((*itItem).Host) + (*itItem).RequestURI + " ttl=" + NumtoStr((*itItem).SecsLeft) + "\n");
+		i = 0;
+		for(itItem = m_Queue.begin(); itItem != m_Queue.end(); itItem++, i++)
+			TRACE0("Q> Queue " + NumtoStr(i + 1) + ": " + IPtoStr((*itItem).Host) + (*itItem).RequestURI + " ttl=" + NumtoStr((*itItem).SecsLeft) + "\n");
 
-	i = 0;
-	for(itItem = m_PassList.begin(); itItem != m_PassList.end(); itItem++, i++)
-		TRACE0("Q> Pass " + NumtoStr(i + 1) + ": " + IPtoStr((*itItem).Host) + (*itItem).RequestURI + " ttl=" + NumtoStr((*itItem).SecsLeft) + "\n");
-	
-	TRACE0("\n");
+		i = 0;
+		for(itItem = m_PassList.begin(); itItem != m_PassList.end(); itItem++, i++)
+			TRACE0("Q> Pass " + NumtoStr(i + 1) + ": " + IPtoStr((*itItem).Host) + (*itItem).RequestURI + " ttl=" + NumtoStr((*itItem).SecsLeft) + "\n");
+		
+		TRACE0("\n");
+	}
 }
 
 

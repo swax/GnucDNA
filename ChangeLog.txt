@@ -1,10 +1,12 @@
-GnucDNA 1.0.3.1
+GnucDNA 1.1.0.1
 	swabby: Removed support for Gnutella 0.4
-	swabby: Gnutella X-Degree Support
+	swabby: Gnutella X-Degree of 32
 	swabby: Gnutella Inter-Ultrapeer Query Routing
 	swabby: Gnutella support for unknown and variable packet sizes
+	swabby: Gnutella pongs only sent for hosts directly connected
+	jthomps: Removed mutex, moved to GnucCOM
 	
-GnucDNA 1.0.3.0
+GnucDNA 1.1.0.0
 	swabby: Moved to new GnucDNAr3 code base
 	swabby: GnucDNA is now only a pure library
 
