@@ -1,7 +1,7 @@
 /********************************************************************************
 
-	GnucDNA - The Gnucleus Library
-    Copyright (C) 2000-2004 John Marshall Group
+	GnucDNA - A Gnutella Library
+    Copyright (C) 2000-2004 John Marshall
 
     This library is free software; you can redistribute it and/or
     modify it under the terms of the GNU Lesser General Public
@@ -166,7 +166,7 @@ void CGnuDownloadShell::Init(CString Name, int FileSize, int HashID, CString Has
 {
 	m_Name = Name;
 
-	m_FileLength  = FileSize;
+	m_FileLength = FileSize;
 
 	if( m_FileLength )
 		CreatePartList();
@@ -215,8 +215,11 @@ void CGnuDownloadShell::AddHost(FileSource HostInfo)
 		return;
 
 	// Usually DownloadFile with unknown size
-	if( m_FileLength == 0 && HostInfo.Sha1Hash == m_Sha1Hash)
+	if( m_FileLength == 0 && HostInfo.Size && HostInfo.Sha1Hash == m_Sha1Hash)
+	{
 		m_FileLength = HostInfo.Size;
+		CreatePartList();
+	}		
 
 
 	if(HostInfo.Size != m_FileLength || HostInfo.Sha1Hash != m_Sha1Hash)
@@ -355,7 +358,7 @@ void CGnuDownloadShell::Start()
 {
 	m_HostTryPos = 1;
 	
-	if(GetBytesCompleted() < m_FileLength)
+	if(m_FileLength == 0 || GetBytesCompleted() < m_FileLength)
 	{
 		m_ShellStatus = eActive;
 
@@ -708,7 +711,7 @@ DWORD CGnuDownloadShell::GetStatus()
 	// Completed or Failed
 	if(m_ShellStatus == eDone)
 	{
-		if(m_FileLength == GetBytesCompleted())
+		if(m_FileLength && m_FileLength == GetBytesCompleted())
 		{
 			if(!m_HashComputed)
 				return TRANSFER_RECEIVING;
@@ -806,6 +809,9 @@ int CGnuDownloadShell::GetBytesCompleted()
 
 bool CGnuDownloadShell::CheckCompletion()
 {
+	if(m_FileLength == 0)
+		return false;
+
 	// Make sure all parts finished, this also sub-hashes finished parts
 	bool PartsFinished = true;
 
@@ -1168,7 +1174,7 @@ CString CGnuDownloadShell::GetFilePath()
 	if(GetBytesCompleted() == 0)
 		return "";
 
-	if(m_FileLength == GetBytesCompleted())
+	if(m_FileLength && m_FileLength == GetBytesCompleted())
 		Path = m_FilePath;
 	else
 		Path = m_PartialPath;
@@ -1186,7 +1192,7 @@ void CGnuDownloadShell::RunFile()
 
 void CGnuDownloadShell::ReSearch()
 {
-	if(GetBytesCompleted() >= m_FileLength)
+	if(m_FileLength && m_FileLength >= GetBytesCompleted())
 		return;
 
 	SendGnuQuery(NULL);

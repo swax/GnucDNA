@@ -252,7 +252,7 @@ IP CGnuNetworks::GuessLocalHost()
 
 		if( IsPrivateIP(Address) )
 		{
-			if(ReturnIP.S_addr == 0)
+			if(ReturnIP.S_addr == StrtoIP("127.0.0.1").S_addr)
 				ReturnIP = Address;
 
 			m_BehindRouter = true;

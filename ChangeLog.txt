@@ -1,5 +1,8 @@
 GnucDNA 1.0.2.7
 	swabby: Support for authentication over transfers
+	swabby: LocalIP set to a private one if public cant be found
+	swabby: DownloadFile works with zero size now
+	swabby: Fixed Download re-searching getting sources bug
 	
 GnucDNA 1.0.2.6
 	swabby: Update server re-direction works

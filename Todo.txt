@@ -5,7 +5,7 @@ QH2/FW
 NAT detection, map of 10000 ips, once 10000 hit turn off detection
   add ips from udp send and sock connects
 If PI/RELAY recved with UDP address of directly connected host (but not from directly connected host), disconnect youngest link
-Query Keys set to requested IP
+
 
 Now	
 	IPrefs::SetSpeedUp
@@ -16,7 +16,6 @@ Now
 
 
 Test
-    not creating local hit table for children when in hub mode
 	*forwarding q2, blank q2s are being forwarded
 	/TO packet
 	table % full doesnt get too large

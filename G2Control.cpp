@@ -1,7 +1,7 @@
 /********************************************************************************
 
-	GnucDNA - The Gnucleus Library
-    Copyright (C) 2000-2004 John Marshall Group
+	GnucDNA - A Gnutella Library
+    Copyright (C) 2000-2004 John Marshall
 
     This library is free software; you can redistribute it and/or
     modify it under the terms of the GNU Lesser General Public
@@ -2156,8 +2156,7 @@ void CG2Control::Receive_QH2(G2_RecvdPacket &PacketQH2)
 			break;
 		}
 
-	if(pSearch == NULL)
-		return;
+	// Dont return here because there could be result of file downloading
 	
 	m_SearchPacketsRecvd++;
 
@@ -2252,12 +2251,11 @@ void CG2Control::Receive_QH2(G2_RecvdPacket &PacketQH2)
 				G2Source.Speed = QueryHit.HitGroups[j].Speed / 8;
 			}
 
-		
-
 
 		// Send to searches
 		if(pSearch)
 			pSearch->IncomingSource( G2Source );
+
 
 		// Send to downloads
 		std::map<CString, CGnuDownloadShell*>::iterator itDown = m_pTrans->m_DownloadHashMap.find(G2Source.Sha1Hash);

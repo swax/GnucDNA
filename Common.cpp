@@ -27,7 +27,6 @@
 #include "stdafx.h"
 #include "Common.h"
 
-
 DWORD AssignThreadToCPU(CWinThread *pThread, DWORD cpuNumber)
 {
 	DWORD dwErr = 0;

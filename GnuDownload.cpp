@@ -1,7 +1,7 @@
 /********************************************************************************
 
-	GnucDNA - The Gnucleus Library
-    Copyright (C) 2000-2004 John Marshall Group
+	GnucDNA - A Gnutella Library
+    Copyright (C) 2000-2004 John Marshall
 
     This library is free software; you can redistribute it and/or
     modify it under the terms of the GNU Lesser General Public
@@ -41,7 +41,6 @@
 #include "GnuAltLoc.h"
 
 #include "DnaCore.h"
-#include "DnaEvents.h"
 
 #include "hash/TigerTree2.h"
 
@@ -490,6 +489,12 @@ void CGnuDownload::OnReceive(int nErrorCode)
 						else
 							sscanf(HeaderValue, "bytes %ld-%ld/%ld", &StartByte, &EndByte, &RemoteFileSize);
 						
+						// Usually DownloadFile with unknown size
+						if( m_pShell->m_FileLength == 0 && RemoteFileSize)
+						{
+							m_pShell->m_FileLength = RemoteFileSize;
+							m_pShell->CreatePartList();			
+						}	
 
 						if (EndByte > m_StartPos && EndByte < m_PausePos - 1)
 							m_PausePos = EndByte + 1;
@@ -545,8 +550,8 @@ void CGnuDownload::OnReceive(int nErrorCode)
 					else if (HeaderName == "x-auth-challenge" && !HeaderValue.IsEmpty())
 					{
 						m_RemoteChallenge = HeaderValue;
-						if(m_pNet->m_pCore->m_dnaCore->m_dnaEvents)
-							m_pNet->m_pCore->m_dnaCore->m_dnaEvents->DownloadChallenge(m_pShell->m_DownloadID, m_HostID, m_RemoteChallenge);
+						//if(m_pNet->m_pCore->m_dnaCore->m_dnaEvents)
+						//	m_pNet->m_pCore->m_dnaCore->m_dnaEvents->DownloadChallenge(m_pShell->m_DownloadID, m_HostID, m_RemoteChallenge);
 					
 						// Send Answer to Challenge
 						if( !m_RemoteChallengeAnswer.IsEmpty() )
@@ -934,7 +939,7 @@ void CGnuDownload::SendRequest()
 
 
 	// Send TigerTree request if available
-	if( HostInfo()->TigerSupport && m_pShell->m_TigerTree == NULL)
+	if( HostInfo()->TigerSupport && m_pShell->m_TigerTree == NULL && m_pShell->m_FileLength)
 	{
 		bool RequestPending = false;
 

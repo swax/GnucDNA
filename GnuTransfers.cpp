@@ -1,7 +1,7 @@
 /********************************************************************************
 
-	GnucDNA - The Gnucleus Library
-    Copyright (C) 2000-2004 John Marshall Group
+	GnucDNA - A Gnutella Library
+    Copyright (C) 2000-2004 John Marshall
 
     This library is free software; you can redistribute it and/or
     modify it under the terms of the GNU Lesser General Public
@@ -25,13 +25,8 @@
 
 
 #include "stdafx.h"
-
-#include "DnaCore.h"
-#include "DnaDownload.h"
-#include "DnaUpload.h"
-#include "DnaEvents.h"
-
 #include "GnuCore.h"
+
 #include "GnuNetworks.h"
 #include "GnuPrefs.h"
 #include "GnuControl.h"
@@ -43,8 +38,12 @@
 #include "GnuDownloadShell.h"
 #include "GnuDownload.h"
 
-#include "GnuTransfers.h"
+#include "DnaCore.h"
+#include "DnaDownload.h"
+#include "DnaUpload.h"
+#include "DnaEvents.h"
 
+#include "gnutransfers.h"
 
 CGnuTransfers::CGnuTransfers()
 {
@@ -591,7 +590,7 @@ void CGnuTransfers::RemoveCompletedDownloads()
 	{
 		CGnuDownloadShell* p = *itDown;
 
-		if(p->m_FileLength == p->GetBytesCompleted())
+		if(p->m_FileLength && p->m_FileLength == p->GetBytesCompleted())
 		{
 			m_DownloadAccess.Lock();
 
