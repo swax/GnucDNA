@@ -4,6 +4,7 @@ GnucDNA 1.1.1.3
 	swabby: Gnutella and G2 UDP port combined
 	swabby: Support for limewire crawler
 	swabby: Added check for corrupted tiger in gnuhashes file
+	swabby: Fixed bug when tiger hash verifying small files
 	
 GnucDNA 1.1.1.2
 	swabby: Downloaded IPs from webcache randomized

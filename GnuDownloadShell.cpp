@@ -1419,7 +1419,7 @@ bool CGnuDownloadShell::PartVerified(int PartNumber)
 
 	int TreeOffset = m_TreeSize - (BaseNodes * 24) + (NodeOffset * 24);
 	
-	if(TreeOffset > 0 && TreeOffset <= m_TreeSize - 24)
+	if(TreeOffset >= 0 && TreeOffset <= m_TreeSize - 24)
 		if(memcmp(m_TigerTree + TreeOffset, Tiger_Digest, 24) == 0)
 		{
 			for(i = PartNumber; i < m_PartList.size(); i++)

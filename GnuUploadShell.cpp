@@ -869,6 +869,9 @@ bool CGnuUploadShell::LoadTigerTree()
 					return false;
 				}
 
+				if(m_TigerTree)
+					delete [] m_TigerTree;
+
 				// if thex 
 				if( m_TigerThexRequest )
 				{
