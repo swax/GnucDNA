@@ -1,9 +1,9 @@
 /********************************************************************************
 
 	GnucDNA - The Gnucleus Library
-    Copyright (C) 2000-2005 John Marshall Group
+	Copyright (C) 2000-2005 John Marshall Group
 
-    This program is free software; you can redistribute it and/or
+	This program is free software; you can redistribute it and/or
 	modify it under the terms of the GNU General Public License
 	as published by the Free Software Foundation; either version 2
 	of the License, or any later version.
@@ -18,7 +18,7 @@
 	Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 	By contributing code you grant John Marshall Group an unlimited, non-exclusive
-	license your contribution.
+	license to your contribution.
 
 	For support, questions, commercial use, etc...
 	E-Mail: swabby@c0re.net
