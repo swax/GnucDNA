@@ -389,17 +389,17 @@ void CGnuDownload::OnReceive(int nErrorCode)
 			// raza X-Thex-URI: /gnutella/thex/v1?urn:tree:tiger/:C2GKRKXQYZR3C2SCUGSMBRT7VOILXTGRS5A5GLY&depth=9&ed2k=0
 			// lime X-Thex-URI: /uri-res/N2X?urn:sha1:YWSC2W6KZ3ZXDM2242CDJ7S5QECLBU22;VZZE5DTQ3YLA2CTP3BJ4SCQOKU7TWDYXPTFFLGQ
 
-			CString TigerPath;
-
-			if( TigerPath.IsEmpty() )
-				TigerPath = ParsedHeaders.FindHeader("X-TigerTree-Path");
+			CString TigerPath = ParsedHeaders.FindHeader("X-TigerTree-Path");
 	
 			if( TigerPath.IsEmpty() )
 			{
 				TigerPath = ParsedHeaders.FindHeader("X-Thex-URI");
-				HostInfo()->TigerUseThex = true;
+
+				if( !TigerPath.IsEmpty() )
+					HostInfo()->TigerUseThex = true;
 			}
-			
+
+
 			if( !TigerPath.IsEmpty() )
 			{
 				CString TigerURI = TigerPath;
@@ -1512,13 +1512,11 @@ void CGnuDownload::DownloadBytes(byte* pBuff, int nSize)
 			else
 				HostInfo()->TigerSupport = false;
 
-			if(m_KeepAlive)
+
+			if(m_KeepAlive && !m_pShell->CheckCompletion() )
 			{
-				if( !m_pShell->CheckCompletion() )
-				{
-					StatusUpdate(TRANSFER_CONNECTED);
-					SendRequest();
-				}
+				StatusUpdate(TRANSFER_CONNECTED);
+				SendRequest();
 			}
 			else
 			{
