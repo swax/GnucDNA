@@ -58,19 +58,10 @@ Node::Node(CString nHost, UINT nPort, int nNetwork, CTime tLastSeen)
 // Allow Node = "host:port" assignment
 Node& Node::operator=(CString &rhs)
 {
-	int pos = rhs.Find(":") + 1;
+	CString Address = rhs;
 
-	// check for a valid string
-	if (pos <= 1 || pos >= rhs.GetLength())
-	{
-		Host = "";
-		Port = 0;
-	}
-	else
-	{
-		Host = rhs.Left(pos - 1);
-		Port = atoi(rhs.Mid(pos, rhs.GetLength() - pos));
-	}
+	Host = ParseString(Address, ':');
+	Port = atoi(Address);
 
 	Network = NETWORK_GNUTELLA;
 	LastSeen = 0;
