@@ -1,4 +1,4 @@
-
+stablize connection to bearshare
 
 Test
 	Gnutella Leaf Mode / Preferencing / Upgrade Path

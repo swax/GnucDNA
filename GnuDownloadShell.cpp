@@ -1441,6 +1441,9 @@ bool CGnuDownloadShell::URLtoSource(FileSource &WebSource, CString URL)
 
 	// Set Host
 	hostent* pHost = gethostbyname(WebSite);
+	if ( pHost == NULL)
+		return false;
+		
 	in_addr* p = (in_addr*) pHost->h_addr_list[0];
 	WebSource.Address.Host = StrtoIP( inet_ntoa(*p) );
 

@@ -9,6 +9,7 @@ GnucDNA 1.1.0.8
 	swabby: X-Alt hosts must be verified first before adding to mesh
 	swabby: X-Nalt suppport added
 	swabby: Banned openext hosts
+	swabby: Support for larger 32k packets
 
 GnucDNA 1.1.0.7
 	swabby: Added support for X-THEX-URI TigerTree header

@@ -168,7 +168,6 @@ CGnuNode::CGnuNode(CGnuControl* pComm, CString Host, UINT Port)
 	// Receiving
 	m_ExtraLength  = 0;
 
-
 	// Sending
 	for(int i = 0; i < MAX_TTL; i++)
 		m_PacketListLength[i] = 0;
@@ -1526,9 +1525,10 @@ void CGnuNode::SendPacket(void* packet, int length, int type, int distance, bool
 {
 	// Broadcast packets distance is hops, routed packets distance is ttl - 1
 
-	if(length > PACKET_BUFF || length <= 0)
+	if(length > (PACKET_BUFF/2) || length <= 0) // legacy clients 16kb max
 	{
-		ASSERT(0);
+		//m_pCore->DebugLog("Gnutella", "Bad Send Packet Size " + NumtoStr(length));
+
 		return;
 	}
 
@@ -1822,10 +1822,13 @@ void CGnuNode::Close()
 		
 		if(m_Status == SOCK_CONNECTED)
 			do {
-				BuffLength = Receive(&m_pBuff[m_ExtraLength], PACKET_BUFF - m_ExtraLength);
+				if( !m_InflateRecv )
+					BuffLength = Receive(&m_pBuff[m_ExtraLength], PACKET_BUFF - m_ExtraLength);
+				else	
+					BuffLength = Receive(InflateBuff, ZSTREAM_BUFF);
 
 				if(BuffLength > 0)
-					SplitBundle(m_pBuff, BuffLength);
+					FinishReceive(BuffLength);
 
 			} while(BuffLength > 0);
 
@@ -1878,12 +1881,13 @@ void CGnuNode::FinishReceive(int BuffLength)
 
 void CGnuNode::SplitBundle(byte* bundle, DWORD length)
 {
+	int extra = m_ExtraLength;
+
 	// First add previous buffer data
 	length += m_ExtraLength;
 	m_ExtraLength = 0;
 
 
-	UINT Payload = 0;
 	int  nextPos = 0;
 
 	packet_Header* packet;
@@ -1901,7 +1905,7 @@ void CGnuNode::SplitBundle(byte* bundle, DWORD length)
 		{
 			packet = (packet_Header*) (bundle + nextPos);
 
-			if(packet->Payload < 16384)
+			if(packet->Payload < PACKET_BUFF - 23)
 			{
 				if (nextPos + sizeof(packet_Header) + packet->Payload <= length)
 				{
@@ -1909,7 +1913,7 @@ void CGnuNode::SplitBundle(byte* bundle, DWORD length)
 
 					Gnu_RecvdPacket Packet( m_Address, packet, 23 + packet->Payload, this);
 					m_pProtocol->ReceivePacket( Packet );
-					
+				
 					nextPos += 23 + packet->Payload;
 					if (nextPos == length)
 						theStatus = status_DONE;
@@ -1919,13 +1923,56 @@ void CGnuNode::SplitBundle(byte* bundle, DWORD length)
 			}
 			else
 			{
-				CloseWithReason("Packet Size Greater than 16k");
-				return;
 
-		        //if (nextPos < length - sizeof(packet_Header))
-				//	nextPos++;
-		        //else   
-				//	theStatus = status_BAD_PACKET;
+				//////////////////////////////////////////////////////////
+				// debug bad packets
+				/*
+				if( nextPos != 0 )
+				{
+					m_pCore->DebugLog("Gnutella", "Packet Size Greater than 16k: " + m_RemoteAgent);
+					m_pCore->DebugLog("Gnutella", "Payload " + NumtoStr(packet->Payload) + ", NextPos " + NumtoStr(nextPos) + ", Length " + NumtoStr(length) + ", Extra " + NumtoStr(extra));
+
+					// dump all packets
+					nextPos   = 0;
+					theStatus = status_CONTINUE;
+
+					do
+					{
+						if (nextPos + sizeof(packet_Header) > length)
+							theStatus = status_INCOMPLETE_PACKET;
+
+						else
+						{
+							packet = (packet_Header*) (bundle + nextPos);
+
+							if(packet->Payload < 16384)
+							{
+								if (nextPos + sizeof(packet_Header) + packet->Payload <= length)
+								{
+									m_pCore->DebugLog("Gnutella", HexDump((byte*) packet, 23 + packet->Payload));
+													
+									nextPos += 23 + packet->Payload;
+
+									if (nextPos == length)
+										theStatus = status_DONE;
+								}
+								else
+									theStatus = status_INCOMPLETE_PACKET;
+							}
+							else
+							{
+								m_pCore->DebugLog("Gnutella", "Bad: " + HexDump((byte*) packet, length - nextPos));
+								break;
+							}			
+						}
+
+					} while(status_CONTINUE == theStatus);		
+				}
+				*/
+				//////////////////////////////////////////////////////////
+
+				CloseWithReason("Packet Size Greater than 32k");
+				return;
 			}
 		}
 	} while(status_CONTINUE == theStatus);
@@ -2177,8 +2224,7 @@ void CGnuNode::NodeManagement()
 				m_pProtocol->Send_Ping(this, 1);
 
 			if(m_SecsDead > 60)
-			{
-				
+			{		
 				CloseWithReason("Minute Dead");
 				return;
 			}
