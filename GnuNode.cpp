@@ -76,7 +76,6 @@ CGnuNode::CGnuNode(CGnuControl* pComm, CString Host, UINT Port)
 	m_SecsDead			= 0;
 	m_CloseWait			= 0;
 	
-	m_NextRequeryWait   = 0;
 	m_NextStatUpdate    = time(NULL) + 30*60;
 
 	// Connection vars
@@ -2051,10 +2050,6 @@ bool CGnuNode::GetAlternateSuperList(CString &HostList)
 
 void CGnuNode::Timer()
 {
-	// Decrement time till next ReSearch is allowed on this socket
-	if(m_NextRequeryWait > 0)
-		m_NextRequeryWait--;
-
 	NodeManagement();
 	
 	CompressionStats();

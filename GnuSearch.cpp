@@ -624,44 +624,10 @@ void CGnuSearch::Timer()
 			return;
 		}
 
-		// Research Gnutella
-		if( m_pNet->m_pGnu)
-		{
-			std::list<int>::iterator itID;
-			for(itID = m_RequeryList.begin(); itID != m_RequeryList.end(); itID++)
-			{
-				std::map<int,CGnuNode*>::iterator itNode = m_pNet->m_pGnu->m_NodeIDMap.find(*itID);
-				if(itNode != m_pNet->m_pGnu->m_NodeIDMap.end())
-				{
-					CGnuNode* pNode = itNode->second;
-
-					if(pNode->m_NextRequeryWait == 0)
-					{
-						packet_Query* pQuery = (packet_Query*) m_GnuPacket;
-						pNode->SendPacket(m_GnuPacket, m_GnuPacketLength, PACKET_QUERY, pQuery->Header.Hops);
-
-						pNode->m_NextRequeryWait = REQUERY_WAIT;
-						m_RequeryList.erase(itID);
-
-						break;
-					}
-				}
-				else
-					itID = m_RequeryList.erase(itID);
-			}
-		}
-
 		// Search G2
 		if( m_pNet->m_pG2 )
 			m_pNet->m_pG2->StepSearch(m_QueryID);
 	}
-}
-
-void CGnuSearch::SockUpdate()
-{
-	// New conenction made, send searches over it
-	//if(!m_SearchPaused)
-	//	m_DoReQuery = true;
 }
 
 void CGnuSearch::TransferUpdate(int ResultID)
@@ -827,7 +793,11 @@ void CGnuSearch::IncomingGnuNode(CGnuNode* pNode)
 {
 	ASSERT(pNode->m_GnuNodeMode == GNU_ULTRAPEER);
 
-	m_RequeryList.push_back(pNode->m_NodeID);
+	if(m_SearchPaused)
+		return;
+
+	packet_Query* pQuery = (packet_Query*) m_GnuPacket;
+	pNode->SendPacket(m_GnuPacket, m_GnuPacketLength, PACKET_QUERY, pQuery->Header.Hops);
 }
 
 int CGnuSearch::UpdateResultState(CString Hash)

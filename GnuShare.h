@@ -73,6 +73,8 @@ public:
 
 	// Must *properly* gain access to the following members
 	// The thread uses them as well as gnucleus
+	static UINT ShareWorker(LPVOID pVoidShare);
+
 	CEvent	m_TriggerThread;
 	bool	m_UpdateShared;
 

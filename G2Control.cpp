@@ -729,7 +729,7 @@ bool CG2Control::GetAltHubs(CString &HostList, CG2Node* NodeExclude)
 	int Hosts = 0;
 
 	bool PrefDna = false;
-	if(NodeExclude->m_RemoteAgent.Find("GnucDNA") != -1 && NodeExclude->m_NodeMode == G2_CHILD)
+	if(NodeExclude && NodeExclude->m_RemoteAgent.Find("GnucDNA") != -1 && NodeExclude->m_NodeMode == G2_CHILD)
 		PrefDna = true;
 
 	for(int i = 0; i < m_G2NodeList.size() && Hosts < 10; i++)

@@ -1,5 +1,6 @@
 GnucDNA 1.1.0.4
-	swabby: Revised download research system
+	swabby: Revised download re-search system
+	swabby: Fixed Gnutella re-searching
 	fred: Fixed bug GWebCache not updating
 	
 GnucDNA 1.1.0.3
@@ -14,7 +15,6 @@ GnucDNA 1.1.0.2
 	fred: Valid URL parsing fix
 	
 GnucDNA 1.1.0.1
-	Gnutella
 	swabby: Removed support for Gnutella 0.4
 	swabby: X-Degree of 32, Max TTL of 3
 	swabby: Inter-Ultrapeer Query Routing

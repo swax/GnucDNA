@@ -32,7 +32,6 @@ public:
 	bool CheckLimit(int, DWORD, DWORD);
 	
 	void Timer();
-	void SockUpdate();
 	void TransferUpdate(int);
 	void IncomingGnuNode(CGnuNode*);
 
@@ -66,8 +65,6 @@ public:
 	int  m_GnuPacketLength;
 
 	bool m_BrowseSearch;
-	
-	std::list<int> m_RequeryList;
 
 	std::map<UINT, ResultGroup*>    m_ResultMap;
 	std::map<CString, ResultGroup*> m_ResultHashMap;

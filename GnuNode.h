@@ -127,7 +127,6 @@ public:
 	int	m_SecsDead;
 	int m_CloseWait;
 
-	int m_NextRequeryWait;
 	int m_NextStatUpdate;
 
 	// Connection vars

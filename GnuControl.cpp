@@ -262,9 +262,6 @@ void CGnuControl::NodeUpdate(CGnuNode* pNode)
 		if(m_pCore->m_dnaCore->m_dnaEvents)
 			m_pCore->m_dnaCore->m_dnaEvents->NetworkChange(pNode->m_NodeID);
 	}
-
-	for(int i = 0; i < m_pNet->m_SearchList.size(); i++)
-		m_pNet->m_SearchList[i]->SockUpdate();
 }
 
 void CGnuControl::Timer()

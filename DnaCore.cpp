@@ -47,9 +47,7 @@
 #include "DnaCore.h"
 
 
-CDnaCore*  ComCore; // Needed for call back functions
-void CALLBACK SecTimerProc(HWND hwnd, UINT message,UINT idTimer, DWORD dwTime);
-void CALLBACK HourTimerProc(HWND hwnd, UINT message,UINT idTimer, DWORD dwTime);
+std::map<int, CDnaCore*> CoreMap;
 
 
 CDnaCore::CDnaCore()
@@ -72,8 +70,6 @@ void CDnaCore::Load(void)
 		return;
 
 	m_Loaded = true;
-
-	ComCore = this;
 
 	m_dnaEvents = NULL;
 
@@ -112,7 +108,10 @@ void CDnaCore::Load(void)
 	m_LastTickCount = 0;
 
 	m_SecTimerID  = SetTimer(NULL, NULL, 1000,  (TIMERPROC) SecTimerProc);
+	CoreMap[m_SecTimerID] = this;
+
 	m_HourTimerID = SetTimer(NULL, NULL, 3600000, (TIMERPROC) HourTimerProc);
+	CoreMap[m_HourTimerID] = this;
 }
 
 void CDnaCore::Unload(void)
@@ -122,7 +121,14 @@ void CDnaCore::Unload(void)
 
 	m_Loaded = false;
 
+	std::map<int, CDnaCore*>::iterator itCore = CoreMap.find(m_SecTimerID);
+	if(itCore != CoreMap.end())
+		CoreMap.erase(itCore);
 	KillTimer(NULL, m_SecTimerID);
+	
+	itCore = CoreMap.find(m_HourTimerID);
+	if(itCore != CoreMap.end())
+		CoreMap.erase(itCore);
 	KillTimer(NULL, m_HourTimerID);
 
 	UINT m_SecTimerID    = 0;
@@ -165,9 +171,6 @@ void CDnaCore::Unload(void)
 	
 	delete m_gnuCore;
 	m_gnuCore = NULL;
-
-
-	ComCore = NULL;
 }
 
 
@@ -183,32 +186,43 @@ void CDnaCore::Unload(void)
 //}
 // CCore message handlers
 
-void CALLBACK SecTimerProc( 
+void CALLBACK CDnaCore::SecTimerProc( 
     HWND hwnd,        // handle to window for timer messages 
     UINT message,     // WM_TIMER message 
     UINT idTimer,     // timer identifier 
     DWORD dwTime)     // current system time 
 { 
+	std::map<int, CDnaCore*>::iterator itCore = CoreMap.find(idTimer);
+	if(itCore == CoreMap.end())
+		return;
+
+	CDnaCore* pCore = itCore->second;
+
 	// Prevent timer from over flowing
 	UINT TickCount = GetTickCount();
 
-	if(TickCount - ComCore->m_LastTickCount < 500)
+	if(TickCount - pCore->m_LastTickCount < 500)
 		return;
 	else
-		ComCore->m_LastTickCount = TickCount;
+		pCore->m_LastTickCount = TickCount;
    
 
-	ComCore->m_gnuCore->SecondTimer();
+	pCore->m_gnuCore->SecondTimer();
 } 
 
-void CALLBACK HourTimerProc( 
+void CALLBACK CDnaCore::HourTimerProc( 
     HWND hwnd,        // handle to window for timer messages 
     UINT message,     // WM_TIMER message 
     UINT idTimer,     // timer identifier 
     DWORD dwTime)     // current system time 
 { 
+	std::map<int, CDnaCore*>::iterator itCore = CoreMap.find(idTimer);
+	if(itCore == CoreMap.end())
+		return;
 
-	ComCore->m_gnuCore->HourlyTimer();
+	CDnaCore* pCore = itCore->second;
+
+	pCore->m_gnuCore->HourlyTimer();
 } 
 
 CString CDnaCore::GetRunPath(void)

@@ -77,6 +77,8 @@ public:
 	CDnaMeta*		GetMeta()	 { return m_dnaMeta; } 
 	CDnaChat*		GetChat()	 { return m_dnaChat; } 
 
+	static void CALLBACK SecTimerProc(HWND hwnd, UINT message,UINT idTimer, DWORD dwTime);
+	static void CALLBACK HourTimerProc(HWND hwnd, UINT message,UINT idTimer, DWORD dwTime);
 
 };
 

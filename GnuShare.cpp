@@ -49,9 +49,6 @@
 
 #define AVG_QUERIES_PER_SEC 50
 
-UINT ShareWorker(LPVOID pVoidShare);
-
-
 CGnuShare::CGnuShare(CGnuCore* pCore)
 {	
 	m_pCore		 = pCore;
@@ -491,7 +488,7 @@ CString CGnuShare::GetFileHash(int index, int HashType)
 }
 
 
-UINT ShareWorker(LPVOID pVoidShare)
+UINT CGnuShare::ShareWorker(LPVOID pVoidShare)
 {
 	TRACE0("*** Search Thread Started\n");
 	srand((unsigned)time(NULL));
@@ -513,7 +510,7 @@ UINT ShareWorker(LPVOID pVoidShare)
 	EventList[0]   = (HANDLE) pShare->m_TriggerThread;
 
 	pShare->ResetDirectories(EventCount, EventList);
-
+	pShare->m_TriggerThread.ResetEvent();
 
 	for(;;)
 	{

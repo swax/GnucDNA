@@ -30,6 +30,7 @@
 #include "GnuCore.h"
 #include "GnuPrefs.h"
 #include "GnuNetworks.h"
+#include "GnuTransfers.h"
 #include "GnuControl.h"
 #include "G2Control.h"
 
@@ -586,6 +587,8 @@ void CDnaPrefs::SetPartialsDir(LPCTSTR newVal)
 		if(m_gnuPrefs->m_PartialDir == m_gnuPrefs->m_DownloadPath)
 			m_gnuPrefs->m_PartialDir = m_gnuPrefs->m_DownloadPath + "\\Partials";
 	}
+
+	m_gnuPrefs->m_pCore->m_pTrans->LoadDownloads();
 }
 
 void CDnaPrefs::LoadProxies(LPCTSTR FilePath)
