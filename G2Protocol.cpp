@@ -1970,6 +1970,7 @@ void CG2Protocol::Encode_GnuCrawlInfo(G2_Frame* pNode, GnuNodeInfo &GnuNode, G2_
 void CG2Protocol::Encode_URN(CString strUrn, byte* urn, int &length)
 {
 	// send bp and tth over network
+	int urnSize = length;
 
 	ASSERT( strUrn.Left(4) == "urn:" );
 
@@ -1981,10 +1982,10 @@ void CG2Protocol::Encode_URN(CString strUrn, byte* urn, int &length)
 		memcpy(urn, "bp\0", 3);
 
 		length += DecodeLengthBase32(32);
-		DecodeBase32( strUrn.Mid(9), 32, urn + 3);
+		DecodeBase32( strUrn.Mid(9), 32, urn + 3, urnSize - 3);
 
 		length += DecodeLengthBase32(39);
-		DecodeBase32( strUrn.Mid(9 + 32 + 1), 39, urn + 3 + 20);
+		DecodeBase32( strUrn.Mid(9 + 32 + 1), 39, urn + 3 + 20, urnSize - 3 - 20);
 	}
 
 	else if( strUrn.Left(12) == "tree:tiger/:" && strUrn.GetLength() == 12 + 39)
@@ -1993,7 +1994,7 @@ void CG2Protocol::Encode_URN(CString strUrn, byte* urn, int &length)
 		memcpy(urn, "tth\0", 4);
 		
 		length += DecodeLengthBase32(39);
-		DecodeBase32( strUrn.Mid(12), 39, urn + 4);
+		DecodeBase32( strUrn.Mid(12), 39, urn + 4, urnSize - 4);
 	}
 	
 	else if( strUrn.Left(5) == "sha1:" && strUrn.GetLength() == 5 + 32)
@@ -2002,7 +2003,7 @@ void CG2Protocol::Encode_URN(CString strUrn, byte* urn, int &length)
 		memcpy(urn, "sha1\0", 5);
 
 		length += DecodeLengthBase32(32);
-		DecodeBase32( strUrn.Mid(5), 32, urn + 5);
+		DecodeBase32( strUrn.Mid(5), 32, urn + 5, urnSize - 5);
 	}
 
 	else if( strUrn.Left(4) == "md5:" && strUrn.GetLength() == 4 + 32)
@@ -2011,7 +2012,7 @@ void CG2Protocol::Encode_URN(CString strUrn, byte* urn, int &length)
 		memcpy(urn, "md5\0", 4);
 
 		length += DecodeLengthBase16(32);
-		DecodeBase16( strUrn.Mid(4), 32, urn + 4);
+		DecodeBase16( strUrn.Mid(4), 32, urn + 4, urnSize - 4);
 	}
 
 	else if( strUrn.Left(5) == "ed2k:" && strUrn.GetLength() == 5 + 32)
@@ -2020,7 +2021,7 @@ void CG2Protocol::Encode_URN(CString strUrn, byte* urn, int &length)
 		memcpy(urn, "ed2k\0", 5);
 
 		length += DecodeLengthBase16(32);
-		DecodeBase16( strUrn.Mid(5), 32, urn + 5);
+		DecodeBase16( strUrn.Mid(5), 32, urn + 5, urnSize - 5);
 	}
 
 	else if( strUrn.Find(":") > 0)
@@ -2036,13 +2037,13 @@ void CG2Protocol::Encode_URN(CString strUrn, byte* urn, int &length)
 		strUrn = strUrn.Mid(colonpos + 1);
 
 		length += DecodeLengthBase16( strUrn.GetLength() );
-		DecodeBase16( strUrn, strUrn.GetLength(), urn + colonpos + 1);
+		DecodeBase16( strUrn, strUrn.GetLength(), urn + colonpos + 1, urnSize - colonpos - 1);
 	}
 	
 	else
 	{
 		length = DecodeLengthBase16(32);
-		DecodeBase16( strUrn, 32, urn);
+		DecodeBase16( strUrn, 32, urn, urnSize);
 	}
 }
 

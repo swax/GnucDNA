@@ -65,13 +65,17 @@ public:
 	// Connections
 	void ManageNodes();
 	
-	void TryConnect();
+	void TryConnect(bool PrefDna);
 	void DropNode(int G2Mode, bool NeedDna);
+	bool ConnectFromCache(std::list<Node> &Cache, bool Perm);
 
 	void CreateNode(Node HostInfo);
 	void RemoveNode(CG2Node*);
 
 	std::map<uint32, bool> m_TriedConnects;
+
+	time_t m_LastConnect;
+
 
 	// Hub Balancing
 	void HubBalancing();
@@ -97,7 +101,7 @@ public:
 
 	CG2Node* FindNode(CString Host, UINT Port, bool Connected=true);
 	CG2Node* GetRandHub();
-	bool	 GetAltHubs(CString &HostList, CG2Node* NodeExclude=NULL);
+	bool	 GetAltHubs(CString &HostList, CG2Node* NodeExclude, bool DnaOnly);
 
 	void G2NodeUpdate(CG2Node* updated);
 

@@ -59,7 +59,7 @@ public:
 	void	ParseBrowseHandshakeResponse(CString, byte*, int);
 	
 	CString FindHeader(CString);
-	void	ParseTryHeader(CString TryHeader);
+	void	ParseTryHeader(CString TryHeader, bool DnaOnly=false);
 	void    ParseHubsHeader(CString HubsHeader);
 	
 	void Send_ConnectOK(bool);
@@ -101,12 +101,12 @@ public:
 	virtual int  Send(const void* lpBuf, int nBufLen, int nFlags = 0);
 	virtual void Close();
 
-	void CloseWithReason(CString Reason, bool RemoteClosed=false, bool SendBye=true);
+	void CloseWithReason(CString Reason, int ErrorCode=200, bool RemoteClosed=false, bool SendBye=true);
 
 
 	// Other
 	bool GetAlternateHostList(CString &);
-	bool GetAlternateSuperList(CString &);
+	bool GetTryUltrapeers(CString &, bool);
 
 	void  Timer();
 	void  NodeManagement();

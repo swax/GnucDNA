@@ -166,3 +166,8 @@ void CDnaCache::SeedWebCache(LPCTSTR WebAddress)
 {
 	m_gnuCache->WebCacheSeedCache(WebAddress);
 }
+
+void CDnaCache::TryWebCache(LPCTSTR Network)
+{
+	m_gnuCache->WebCacheGetRequest(Network);
+}

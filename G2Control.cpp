@@ -67,7 +67,8 @@ CG2Control::CG2Control(CGnuNetworks* pNet)
 
 	m_ClientMode   = G2_CHILD;
 	m_ClientUptime = CTime::GetCurrentTime();
-	
+	m_LastConnect  = 0;
+
 	srand((unsigned)time(NULL));
 	m_ClientIdent  = rand() * rand();
 	
@@ -347,7 +348,7 @@ void CG2Control::HourlyTimer()
 	// Web Cache check in
 	if(m_ClientMode == G2_HUB)
 		if(CountHubConnects() == 0 || !m_pNet->m_TcpFirewall) // make sure if no connects to update, because firewall cant be tested without peers
-			m_pCache->WebCacheUpdate();
+			m_pCache->WebCacheUpdate("gnutella2");
 
 	m_TriedConnects.clear(); // in case total cache less than 100 and stalled
 }
@@ -483,10 +484,10 @@ void CG2Control::ManageNodes()
 		// Searching on G2 does not require a hub connection
 
 		if(HubConnects < m_pPrefs->m_G2ChildConnects)
-			TryConnect();
+			TryConnect(NeedDnaHubs);
 
 		else if(HubConnects && NeedDnaHubs)
-			TryConnect(); // Half connects dna
+			TryConnect(NeedDnaHubs); // Half connects dna
 
 
 		if(m_pPrefs->m_G2ChildConnects && HubConnects > m_pPrefs->m_G2ChildConnects)
@@ -499,10 +500,10 @@ void CG2Control::ManageNodes()
 		// Sending queries to 10% of network should hit whole network
 
 		if(m_pPrefs->m_G2MinConnects && HubConnects < m_pPrefs->m_G2MinConnects)
-			TryConnect();
+			TryConnect(NeedDnaHubs);
 
 		else if(HubConnects && NeedDnaHubs)
-			TryConnect(); 
+			TryConnect(NeedDnaHubs); 
 
 		if(m_pPrefs->m_G2MaxConnects && HubConnects > m_pPrefs->m_G2MaxConnects)
 			DropNode(G2_HUB, NeedDnaHubs);
@@ -541,71 +542,48 @@ void CG2Control::CleanDeadSocks()
 			itNode++;
 }
 
-void CG2Control::TryConnect()
+void CG2Control::TryConnect(bool PrefDna)
 {
+	if( PrefDna && ConnectFromCache(m_pCache->m_G2Dna, false) )
+		return;
 
-	// If Real list has values
-	if(m_pCache->m_G2Real.size())
-	{
-		// try a random host from top 15, x-try adds max 5, reduces one nodes chance of messing with cache
-		int randIndex = ( m_pCache->m_G2Real.size() > 15) ? rand() % 15 : rand() % m_pCache->m_G2Real.size();
+	if( ConnectFromCache(m_pCache->m_G2Real, false) )
+		return;
 
-		std::list<Node>::iterator itNode = m_pCache->m_G2Real.begin();
-		for(int i = 0; itNode != m_pCache->m_G2Real.end(); itNode++, i++)
-			if(i == randIndex)
-			{
-				std::map<uint32, bool>::iterator itAddr = m_TriedConnects.find( StrtoIP((*itNode).Host).S_addr );
-				if(itAddr != m_TriedConnects.end())
-					break;
-
-				m_TriedConnects[ StrtoIP((*itNode).Host).S_addr ] = true;
-
-				CreateNode( *itNode );
-				m_pCache->m_G2Real.erase(itNode);
-
-				return;
-			}
-	}
-
-
-	// If permanent list has values
-	if(m_pCache->m_G2Perm.size())
-	{
-		int randIndex = rand() % m_pCache->m_G2Perm.size();
-
-		std::list<Node>::iterator itNode = m_pCache->m_G2Perm.begin();
-		for(int i = 0; itNode != m_pCache->m_G2Perm.end(); itNode++, i++)
-			if(i == randIndex)
-			{
-				std::map<uint32, bool>::iterator itAddr = m_TriedConnects.find( StrtoIP((*itNode).Host).S_addr );
-				if(itAddr != m_TriedConnects.end())
-					break;
-
-				m_TriedConnects[ StrtoIP((*itNode).Host).S_addr ] = true;
-				
-
-				CreateNode( *itNode );
-
-				return;
-			}
-	}
+	if( ConnectFromCache(m_pCache->m_G2Perm, true) )
+		return;
 
 
 	// Do web cache request only if not connected to g1 because g2 hosts can be found through there
-	if( CountHubConnects() == 0 && m_pNet->m_pGnu == NULL)
+	if( CountHubConnects() == 0 && m_pNet->m_pGnu == NULL && m_LastConnect < time(NULL) - 60)
 		m_pCache->WebCacheGetRequest("gnutella2");
 
 
-	// Nothing in G2 caches, try G1 nodes for entry to G2
-	if(m_pCache->m_GnuReal.size())
-	{
-		// try a random host from top 15, x-try adds max 5, reduces one nodes chance of messing with cache
-		int randIndex = ( m_pCache->m_GnuReal.size() > 15) ? rand() % rand() % 15 : m_pCache->m_GnuReal.size();
+	// try gnutella ips as last resort
+	if( ConnectFromCache(m_pCache->m_GnuDna, true) )
+		return;
+	
+	if( ConnectFromCache(m_pCache->m_GnuReal, true) )
+		return;
 
-		std::list<Node>::iterator itNode = m_pCache->m_GnuReal.begin();
-		for(int i = 0; itNode != m_pCache->m_GnuReal.end(); itNode++, i++)
-			if(i == randIndex)
+	if( ConnectFromCache(m_pCache->m_GnuPerm, true) )
+		return;
+}
+
+bool CG2Control::ConnectFromCache(std::list<Node> &Cache, bool Perm)
+{
+	// If Real list has values
+	if(Cache.size())
+	{
+		int CachePos = (Perm) ? rand() % Cache.size() : 0;
+		
+		std::list<Node>::iterator itNode = Cache.begin();
+		for(int i = 0; itNode != Cache.end(); itNode++, i++)
+			if(i == CachePos)
 			{
+				if( !Perm )
+					Cache.erase(itNode);
+
 				std::map<uint32, bool>::iterator itAddr = m_TriedConnects.find( StrtoIP((*itNode).Host).S_addr );
 				if(itAddr != m_TriedConnects.end())
 					break;
@@ -613,9 +591,12 @@ void CG2Control::TryConnect()
 				m_TriedConnects[ StrtoIP((*itNode).Host).S_addr ] = true;
 
 				CreateNode( *itNode );
-				return;
+
+				return true;
 			}
 	}
+
+	return false;
 }
 
 void CG2Control::CreateNode(Node HostInfo)
@@ -737,38 +718,53 @@ CG2Node* CG2Control::GetRandHub()
 	return NULL;
 }
 
-bool CG2Control::GetAltHubs(CString &HostList, CG2Node* NodeExclude)
+bool CG2Control::GetAltHubs(CString &HostList, CG2Node* NodeExclude, bool DnaOnly)
 {
-	int Hosts = 0;
+	HostList = "";
 
-	bool PrefDna = false;
-	if(NodeExclude && NodeExclude->m_RemoteAgent.Find("GnucDNA") != -1 && NodeExclude->m_NodeMode == G2_CHILD)
-		PrefDna = true;
+	std::vector<CString> Hubs;
+	std::map<int, IPv4>  DnaMap;
 
-	for(int i = 0; i < m_G2NodeList.size() && Hosts < 10; i++)
-		if(m_G2NodeList[i]->m_NodeMode == G2_HUB && 
-		   m_G2NodeList[i]->m_Status == SOCK_CONNECTED && 
-		   m_G2NodeList[i] != NodeExclude )
+
+	for(int i = 0; i < m_G2NodeList.size(); i++)
+		if(m_G2NodeList[i] != NodeExclude && 
+			m_G2NodeList[i]->m_NodeMode == G2_HUB &&
+			m_G2NodeList[i]->m_Status == SOCK_CONNECTED)
 		{
-			CG2Node* pNode = m_G2NodeList[i];
-			
-			if(PrefDna && pNode->m_RemoteAgent.Find("GnucDNA") == -1)
-				continue;
-			
-			HostList += IPv4toStr(pNode->m_Address) + " " + CTimeToStr( CTime::GetCurrentTime() ) + ",";	
-			Hosts++;
+			if(DnaOnly)
+			{
+				if(m_G2NodeList[i]->m_RemoteAgent.Find("GnucDNA") == -1)
+					continue;
+
+				// put node with zero/unknown leaves at end of list
+				int LeafCount = (m_G2NodeList[i]->m_NodeInfo.LeafCount) ? m_G2NodeList[i]->m_NodeInfo.LeafCount : 999;
+				DnaMap[ LeafCount ] = m_G2NodeList[i]->m_Address;
+			}
+			else
+				Hubs.push_back( IPv4toStr( m_G2NodeList[i]->m_Address) );
 		}
 
-	std::list<Node>::iterator itNode;
-	for( itNode = m_pCache->m_G2Real.begin(); itNode != m_pCache->m_G2Real.begin() && Hosts < 10; itNode++)
+	// put dna nodes in order of least leaves to promote fast connections / even ultrapeer fill up
+	if(DnaOnly)
 	{
-		HostList += (*itNode).Host + ":" + NumtoStr((*itNode).Port) + " " + CTimeToStr( CTime((*itNode).LastSeen) ) + ",";	
-		Hosts++;
+		std::map<int, IPv4>::iterator itNode;
+		for(itNode = DnaMap.begin(); itNode != DnaMap.end(); itNode++)
+			Hubs.push_back( IPv4toStr( itNode->second) );
 	}
+	// ultrapeers given random to encourage to nice multi-vendor network
+	else
+		Hubs = RandomizeVector(Hubs);
 
+
+	for(int i = 0, HostCount = 0; i < Hubs.size() && HostCount < 10; i++)
+	{
+		HostList += Hubs[i] + ",";	
+		HostCount++;
+	}
+	
 
 	// Delete Extra comma
-	if(Hosts)
+	if(HostCount)
 	{
 		HostList = HostList.Left(HostList.ReverseFind(','));
 		return true;

@@ -57,7 +57,7 @@ public:
 	void SetConnected();
 
 	CString FindHeader(CString);
-	void	ParseTryHeader(CString TryHeader);
+	void	ParseTryHeader(CString TryHeader, bool DnaOnly=false);
 	void    ParseG1TryHeader(CString TryHeader);
 	bool    ValidAgent(CString Agent);
 

@@ -300,12 +300,13 @@ void CGnuNode::OnConnect(int nErrorCode)
 	if(nErrorCode)
 	{
 		m_pCore->LogError("GnuNode OnConnect Error " + NumtoStr(nErrorCode));
-		CloseWithReason("Connect " + SockErrortoString(nErrorCode), true, false);
+		CloseWithReason("Connect " + SockErrortoString(nErrorCode), BYE_INTERNAL, true, false);
 		return;
 	}
 	
-	CString Handshake;
+	m_pComm->m_LastConnect = time(NULL);
 
+	CString Handshake;
 
 	// Get Remote host
 	CString HostIP;
@@ -420,7 +421,7 @@ void CGnuNode::OnReceive(int nErrorCode)
 {
 	if(nErrorCode)
 	{
-		CloseWithReason("GnuNode OnReceive Error " + NumtoStr(nErrorCode));
+		CloseWithReason("GnuNode OnReceive Error " + NumtoStr(nErrorCode), BYE_INTERNAL, true, false);
 		return;
 	}
 
@@ -447,7 +448,7 @@ void CGnuNode::OnReceive(int nErrorCode)
 			int lastError = GetLastError();
 			if(lastError != WSAEWOULDBLOCK)
 			{				
-				CloseWithReason("Receive Error " + NumtoStr(lastError));
+				CloseWithReason("Receive Error " + NumtoStr(lastError), BYE_INTERNAL);
 				return;
 			}
 		}
@@ -533,14 +534,19 @@ void CGnuNode::ParseIncomingHandshake06(CString Data, byte* Stream, int StreamLe
 		ParseTryHeader( TryHeader );
 
 	// Parse X-Try-Ultrapeers header
-	CString UltraTryHeader = FindHeader("X-Try-Ultrapeers");
-	if(!UltraTryHeader.IsEmpty())
-		ParseTryHeader( UltraTryHeader );
+	TryHeader = FindHeader("X-Try-Ultrapeers");
+	if(!TryHeader.IsEmpty())
+		ParseTryHeader( TryHeader );
+
+	// Parse X-Try-DNA header
+	TryHeader = FindHeader("X-Try-DNA");
+	if(!TryHeader.IsEmpty())
+		ParseTryHeader( TryHeader, true );
 
 	// Parse X-Try-Hubs header
-	CString HubsToTry = FindHeader("X-Try-Hubs");
-	if( !HubsToTry.IsEmpty() )
-		ParseHubsHeader( HubsToTry );
+	TryHeader = FindHeader("X-Try-Hubs");
+	if( !TryHeader.IsEmpty() )
+		ParseHubsHeader( TryHeader );
 
 
 	// Connect string, GNUTELLA CONNECT/0.6\r\n
@@ -795,14 +801,19 @@ void CGnuNode::ParseOutboundHandshake06(CString Data, byte* Stream, int StreamLe
 		ParseTryHeader( TryHeader );
 
 	// Parse X-Try-Ultrapeers header
-	CString UltraTryHeader = FindHeader("X-Try-Ultrapeers");
-	if(!UltraTryHeader.IsEmpty())
-		ParseTryHeader( UltraTryHeader );
+	TryHeader = FindHeader("X-Try-Ultrapeers");
+	if(!TryHeader.IsEmpty())
+		ParseTryHeader( TryHeader );
+
+	// Parse X-Try-DNA header
+	TryHeader = FindHeader("X-Try-DNA");
+	if(!TryHeader.IsEmpty())
+		ParseTryHeader( TryHeader, true );
 
 	// Parse X-Try-Hubs header
-	CString HubsToTry = FindHeader("X-Try-Hubs");
-	if( !HubsToTry.IsEmpty() )
-		ParseHubsHeader( HubsToTry );
+	TryHeader = FindHeader("X-Try-Hubs");
+	if( !TryHeader.IsEmpty() )
+		ParseHubsHeader( TryHeader );
 
 
 	// Ok string, GNUTELLA/0.6 200 OK\r\n
@@ -955,7 +966,7 @@ void CGnuNode::ParseOutboundHandshake06(CString Data, byte* Stream, int StreamLe
 							CGnuNode *p = m_pComm->m_NodeList[i];
 
 							if(p != this && p->m_Status != SOCK_CLOSED)
-								p->CloseWithReason("Node Upgrading");
+								p->CloseWithReason("Node Upgrading", BYE_MANUAL);
 						}
 
 						m_pComm->m_GnuClientMode = GNU_ULTRAPEER;
@@ -997,7 +1008,7 @@ void CGnuNode::ParseOutboundHandshake06(CString Data, byte* Stream, int StreamLe
 	}
 }
 
-void CGnuNode::ParseTryHeader(CString TryHeader)
+void CGnuNode::ParseTryHeader(CString TryHeader, bool DnaOnly)
 {
 	// This host responds with more hosts, put on Perm list
 	if( !m_Inbound)
@@ -1013,14 +1024,18 @@ void CGnuNode::ParseTryHeader(CString TryHeader)
 		tryBack = TryHeader.Find(",");
 
 	int Added = 0;
-	
-	while(tryBack != -1 && tryMid != -1 && Added < 5)
+
+	std::deque<Node> TryHosts;
+
+	while(tryBack != -1 && tryMid != -1 && Added < 10)
 	{
 		Node tryNode;
 		tryNode.Host = TryHeader.Mid(tryFront, tryMid - tryFront);
 		tryNode.Port = atoi( TryHeader.Mid(tryMid + 1, tryBack - tryMid + 1));
+		tryNode.DNA  = DnaOnly;
 
-		m_pCache->AddKnown( tryNode);
+		TryHosts.push_front(tryNode);
+
 		Added++;
 
 
@@ -1028,6 +1043,11 @@ void CGnuNode::ParseTryHeader(CString TryHeader)
 		tryMid    = TryHeader.Find(":", tryFront);
 		tryBack   = TryHeader.Find(",", tryFront);
 	}
+
+	// done in this manner because hosts sorted by leaf count
+	// make sure next node tried by cache is a host with low leaves, high prob of success
+	for(int i = 0; i < TryHosts.size(); i++)
+		m_pCache->AddKnown( TryHosts[i] );
 }
 
 void CGnuNode::ParseHubsHeader(CString HubsHeader)
@@ -1040,7 +1060,7 @@ void CGnuNode::ParseHubsHeader(CString HubsHeader)
 	// 1.2.3.4:6346 2003-03-25T23:59Z,
 	CString Address = ParseString(HubsHeader, ',');
 
-	while( !Address.IsEmpty() && Added < 5)
+	while( !Address.IsEmpty() && Added < 10)
 	{
 		Node tryNode;
 		tryNode.Network = NETWORK_G2;
@@ -1170,18 +1190,21 @@ void CGnuNode::Send_ConnectOK(bool Reply)
 		if( !m_Challenge.IsEmpty() && !m_ChallengeAnswer.IsEmpty() )
 			Handshake += "X-Auth-Challenge: " + m_Challenge + "\r\n";
 
-
-
 		// X-Try-Ultrapeers header
 		CString SuperHostsToTry;
-		if(GetAlternateSuperList(SuperHostsToTry))
+		if(GetTryUltrapeers(SuperHostsToTry, false))
 			Handshake += "X-Try-Ultrapeers: " + SuperHostsToTry + "\r\n";	
+
+		// X-Try-DNA header
+		CString DnaToTry;
+		if( GetTryUltrapeers(DnaToTry, true) )
+			Handshake += "X-Try-DNA: " + DnaToTry + "\r\n";
 
 		// X-Try-Hubs header
 		if( m_pNet->m_pG2 )
 		{
 			CString HubsToTry;
-			if( m_pNet->m_pG2->GetAltHubs(HubsToTry) )
+			if( m_pNet->m_pG2->GetAltHubs(HubsToTry, NULL, false) )
 				Handshake += "X-Try-Hubs: " + HubsToTry + "\r\n";	
 		}
 
@@ -1218,14 +1241,19 @@ void CGnuNode::Send_ConnectError(CString Reason)
 
 	// X-Try-Ultrapeers header
 	CString SuperHostsToTry;
-	if(GetAlternateSuperList(SuperHostsToTry))
+	if(GetTryUltrapeers(SuperHostsToTry, false))
 		Handshake += "X-Try-Ultrapeers: " + SuperHostsToTry + "\r\n";
+
+	// X-Try-DNA header
+	CString DnaToTry;
+	if( GetTryUltrapeers(DnaToTry, true) )
+		Handshake += "X-Try-DNA: " + DnaToTry + "\r\n";
 
 	// X-Try-Hubs header
 	if( m_pNet->m_pG2 )
 	{
 		CString HubsToTry;
-		if( m_pNet->m_pG2->GetAltHubs(HubsToTry) )
+		if( m_pNet->m_pG2->GetAltHubs(HubsToTry, NULL, false) )
 			Handshake += "X-Try-Hubs: " + HubsToTry + "\r\n";	
 	}
 
@@ -1500,10 +1528,10 @@ void CGnuNode::SetConnected()
 
 	
 	// For testing protcol compatibility
-	/*if( m_RemoteAgent.Find("1.1.0.7") == -1 )
+	/*if( m_RemoteAgent.Find("DNA") == -1 )
 		//if( m_RemoteAgent.Find("Lime") == -1 && m_RemoteAgent.Find("Bear") == -1 )
 		{
-			CloseWithReason("Not 1.1", false, false);
+			CloseWithReason("Not DNA", false, false);
 			return;
 		}*/
 
@@ -1703,7 +1731,7 @@ void CGnuNode::FlushSendBuffer(bool FullFlush)
 			{
 				int lastError = GetLastError();
 				if(lastError != WSAEWOULDBLOCK)
-					CloseWithReason("Send Buffer Error " + NumtoStr(lastError), true, false);
+					CloseWithReason("Send Buffer Error " + NumtoStr(lastError), BYE_INTERNAL, true, false);
 				
 				return;
 			}
@@ -1780,7 +1808,7 @@ void CGnuNode::FlushSendBuffer(bool FullFlush)
 					{
 						int lastError = GetLastError();
 						if(lastError != WSAEWOULDBLOCK)
-							CloseWithReason("Send Error " + NumtoStr(lastError), true, false);
+							CloseWithReason("Send Error " + NumtoStr(lastError), BYE_INTERNAL,  true, false);
 					}
 					else
 					{
@@ -1846,16 +1874,16 @@ void CGnuNode::OnClose(int nErrorCode)
 	if(nErrorCode)
 		Reason += SockErrortoString(nErrorCode);
 
-	CloseWithReason(Reason, true);
+	CloseWithReason(Reason, 0, true);
 
 	CAsyncSocketEx::OnClose(nErrorCode);
 }
 
-void CGnuNode::CloseWithReason(CString Reason, bool RemoteClosed, bool SendBye)
+void CGnuNode::CloseWithReason(CString Reason, int ErrorCode, bool RemoteClosed, bool SendBye)
 {
 	if(m_Status == SOCK_CONNECTED && SendBye && !RemoteClosed)
 	{
-		m_pProtocol->Send_Bye(this, Reason);
+		m_pProtocol->Send_Bye(this, Reason, ErrorCode);
 		FlushSendBuffer(true);
 	}
 
@@ -1939,7 +1967,7 @@ void CGnuNode::FinishReceive(int BuffLength)
 				SplitBundle(m_pBuff, BuffLength);
 			}
 		}
-	}
+	}  
 	else
 		SplitBundle(m_pBuff, BuffLength);
 }
@@ -2036,7 +2064,7 @@ void CGnuNode::SplitBundle(byte* bundle, DWORD length)
 				*/
 				//////////////////////////////////////////////////////////
 
-				CloseWithReason("Packet Size Greater than 32k");
+				CloseWithReason("Packet Size Greater than 32k", 400);
 				return;
 			}
 		}
@@ -2053,7 +2081,7 @@ void CGnuNode::SplitBundle(byte* bundle, DWORD length)
 		// client, connecttime, variables log, disconnect
 		m_pCore->DebugLog("Gnu Network", "Extra Length Error - " + m_RemoteAgent + ", Uptime " + NumtoStr(time(NULL) - m_ConnectTime.GetTime()) + ", " + ", Length " + NumtoStr(length) + ", NextPos " + NumtoStr(nextPos) + ", ExtraLength " + NumtoStr(m_ExtraLength));
 		
-		CloseWithReason("Packet received too large"); // without this crashes in inflate
+		CloseWithReason("Packet received too large", BYE_REMOTE); // without this crashes in inflate
 		//ASSERT(0); // Shouldnt happen
 
 	}
@@ -2073,7 +2101,7 @@ void CGnuNode::ApplyPatchTable()
 		int zerror = uncompress( PatchTable, &UncompressedSize, m_PatchBuffer, m_PatchOffset);
 		if( zerror != Z_OK )
 		{
-			CloseWithReason("Patch Table Decompress Error");
+			CloseWithReason("Patch Table Decompress Error", BYE_REMOTE);
 			delete [] PatchTable;
 			return;
 		}
@@ -2157,27 +2185,51 @@ void CGnuNode::SetPatchBit(int &remotePos, double &Factor, byte value)
 	}
 }
 
-bool CGnuNode::GetAlternateSuperList(CString &HostList)
+bool CGnuNode::GetTryUltrapeers(CString &HostList, bool DnaOnly)
 {
-	int Hosts = 0;
+	HostList = "";
 
-	bool PrefDna = false;
-	if(m_RemoteAgent.Find("GnucDNA") != -1 && m_GnuNodeMode == GNU_LEAF)
-		PrefDna = true;
+	std::vector<CString> UltraHosts;
+	std::map<int, IPv4>  DnaMap;
 
-	for(int i = 0; i < m_pComm->m_NodeList.size() && Hosts < 10; i++)
-		if(m_pComm->m_NodeList[i] != this && m_pComm->m_NodeList[i]->m_GnuNodeMode == GNU_ULTRAPEER)
+	for(int i = 0; i < m_pComm->m_NodeList.size(); i++)
+		if( m_pComm->m_NodeList[i] != this && 
+			m_pComm->m_NodeList[i]->m_GnuNodeMode == GNU_ULTRAPEER &&
+			m_pComm->m_NodeList[i]->m_Status == SOCK_CONNECTED)
 		{
-			if(PrefDna && m_pComm->m_NodeList[i]->m_RemoteAgent.Find("GnucDNA") == -1)
-				continue;
+			if(DnaOnly)
+			{
+				if(m_pComm->m_NodeList[i]->m_RemoteAgent.Find("GnucDNA") == -1)
+					continue;
 
-			HostList += IPv4toStr(m_pComm->m_NodeList[i]->m_Address) + ",";	
-			Hosts++;
+				// put node with zero/unknown leaves at end of list
+				int LeafCount = (m_pComm->m_NodeList[i]->m_LeafCount) ? m_pComm->m_NodeList[i]->m_LeafCount : 999;
+				DnaMap[ LeafCount ] = m_pComm->m_NodeList[i]->m_Address;
+			}
+			else
+				UltraHosts.push_back( IPv4toStr( m_pComm->m_NodeList[i]->m_Address) );
 		}
-	
+
+	// put dna nodes in order of least leaves to promote fast connections / even ultrapeer fill up
+	if(DnaOnly)
+	{
+		std::map<int, IPv4>::iterator itNode;
+		for(itNode = DnaMap.begin(); itNode != DnaMap.end(); itNode++)
+			UltraHosts.push_back( IPv4toStr( itNode->second) );
+	}
+	// ultrapeers given random to encourage to nice multi-vendor network
+	else
+		UltraHosts = RandomizeVector(UltraHosts);
+
+
+	for(int i = 0, HostCount = 0; i < UltraHosts.size() && HostCount < 10; i++)
+	{
+		HostList += UltraHosts[i] + ",";	
+		HostCount++;
+	}
 
 	// Delete Extra comma
-	if(Hosts)
+	if(HostCount)
 	{
 		HostList = HostList.Left(HostList.ReverseFind(','));
 		return true;
@@ -2185,7 +2237,6 @@ bool CGnuNode::GetAlternateSuperList(CString &HostList)
 
 	return false;
 }
-
 
 /////////////////////////////////////////////////////////////////////////////
 // Misc functions
@@ -2290,7 +2341,7 @@ void CGnuNode::NodeManagement()
 
 			if(m_SecsDead > 60)
 			{		
-				CloseWithReason("Minute Dead");
+				CloseWithReason("Minute Dead", BYE_TIMEOUT);
 				return;
 			}
 		}
@@ -2301,8 +2352,17 @@ void CGnuNode::NodeManagement()
 		if(m_SecsAlive < 60 * 10)
 			m_SecsAlive++;
 
+		// Send Re-Search
+		if(m_SecsAlive == 5)
+		{
+			// Update searches with a new host
+			if(m_GnuNodeMode == GNU_ULTRAPEER)
+				for(i = 0; i < m_pNet->m_SearchList.size(); i++)
+					m_pNet->m_SearchList[i]->IncomingGnuNode(this);
+		}
+
 		// Stable Connection
-		if(m_SecsAlive == 30)
+		if(m_SecsAlive == 20)
 		{
 			packet_VendMsg FirewallTest;
 			CoCreateGuid(&FirewallTest.Header.Guid);
@@ -2323,15 +2383,10 @@ void CGnuNode::NodeManagement()
 				SendBack.Port = m_pComm->m_UdpPort;
 				m_pProtocol->Send_VendMsg( this, FirewallTest, &SendBack, 6);
 			}
-
-			// Update searches with a new host
-			if(m_GnuNodeMode == GNU_ULTRAPEER)
-				for(i = 0; i < m_pNet->m_SearchList.size(); i++)
-					m_pNet->m_SearchList[i]->IncomingGnuNode(this);
 		}
 
 		// Allow 20 secs for tcp and udp tests to come back
-		if(m_SecsAlive == 50)
+		if(m_SecsAlive == 40)
 		{
 			// Send node our stats
 			if(m_SupportsStats)
@@ -2351,7 +2406,7 @@ void CGnuNode::NodeManagement()
 		if( time(NULL) > m_NextStatUpdate && m_SupportsStats)
 		{
 			m_pProtocol->Send_StatsMsg(this);
-			m_NextStatUpdate = time(NULL) + 30*60;
+			m_NextStatUpdate = time(NULL) + 1*60;
 		}
 
 		// Close if we're browsing host and all bytes received

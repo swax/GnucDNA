@@ -481,7 +481,7 @@ CGnuDownloadShell* CGnuTransfers::LoadDownloadHosts(CString FilePath)
 
 		while(dotPos != -1 && buffPos < Download->m_TreeSize)
 		{
-			DecodeBase32( Value.Mid(dotPos - 39, 39), 39, Download->m_TigerTree + buffPos );
+			DecodeBase32( Value.Mid(dotPos - 39, 39), 39, Download->m_TigerTree + buffPos, Download->m_TreeSize - buffPos );
 
 			buffPos += 24;
 			dotPos = Value.Find(".", dotPos + 1);
@@ -527,7 +527,7 @@ CGnuDownloadShell* CGnuTransfers::LoadDownloadHosts(CString FilePath)
 			nResult.Busy		= atoi(GetBackupString("Busy", CurrentPos, Backup)) != 0;
 			nResult.Stable		= atoi(GetBackupString("Stable", CurrentPos, Backup)) != 0;
 			nResult.ActualSpeed = atoi(GetBackupString("ActualSpeed", CurrentPos, Backup)) != 0;
-			DecodeBase16(GetBackupString("PushID", CurrentPos, Backup), 32, (byte*) &nResult.PushID);
+			DecodeBase16(GetBackupString("PushID", CurrentPos, Backup), 32, (byte*) &nResult.PushID, 16);
 
 			CString Nodes = GetBackupString("Direct", CurrentPos, Backup);
 			while(!Nodes.IsEmpty())

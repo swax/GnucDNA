@@ -33,26 +33,29 @@
 
 Node::Node()
 { 
-	Network = NETWORK_GNUTELLA;
-	Host = "";
-	Port = 0;
+	Network  = NETWORK_GNUTELLA;
+	Host     = "";
+	Port     = 0;
 	LastSeen = 0;
+	DNA		 = false;
 }
 
 Node::Node(CString HostPort)
 { 
 	*this = HostPort; 
 
-	Network = NETWORK_GNUTELLA;
+	Network  = NETWORK_GNUTELLA;
 	LastSeen = 0;
+	DNA		 = false;
 }
 
-Node::Node(CString nHost, UINT nPort, int nNetwork, CTime tLastSeen)
+Node::Node(CString nHost, UINT nPort, int nNetwork, CTime tLastSeen, bool bDNA)
 {
-	Network = nNetwork;
-	Host = nHost;
-	Port = nPort;
+	Network  = nNetwork;
+	Host	 = nHost;
+	Port	 = nPort;
 	LastSeen = tLastSeen;
+	DNA		 = bDNA;
 }
 	
 // Allow Node = "host:port" assignment
@@ -63,8 +66,9 @@ Node& Node::operator=(CString &rhs)
 	Host = ParseString(Address, ':');
 	Port = atoi(Address);
 
-	Network = NETWORK_GNUTELLA;
+	Network  = NETWORK_GNUTELLA;
 	LastSeen = 0;
+	DNA		 = false;
 
 	return *this;
 }

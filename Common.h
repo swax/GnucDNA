@@ -40,6 +40,8 @@ bool IsPrivateIP(IP Address);
 CString IPv4toStr(IPv4 Address);
 IPv4    StrtoIPv4(CString HostPort);
 
+std::vector<CString> RandomizeVector(std::vector<CString> vTarget);
+
 } // end gdna namespace
 
 

@@ -168,10 +168,10 @@ void CGnuCache::AddKnown(Node KnownNode)
 		std::list<Node>* ActiveCache = NULL;
 
 		if( KnownNode.Network == NETWORK_GNUTELLA)
-			ActiveCache = &m_GnuReal;
+			ActiveCache = KnownNode.DNA ? &m_GnuDna : &m_GnuReal;
 		
 		if( KnownNode.Network == NETWORK_G2)
-			ActiveCache = &m_G2Real;
+			ActiveCache = KnownNode.DNA ? &m_G2Dna : &m_G2Real;
 		
 
 		if(ActiveCache)
@@ -295,17 +295,19 @@ void CGnuCache::Timer()
 	// Transfer new nodes from thread to cache
 	m_TransferAccess.Lock();
 	
-	while(m_WebTransferList.size())
-	{
-		// add to both g1/g2 caches
-		Node NewNode(m_WebTransferList.back());
-		AddKnown( NewNode );
+		m_WebTransferList = RandomizeVector(m_WebTransferList);
 
-		NewNode.Network = NETWORK_G2;
-		AddKnown( NewNode );
+		while(m_WebTransferList.size())
+		{
+			// add to both g1/g2 caches
+			Node NewNode(m_WebTransferList.back());
+			AddKnown( NewNode );
 
-		m_WebTransferList.pop_back();
-	}
+			NewNode.Network = NETWORK_G2;
+			AddKnown( NewNode );
+
+			m_WebTransferList.pop_back();
+		}
 	
 	m_TransferAccess.Unlock();
 
@@ -442,7 +444,7 @@ void CGnuCache::SaveWebCaches(CString WebHostFile)
 }
 
 
-void CGnuCache::WebCacheRequest(bool HostFileOnly)
+/*void CGnuCache::WebCacheRequest(bool HostFileOnly)
 { 
 
 	// Starts thread to retrieve hostfile (and urlfile)
@@ -468,7 +470,7 @@ void CGnuCache::WebCacheRequest(bool HostFileOnly)
 			m_pCore->LogError("WebCacheRequest can't find random web cache!");
 		}
 	}
-}
+}*/
 
 void CGnuCache::WebCacheGetRequest(CString network)
 { 
@@ -498,14 +500,15 @@ void CGnuCache::WebCacheGetRequest(CString network)
 }
 
 
-void CGnuCache::WebCacheUpdate()
+void CGnuCache::WebCacheUpdate(CString network)
 {
 	//TRACE0("### WebCacheUpdate Called\n"); //DB
 
 	// Send an update request to a random cache
 	if(!m_pWebCacheThread)
 	{
-		m_WebMode = MODE_UPDATE;
+		m_WebMode    = MODE_UPDATE;
+		m_WebNetwork = network;
 		
 		GnuStartThread(m_pWebCacheThread, WebCacheWorker, this);
 	}
@@ -829,7 +832,7 @@ CString CGnuCache::WebCacheDoRequest(CString RequestURL)
 	else if( !m_WebNetwork.IsEmpty() )
 		RequestURL += "&net=" + m_WebNetwork;
 
-	RequestURL += "&client=" + m_pCore->m_ClientCode; //TEST";	// Forced to use client=TEST because GWC version 1.0.0.0 has auth list of clients
+	RequestURL += "&client=" + m_pCore->m_ClientCode;
 	RequestURL += "&version=" + m_pCore->m_DnaVersion;
 
 	if ( RequestURL.Find("?urlfile=1") != -1 || RequestURL.Find("?hostfile=1") != -1 )
@@ -863,17 +866,16 @@ CString CGnuCache::WebCacheDoRequest(CString RequestURL)
 			if(pFile->QueryInfoStatusCode(StatusCode))
 				if(StatusCode >= 200 && StatusCode < 300)
 				{
-					BYTE buffer[50];
-					int Read = 0;
+					char buffer[1024];
+					int ReadSize = 0;
 
 					do
 					{
-						Read = pFile->Read(buffer, 50);
+						ReadSize = pFile->Read(buffer, 1024);
 
-						for(int i = 0; i < Read; i++)
-							strFile += buffer[i];
+						strFile += CString(buffer, ReadSize);
 
-					} while(Read != 0);	   
+					} while(ReadSize != 0);	   
 				}
 				else
 					strFile = NumtoStr(StatusCode) + " ERROR";
@@ -1225,3 +1227,4 @@ bool CGnuCache::ValidURL(CString WebHost)
 
 	return true;
 }
+

@@ -52,7 +52,15 @@ CGnuFileHash::CGnuFileHash(CGnuShare* pShare)
 
 	m_pHashThread = NULL;
 
-	LoadShareHashes(m_pCore->m_RunPath + "GnuHashes.ini");
+	try
+	{
+		LoadShareHashes(m_pCore->m_RunPath + "GnuHashes.ini");
+	}
+	catch(...)
+	{
+		DeleteFile(m_pCore->m_RunPath + "GnuHashes.ini");
+		LoadShareHashes(m_pCore->m_RunPath + "GnuHashes.ini");
+	}
 
 	m_StopThread  = false;
 	m_StopHashing = false;
@@ -624,7 +632,7 @@ void CGnuFileHash::LoadShareHashes(CString HashFileName)
 
 				while(dotPos != -1 && buffPos < hf.TreeSize)
 				{
-					DecodeBase32( Value.Mid(dotPos - 39, 39), 39, hf.TigerTree + buffPos );
+					DecodeBase32( Value.Mid(dotPos - 39, 39), 39, hf.TigerTree + buffPos, hf.TreeSize-buffPos);
 
 					buffPos += 24;
 					dotPos = Value.Find(".", dotPos + 1);
@@ -737,3 +745,4 @@ void CGnuFileHash::Timer()
 			m_SaveInterval++;
 	}
 }
+

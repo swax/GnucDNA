@@ -462,11 +462,11 @@ void CGnuSock::ParsePushProxyRequest()
 	CString UrlString = ParseString(lowHandshake, '\n');
 	pos = UrlString.Find("guid=");
 	if(pos != -1)
-		DecodeBase16( UrlString.Mid(pos + 5, 32), 32, (byte*) &ClientID);
+		DecodeBase16( UrlString.Mid(pos + 5, 32), 32, (byte*) &ClientID, 16);
 		
 	pos = UrlString.Find("serverid=");
 	if(pos != -1)
-		DecodeBase32( UrlString.Mid(pos + 9, 26), 26, (byte*) &ClientID);
+		DecodeBase32( UrlString.Mid(pos + 9, 26), 26, (byte*) &ClientID, 16);
 
 
 	// Match with leaf node

@@ -145,12 +145,12 @@ public:
 		wndclass.hCursor=0;
 		wndclass.hbrBackground=0;
 		wndclass.lpszMenuName=0;
-		wndclass.lpszClassName=_T("CAsyncSocketEx Helper Window");
+		wndclass.lpszClassName=_T("GnucDNA CAsyncSocketEx Helper Window");
 		wndclass.hIconSm=0;
 
 		RegisterClassEx(&wndclass);
 
-		m_hWnd=CreateWindow(_T("CAsyncSocketEx Helper Window"), _T("CAsyncSocketEx Helper Window"), 0, 0, 0, 0, 0, 0, 0, 0, GetModuleHandle(0));
+		m_hWnd=CreateWindow(_T("GnucDNA CAsyncSocketEx Helper Window"), _T("GnucDNA CAsyncSocketEx Helper Window"), 0, 0, 0, 0, 0, 0, 0, 0, GetModuleHandle(0));
 		ASSERT(m_hWnd);
 		SetWindowLong(m_hWnd, GWL_USERDATA, (LONG)this);
 	};

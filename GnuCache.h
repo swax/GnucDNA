@@ -60,9 +60,9 @@ public:
 	void LoadWebCaches(CString);
 	void SaveWebCaches(CString);
 
-	void WebCacheRequest(bool HostFileOnly=false);
-	void WebCacheGetRequest(CString network = "gnutella");
-	void WebCacheUpdate();
+	//void WebCacheRequest(bool HostFileOnly=false);
+	void WebCacheGetRequest(CString network);
+	void WebCacheUpdate(CString network);
 	void WebCacheAddCache(CString);
 	bool WebCacheSeedCache(CString);
 
@@ -76,6 +76,7 @@ public:
 	CString GetRandWebCache(bool);
 	CString FindHeader(CString Handshake, CString Name);
 
+
 	void Timer();
 
 	int m_MaxCacheSize;
@@ -83,9 +84,11 @@ public:
 
 	std::list<Node> m_GnuPerm;
 	std::list<Node> m_GnuReal;
+	std::list<Node> m_GnuDna;
 
 	std::list<Node> m_G2Perm;
 	std::list<Node> m_G2Real;
+	std::list<Node> m_G2Dna;
 
 	std::list<IP>   m_RecentIPs;
 

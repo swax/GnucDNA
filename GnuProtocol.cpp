@@ -1031,7 +1031,7 @@ void CGnuProtocol::Receive_VendMsg(Gnu_RecvdPacket &Packet)
 			for(int i = 0; i < m_pNet->m_SearchList.size(); i++)
 				if(VendMsg->Header.Guid == m_pNet->m_SearchList[i]->m_QueryID)
 				{
-					TRACE0("VMS " + pNode->m_RemoteAgent + " " + IPtoStr(pNode->m_Address.Host) + ": Query Status Request");
+					TRACE0("VMS " + pNode->m_RemoteAgent + " " + IPtoStr(pNode->m_Address.Host) + ": Query Status Request\n");
 					CGnuSearch* pSearch = m_pNet->m_SearchList[i];
 					
 					packet_VendMsg ReplyMsg;
@@ -1285,7 +1285,11 @@ void CGnuProtocol::Receive_Bye(Gnu_RecvdPacket &Packet)
 
 	byte* ByeData = (byte*) Bye;
 
-	pNode->CloseWithReason( CString( (char*) &ByeData[23]), true );
+	CString Reason;
+	if( Packet.Length > 25)
+		Reason = CString( (char*) &ByeData[25], Packet.Length - 25);
+
+	pNode->CloseWithReason( Reason, true );
 }
 
 void CGnuProtocol::Receive_Unknown(Gnu_RecvdPacket &Packet)
@@ -1980,12 +1984,12 @@ void CGnuProtocol::Send_VendMsg(CGnuNode* pTCP, packet_VendMsg VendMsg, void* pa
 	FinalPacket = NULL;
 }
 
-void CGnuProtocol::Send_Bye(CGnuNode* pTCP, CString Reason)
+void CGnuProtocol::Send_Bye(CGnuNode* pTCP, CString Reason, int ErrorCode)
 {
 	GUID Guid;
 	GnuCreateGuid(&Guid);
 	
-	int PacketSize = 23 + Reason.GetLength() + 1;
+	int PacketSize = 23 + 2 + Reason.GetLength() + 1;
 	byte* PacketData = new byte[PacketSize];
 	
 	packet_Bye* Bye =  (packet_Bye*) PacketData;
@@ -1995,11 +1999,9 @@ void CGnuProtocol::Send_Bye(CGnuNode* pTCP, CString Reason)
 	Bye->Header.Hops		= 0;
 	Bye->Header.Payload		= PacketSize - 23;
 
-	strcpy((char*) &PacketData[23], (LPCSTR) Reason);
+	Bye->Code = ErrorCode;
 
-	byte test[255];
-	memcpy(test, PacketData, PacketSize);
-
+	strcpy((char*) &PacketData[25], (LPCSTR) Reason);
 	PacketData[PacketSize - 1] = NULL;
 
 	pTCP->SendPacket(PacketData, PacketSize, PACKET_BYE, Bye->Header.Hops);

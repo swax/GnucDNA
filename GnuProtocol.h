@@ -47,7 +47,7 @@ public:
 	void Send_QueryHit(GnuQuery &FileQuery, byte* pQueryHit, DWORD ReplyLength, byte ReplyCount, CString &MetaTail);
 	void Send_Push(FileSource Download, IPv4 Proxy=IPv4());
 	void Send_VendMsg(CGnuNode* pTCP, packet_VendMsg VendMsg, void* payload=NULL, int length=0, IPv4 Target=IPv4());
-	void Send_Bye(CGnuNode* pTCP, CString Reason);
+	void Send_Bye(CGnuNode* pTCP, CString Reason, int ErrorCode);
 	void Send_StatsMsg(CGnuNode* pTCP);
 	// Other
 	void Decode_QueryHit( std::vector<FileSource> &Sources, Gnu_RecvdPacket &QHPacket);

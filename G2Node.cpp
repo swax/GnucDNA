@@ -343,6 +343,8 @@ void CG2Node::OnConnect(int nErrorCode)
 		return;
 	}
 
+	m_pG2Comm->m_LastConnect = time(NULL);
+
 	CString Handshake;
 
 	Handshake =  "GNUTELLA CONNECT/0.6\r\n";
@@ -483,7 +485,7 @@ void CG2Node::Send_Close(CString Reason)
 
 	// Add cached hubs
 	CString TryHeader;
-	m_pG2Comm->GetAltHubs(TryHeader, this);
+	m_pG2Comm->GetAltHubs(TryHeader, this, false);
 	
 	CString Address = ParseString(TryHeader, ',');
 	while( !Address.IsEmpty() )
@@ -584,6 +586,11 @@ void CG2Node::ParseOutboundHandshake(CString Data, byte* Stream, int StreamLengt
 	CString HubsToTry = FindHeader("X-Try-Hubs");
 	if( !HubsToTry.IsEmpty() )
 		ParseTryHeader( HubsToTry );
+
+	// Parse X-Try-DNA-Hubs header
+	HubsToTry = FindHeader("X-Try-DNA-Hubs");
+	if( !HubsToTry.IsEmpty() )
+		ParseTryHeader( HubsToTry, true);
 
 	// Parse X-Try-Ultrapeers
 	if(m_lowHandshake.Find("application/x-gnutella2") != -1)
@@ -750,6 +757,11 @@ void CG2Node::ParseIncomingHandshake(CString Data, byte* Stream, int StreamLengt
 	CString HubsToTry = FindHeader("X-Try-Hubs");
 	if( !HubsToTry.IsEmpty() )
 		ParseTryHeader( HubsToTry );
+
+	// Parse X-Try-DNA-Hubs header
+	HubsToTry = FindHeader("X-Try-DNA-Hubs");
+	if( !HubsToTry.IsEmpty() )
+		ParseTryHeader( HubsToTry, true);
 
 	// Parse X-Try-Ultrapeers
 	if(m_lowHandshake.Find("application/x-gnutella2") != -1)
@@ -1018,8 +1030,14 @@ void CG2Node::Send_ConnectOK(bool Reply)
 
 		// X-Try-Hubs header
 		CString HubsToTry;
-		if(m_pG2Comm->GetAltHubs(HubsToTry, this))
+		if(m_pG2Comm->GetAltHubs(HubsToTry, this, false))
 			Handshake += "X-Try-Hubs: " + HubsToTry + "\r\n";	
+
+		// X-Try-DNA-Hubs header
+		CString DnaToTry;
+		if(m_pG2Comm->GetAltHubs(DnaToTry, this, true))
+			Handshake += "X-Try-DNA-Hubs: " + DnaToTry + "\r\n";	
+
 
 		Handshake += "\r\n";
 	}
@@ -1044,8 +1062,13 @@ void CG2Node::Send_ConnectError(CString Reason)
 
 	// X-Try-Ultrapeers header
 	CString HubsToTry;
-	if(m_pG2Comm->GetAltHubs(HubsToTry, this))
+	if(m_pG2Comm->GetAltHubs(HubsToTry, this, false))
 		Handshake += "X-Try-Ultrapeers: " + HubsToTry + "\r\n";
+
+	// X-Try-DNA-Hubs header
+	CString DnaToTry;
+	if(m_pG2Comm->GetAltHubs(DnaToTry, this, true))
+		Handshake += "X-Try-DNA-Hubs: " + DnaToTry + "\r\n";
 
 	Handshake += "\r\n";
 
@@ -1077,9 +1100,11 @@ CString CG2Node::FindHeader(CString Name)
 	return Data;
 }
 
-void CG2Node::ParseTryHeader(CString TryHeader)
+void CG2Node::ParseTryHeader(CString TryHeader, bool DnaOnly)
 {
 	int Added = 0;
+
+	std::deque<Node> TryHosts;
 
 	// 1.2.3.4:6346 2003-03-25T23:59Z,
 	CString Address = ParseString(TryHeader, ',');
@@ -1090,13 +1115,15 @@ void CG2Node::ParseTryHeader(CString TryHeader)
 		tryNode.Network = NETWORK_G2;
 		tryNode.Host = ParseString(Address, ':');
 		tryNode.Port = atoi(ParseString(Address, ' '));
+		tryNode.DNA  = DnaOnly;
 
 		if(Address.IsEmpty()) // Is not sending timestamp, probably G1 node in G2 cache
 			return;
 
 		tryNode.LastSeen = StrToCTime(Address);
 
-		m_pCache->AddKnown( tryNode);
+		TryHosts.push_front(tryNode);
+
 		Added++;
 
 		// Add hubs to global cache
@@ -1107,6 +1134,11 @@ void CG2Node::ParseTryHeader(CString TryHeader)
 		
 		Address = ParseString(TryHeader, ',');
 	}
+
+	// done in this manner because hosts sorted by leaf count
+	// make sure next node tried by cache is a host with low leaves, high prob of success
+	for(int i = 0; i < TryHosts.size(); i++)
+		m_pCache->AddKnown( TryHosts[i] );
 
 	// This host responds with more hosts, put on Perm list
 	if( !m_Inbound)

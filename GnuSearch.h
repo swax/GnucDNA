@@ -59,6 +59,7 @@ public:
 	int    m_ResultStep;
 	uint32 m_NextTimeout;
 	bool   m_SearchPaused;
+	int    m_Minute;
 
 	CGnuNode* m_BrowseNode;
 	int       m_BrowseWaiting;

@@ -100,8 +100,15 @@ struct packet_QueryHit		// Size 35+
 struct packet_Bye				// 23+
 {
 	packet_Header Header;		// 0 - 22
-	// Reason					// 23+
+	WORD Code;					// 23 - 24
+
+	// Reason					// 25+
 };
+
+#define BYE_MANUAL   201
+#define BYE_REMOTE   400
+#define BYE_TIMEOUT  405
+#define BYE_INTERNAL 500
 
 struct packet_QueryHitItem	// Size 9+
 {

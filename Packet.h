@@ -58,11 +58,12 @@ struct Node
 	CString Host;
 	UINT    Port;
 	CTime   LastSeen;
+	bool    DNA;
 
 	// Create a node based on a standard "Host:port" string
 	Node();
 	Node(CString HostPort);
-	Node(CString nHost, UINT nPort, int nNetwork=NETWORK_GNUTELLA, CTime tLastSeen=0);
+	Node(CString nHost, UINT nPort, int nNetwork=NETWORK_GNUTELLA, CTime tLastSeen=0, bool DNA=false);
 
 	void Clear() { Host = ""; Port = 0; };
 

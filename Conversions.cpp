@@ -153,7 +153,7 @@ CString EncodeBase16(unsigned char* buffer, unsigned int bufLen)
     return Base16Buff;
 }
 
-void DecodeBase16(const char *base16Buffer, unsigned int base16BufLen, byte *buffer)
+void DecodeBase16(const char *base16Buffer, unsigned int base16BufLen, byte *buffer, unsigned int bufLen)
 {
     memset(buffer, 0, DecodeLengthBase16(base16BufLen));
   
@@ -171,11 +171,23 @@ void DecodeBase16(const char *base16Buffer, unsigned int base16BufLen, byte *buf
 
 		if(i % 2 == 0)
 		{
-			buffer[i/2] = word << 4;
+			int pos = i/2;
+			
+			ASSERT(pos < bufLen);
+			if(pos >= bufLen)
+				return;
+
+			buffer[pos] = word << 4;
 		} 
 		else
 		{
-			buffer[(i-1)/2] |= word;
+			int pos = (i-1)/2;
+			
+			ASSERT(pos < bufLen);
+			if(pos >= bufLen)
+				return;
+
+			buffer[pos] |= word;
 		}
 	}
 }
@@ -242,7 +254,7 @@ CString EncodeBase32(const unsigned char* buffer, unsigned int bufLen)
     return encStr;
 }
 
-void DecodeBase32(const char *base32Buffer, unsigned int base32BufLen, byte *buffer)
+void DecodeBase32(const char *base32Buffer, unsigned int base32BufLen, byte *buffer, unsigned int bufLen)
 {
     int            i, index, max, lookup, offset;
     unsigned char  word;
@@ -258,6 +270,10 @@ void DecodeBase32(const char *base32Buffer, unsigned int base32BufLen, byte *buf
            word = 0xFF;
         else
            word = base32Lookup[lookup][1];
+
+		ASSERT(offset < bufLen);
+		if(offset >= bufLen)
+			return;
 
         /* If this word is not in the table, ignore it */
         if (word == 0xFF)

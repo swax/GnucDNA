@@ -334,6 +334,28 @@ IPv4 StrtoIPv4(CString HostPort)
 	return Address;
 }
 
+std::vector<CString> RandomizeVector(std::vector<CString> vTarget)
+{
+	if( vTarget.empty() )
+		return vTarget;
+
+	std::deque<CString> vTemp;
+	for(int i = 0; i < vTarget.size(); i++)
+		vTemp.push_back( vTarget[i] );
+
+	std::vector<CString> vRandom;
+
+	while( vTemp.size() )
+	{
+		int index = rand() % vTemp.size();
+
+		vRandom.push_back( vTemp[index] );
+
+		vTemp.erase( vTemp.begin() + index);
+	}
+
+	return vRandom;
+}
 
 } // end gdna namespace
 

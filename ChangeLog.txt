@@ -1,3 +1,11 @@
+GnucDNA 1.1.1.2
+	swabby: Downloaded IPs from webcache randomized
+	swabby: Ultrapeer connections in leaf mode increased, but decreased incrementally when idle
+	swabby: Added missing error code to G1 bye packet
+	swabby: Added buffer checks to encoding bases
+	swabby: Re-Search sent faster over new connections
+	swabby: X-Try-DNA header and cache optimizations for faster connections
+	
 GnucDNA 1.1.1.1
 	swabby: NoReload Shared option added for clients with thousands of dynamic files
 	swabby: Re-searching limited to 1 per hour across all downloads, gnutella compliance standard

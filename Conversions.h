@@ -15,12 +15,12 @@ CTime	StrToCTime(CString& str);	// Converts a string representation to a CTime
 CString CTimeToStr(CTime& time);	// reverse of above
 
 CString EncodeBase16(byte* buffer, unsigned int bufLen);
-void    DecodeBase16(const char *base16Buffer, unsigned int base16BufLen, byte *buffer);
+void    DecodeBase16(const char *base16Buffer, unsigned int base16BufLen, byte *buffer, unsigned int bufLen);
 int		EncodeLengthBase16(int rawLength);
 int		DecodeLengthBase16(int base16Length);
 
 CString EncodeBase32(const byte* buffer, unsigned int bufLen);
-void    DecodeBase32(const char *base32Buffer, unsigned int base32BufLen, byte *buffer);
+void    DecodeBase32(const char *base32Buffer, unsigned int base32BufLen, byte *buffer, unsigned int bufLen);
 int		EncodeLengthBase32(int rawLength);
 int		DecodeLengthBase32(int base32Length);
 

@@ -82,6 +82,7 @@ CGnuSearch::CGnuSearch(CGnuNetworks* pNet)
 	m_ResultStep   = SEARCH_RESULT_STEP;
 	m_NextTimeout  = time(NULL) + SEARCH_TIMOUT_STEP;
 	m_SearchPaused = false;
+	m_Minute       = 0;
 
 	m_SizeFilterMode   = LIMIT_NONE;
 	m_SizeFilterValue  = 0;
@@ -628,6 +629,32 @@ void CGnuSearch::Timer()
 		return;
 	}
 
+	/*m_Minute++;
+	if(m_Minute == 60)
+	{
+		TRACE0("\n" + m_Search + "\n");
+
+		std::map<CString, int> m_ClientCount;
+		std::map<CString, int>::iterator itClient;
+		
+
+		for(int i = 0; i < m_WholeList.size(); i++)
+		{
+			itClient = m_ClientCount.find(m_WholeList[i].Vendor);
+
+			if( itClient == m_ClientCount.end() )
+				m_ClientCount[m_WholeList[i].Vendor] = 1;
+			else
+				m_ClientCount[m_WholeList[i].Vendor]++;
+		}
+			
+		for(itClient = m_ClientCount.begin(); itClient != m_ClientCount.end(); itClient++)
+			TRACE0("    " + itClient->first + " " + NumtoStr(itClient->second) + "\n");
+
+		TRACE0("\n");
+
+		m_Minute = 0;
+	}*/
 	
 	// Continue G2 Search
 	if( !m_SearchPaused )

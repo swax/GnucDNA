@@ -137,7 +137,7 @@ void CGnuPrefs::LoadConfig(CString ConfigFile)
 	GetPrivateProfileString("Local",  "UpdateMode",		NumtoStr(m_Update),		buffer, 256, ConfigFile);
 	m_Update = atoi(buffer);
 	GetPrivateProfileString("Local", "ClientID", EncodeBase16((byte*) &m_ClientID, 16), buffer, 256, ConfigFile);
-	DecodeBase16( CString(buffer), 16, (byte*) &m_ClientID);
+	DecodeBase16( CString(buffer), 32, (byte*) &m_ClientID, 16);
 	GetPrivateProfileString("Local",  "Sp2Override",		NumtoStr(m_Sp2Override),		buffer, 256, ConfigFile);
 	m_Sp2Override = atoi(buffer);
 

@@ -71,6 +71,7 @@ CGnuControl::CGnuControl(CGnuNetworks* pNet)
 
 	m_NetworkName		= "GNUTELLA";
 
+	m_LastConnect = 0;
 
 	// Ultrapeers
 	m_GnuClientMode   = GNU_LEAF;
@@ -96,7 +97,7 @@ CGnuControl::CGnuControl(CGnuNetworks* pNet)
 	m_pDatagram = new CGnuDatagram(this);
 	m_pProtocol = new CGnuProtocol(this);
 
-	m_pProtocol->Init();	
+	m_pProtocol->Init();
 }
 
 CGnuControl::~CGnuControl()
@@ -192,7 +193,7 @@ void CGnuControl::RemoveNode(CGnuNode* pNode)
 	std::vector<CGnuNode*>::iterator itNode;
 	for(itNode = m_NodeList.begin(); itNode != m_NodeList.end(); itNode++)
 		if(*itNode == pNode)
-			pNode->CloseWithReason("Manually Removed");
+			pNode->CloseWithReason("Manually Removed", BYE_MANUAL);
 
 	NodeUpdate(pNode);
 }
@@ -388,7 +389,7 @@ void CGnuControl::HourlyTimer()
 	// Web Cache check in
 	if(m_GnuClientMode == GNU_ULTRAPEER)
 		if(CountUltraConnects() == 0 || !m_pNet->m_TcpFirewall) // make sure if no connects to update, because firewall cant be tested without peers
-			m_pCache->WebCacheUpdate();
+			m_pCache->WebCacheUpdate("gnutella");
 
 	m_TriedConnects.clear();
 
@@ -503,20 +504,22 @@ void CGnuControl::ManageNodes()
 
 
 	bool NeedDnaUltras = false;
-	if(UltraConnects && UltraDnaConnects * 100 / UltraConnects < 50)
+	if(UltraConnects && UltraDnaConnects * 100 / UltraConnects < 25)
 		NeedDnaUltras = true;
 
 
 	if(m_GnuClientMode == GNU_LEAF)
 	{
-		// if search not done for 30 mins, connect to 1 ultrapeer, else 3
-		m_pPrefs->m_LeafModeConnects = (m_LastSearchTime + (30*60) < time(NULL)) ? 1 : 3;
+		// Reduce leaf connects by 1 each 6 mins of inactivity, leveling at 1 connect after a half hour
+		int LeafConnects = 5 - ((time(NULL) - m_LastSearchTime) / 60 / 6);
+		
+		m_pPrefs->m_LeafModeConnects = (LeafConnects <= 0) ? 1 : LeafConnects;
 
 		if(UltraConnects < m_pPrefs->m_LeafModeConnects)
-			AddConnect();
+			AddConnect(NeedDnaUltras);
 		
 		else if(UltraConnects && NeedDnaUltras)
-			AddConnect();
+			AddConnect(NeedDnaUltras);
 
 		if(m_pPrefs->m_LeafModeConnects && UltraConnects > m_pPrefs->m_LeafModeConnects)
 			DropNode(GNU_ULTRAPEER, NeedDnaUltras);
@@ -526,10 +529,10 @@ void CGnuControl::ManageNodes()
 	if(m_GnuClientMode == GNU_ULTRAPEER)
 	{
 		if(m_pPrefs->m_MinConnects && UltraConnects < m_pPrefs->m_MinConnects)
-			AddConnect();
+			AddConnect(NeedDnaUltras);
 		
 		else if(UltraConnects && NeedDnaUltras)
-			AddConnect();
+			AddConnect(NeedDnaUltras);
 
 
 		if(m_pPrefs->m_MaxConnects && UltraConnects > m_pPrefs->m_MaxConnects)
@@ -548,18 +551,36 @@ void CGnuControl::ManageNodes()
 	}
 }
 
-void CGnuControl::AddConnect()
+void CGnuControl::AddConnect(bool PrefDna)
 {
-	// If Real list has values
-	if(m_pCache->m_GnuReal.size())
-	{
-		// try a random host from top 15, x-try adds max 5, reduces one nodes chance of messing with cache
-		int randIndex = ( m_pCache->m_GnuReal.size() > 15) ? rand() % 15 : rand() % m_pCache->m_GnuReal.size();
+	if( PrefDna && ConnectFromCache(m_pCache->m_GnuDna, false) )
+		return;
 
-		std::list<Node>::iterator itNode = m_pCache->m_GnuReal.begin();
-		for(int i = 0; itNode != m_pCache->m_GnuReal.end(); itNode++, i++)
-			if(i == randIndex)
+	if( ConnectFromCache(m_pCache->m_GnuReal, false) )
+		return;
+
+	if( ConnectFromCache(m_pCache->m_GnuPerm, true) )
+		return;
+
+	// No nodes in cache, if not connected to anyone either, havent made a connection for a minute
+	// do web cache update
+	if(CountUltraConnects() == 0 && m_LastConnect < time(NULL) - 60)
+		m_pCache->WebCacheGetRequest("gnutella");
+}
+
+bool CGnuControl::ConnectFromCache(std::list<Node> &Cache, bool Perm)
+{
+	if( Cache.size() )
+	{
+		int CachePos = (Perm) ? rand() % Cache.size() : 0;
+	
+		std::list<Node>::iterator itNode = Cache.begin();
+		for(int i = 0; itNode != Cache.end(); itNode++, i++)
+			if(i == CachePos)
 			{
+				if( !Perm )
+					Cache.erase(itNode);
+				
 				std::map<uint32, bool>::iterator itAddr = m_TriedConnects.find( StrtoIP((*itNode).Host).S_addr );
 				if(itAddr != m_TriedConnects.end())
 					break;
@@ -567,35 +588,11 @@ void CGnuControl::AddConnect()
 				m_TriedConnects[ StrtoIP((*itNode).Host).S_addr ] = true;
 
 				AddNode( (*itNode).Host, (*itNode).Port);
-				m_pCache->m_GnuReal.erase(itNode);
-				return;
+
+				return true;
 			}
 	}
-
-
-	// If permanent list has values
-	if(m_pCache->m_GnuPerm.size())
-	{
-		int randIndex = rand() % m_pCache->m_GnuPerm.size();
-
-		std::list<Node>::iterator itNode = m_pCache->m_GnuPerm.begin();
-		for(int i = 0; itNode != m_pCache->m_GnuPerm.end(); itNode++, i++)
-			if(i == randIndex)
-			{
-				std::map<uint32, bool>::iterator itAddr = m_TriedConnects.find( StrtoIP((*itNode).Host).S_addr );
-				if(itAddr != m_TriedConnects.end())
-					break;
-
-				m_TriedConnects[ StrtoIP((*itNode).Host).S_addr ] = true;
-
-				AddNode( (*itNode).Host, (*itNode).Port);
-				return;
-			}
-	}	
-
-	// No nodes in cache, if not connected to anyone either, web cache update
-	if(CountUltraConnects() == 0)
-		m_pCache->WebCacheRequest(true);
+	return false;
 }
 
 void CGnuControl::DropNode(int GnuMode, bool NeedDna)

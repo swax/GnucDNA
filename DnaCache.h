@@ -31,6 +31,7 @@ public:
 	void AddNode(LPCTSTR HostPort, BOOL SuperNode);
 	void RemoveIP(LPCTSTR Host, int Port);
 	void SeedWebCache(LPCTSTR WebAddress);
+	void TryWebCache(LPCTSTR Network);
 };
 
 
