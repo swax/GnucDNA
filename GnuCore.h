@@ -37,6 +37,7 @@ public:
 	CString  m_RunPath;
 	
 	bool    m_IsKernalNT;
+	bool    m_IsSp2;
 	int     m_SysMemory;
 	int     m_SysSpeed;
 	

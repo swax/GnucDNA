@@ -112,7 +112,7 @@ CGnuDownload::~CGnuDownload()
 	while(Receive(pBuff, 4096) > 0)
 		;
 
-	if(m_hSocket != INVALID_SOCKET)
+	if(m_SocketData.hSocket != INVALID_SOCKET)
 		AsyncSelect(0);
 
 	if(m_TigerReqBuffer)
@@ -125,7 +125,7 @@ CGnuDownload::~CGnuDownload()
 
 // Do not edit the following lines, which are needed by ClassWizard.
 #if 0
-BEGIN_MESSAGE_MAP(CGnuDownload, CAsyncSocket)
+BEGIN_MESSAGE_MAP(CGnuDownload, CAsyncSocketEx)
 	//{{AFX_MSG_MAP(CGnuDownload)
 	//}}AFX_MSG_MAP
 END_MESSAGE_MAP()
@@ -146,11 +146,13 @@ void CGnuDownload::OnConnect(int nErrorCode)
 		return;
 	}
 
+	HostInfo()->Tries = 0; // reset, know host can be connected to
+
 	SetError("Connected");
 
 	SendRequest();
 	
-	CAsyncSocket::OnConnect(nErrorCode);
+	CAsyncSocketEx::OnConnect(nErrorCode);
 }
 
 void CGnuDownload::OnReceive(int nErrorCode) 
@@ -328,9 +330,6 @@ void CGnuDownload::OnReceive(int nErrorCode)
 				
 				if (httpVersion.Left(4) == "HTTP")
 				{
-					if( httpVersion.Left(8) == "HTTP/1.1" )
-						m_KeepAlive = true;
-
 					//Read the Status-Code
 					Code = atoi(StatusLine.Left(3));
 					if (StatusLine.Mid(3, 1) == ' ')
@@ -517,6 +516,19 @@ void CGnuDownload::OnReceive(int nErrorCode)
 				}
 			}
 
+			// Connection Header
+			CString ConnectType = ParsedHeaders.FindHeader("Connection");
+			if( !ConnectType.IsEmpty() )
+			{
+				ConnectType.MakeLower();
+
+				if(ConnectType == "keep-alive")
+					m_KeepAlive = true;
+				
+				if(ConnectType == "close")
+					m_KeepAlive = false;
+			}
+
 			// Server Name
 			CString ServerName = ParsedHeaders.FindHeader("Server");
 			if( !ServerName.IsEmpty() )
@@ -536,54 +548,6 @@ void CGnuDownload::OnReceive(int nErrorCode)
 			// Success code
 			if( (200 <= Code && Code < 300) || Code == 302 )
 			{		
-				int ContentLength = 0, RemoteFileSize = 0, StartByte = 0, EndByte = 0;
-
-				// Conent-Length
-				CString strContentLength = ParsedHeaders.FindHeader("Content-Length");
-				if( !strContentLength.IsEmpty() )
-				{
-					ContentLength = atol(strContentLength);
-
-					if(m_pShell->m_FileLength == 0)
-					{
-						m_pShell->m_FileLength = ContentLength;
-						m_pShell->CreatePartList();	
-						SendRequest();
-						return;
-					}
-				}
-
-				// Content-Range
-				CString ContentRange = ParsedHeaders.FindHeader("Content-Range");
-				if( !ContentRange.IsEmpty() )
-				{
-					ContentRange.MakeLower();
-
-					ContentRange.Replace("bytes=", "bytes ");	//Some wrongly send bytes=x-y/z in Content-Range header
-					
-					if(ContentRange.Find("*") != -1)
-					{
-						sscanf(ContentRange, "bytes */%ld", &RemoteFileSize);
-						StartByte = m_PausePos - ContentLength;
-						EndByte   = m_PausePos - 1;
-					}
-					else
-						sscanf(ContentRange, "bytes %ld-%ld/%ld", &StartByte, &EndByte, &RemoteFileSize);
-					
-					// Usually DownloadFile with unknown size
-					if( m_pShell->m_FileLength == 0 && RemoteFileSize)
-					{
-						m_pShell->m_FileLength = RemoteFileSize;
-						m_pShell->CreatePartList();	
-						SendRequest();
-						return;
-					}	
-
-					if (EndByte > m_StartPos && EndByte < m_PausePos - 1)
-						m_PausePos = EndByte + 1;
-				}
-
-
 				// Location header (redirected)
 				CString Location = ParsedHeaders.FindHeader("Location");
 				if( !Location.IsEmpty() )
@@ -596,19 +560,6 @@ void CGnuDownload::OnReceive(int nErrorCode)
 					SetError("Redirected");
 					Close();
 					return;
-				}
-
-				// Connection Header
-				CString ConnectType = ParsedHeaders.FindHeader("Connection");
-				if( !ConnectType.IsEmpty() )
-				{
-					ConnectType.MakeLower();
-
-					if(ConnectType == "keep-alive")
-						m_KeepAlive = true;
-					
-					if(ConnectType == "close")
-						m_KeepAlive = false;
 				}
 
 				// Authorization
@@ -690,7 +641,72 @@ void CGnuDownload::OnReceive(int nErrorCode)
 					return;
 				}
 
-				
+
+				int ContentLength = 0, RemoteFileSize = 0, StartByte = 0, EndByte = 0;
+
+				// Conent-Length
+				CString strContentLength = ParsedHeaders.FindHeader("Content-Length");
+				if( !strContentLength.IsEmpty() )
+				{
+					ContentLength = atol(strContentLength);
+
+					if(m_pShell->m_FileLength == 0)
+					{
+						m_pShell->m_FileLength = ContentLength;
+						m_pShell->CreatePartList();	
+						
+						if(m_KeepAlive)
+							SendRequest();
+						else
+						{
+							Close();
+							HostInfo()->Status = FileSource::eAlive;
+							HostInfo()->RetryWait = 0;
+						}
+
+						return;
+					}
+				}
+
+				// Content-Range
+				CString ContentRange = ParsedHeaders.FindHeader("Content-Range");
+				if( !ContentRange.IsEmpty() )
+				{
+					ContentRange.MakeLower();
+
+					ContentRange.Replace("bytes=", "bytes ");	//Some wrongly send bytes=x-y/z in Content-Range header
+					
+					if(ContentRange.Find("*") != -1)
+					{
+						sscanf(ContentRange, "bytes */%ld", &RemoteFileSize);
+						StartByte = m_PausePos - ContentLength;
+						EndByte   = m_PausePos - 1;
+					}
+					else
+						sscanf(ContentRange, "bytes %ld-%ld/%ld", &StartByte, &EndByte, &RemoteFileSize);
+					
+					// Usually DownloadFile with unknown size
+					if( m_pShell->m_FileLength == 0 && RemoteFileSize)
+					{
+						m_pShell->m_FileLength = RemoteFileSize;
+						m_pShell->CreatePartList();	
+						
+						if(m_KeepAlive)
+							SendRequest();
+						else
+						{
+							Close();
+							HostInfo()->Status = FileSource::eAlive;
+							HostInfo()->RetryWait = 0;
+						}
+
+						return;
+					}	
+
+					if (EndByte > m_StartPos && EndByte < m_PausePos - 1)
+						m_PausePos = EndByte + 1;
+				}
+
 				// If not same
 				if(StartByte != m_StartPos)
 				{
@@ -922,12 +938,12 @@ void CGnuDownload::OnReceive(int nErrorCode)
 	}
 
 
-	CAsyncSocket::OnReceive(nErrorCode);
+	CAsyncSocketEx::OnReceive(nErrorCode);
 }
 
 int CGnuDownload::Send(const void* lpBuf, int nBufLen, int nFlags) 
 {
-	int Command = CAsyncSocket::Send(lpBuf, nBufLen, nFlags);
+	int Command = CAsyncSocketEx::Send(lpBuf, nBufLen, nFlags);
 
 	return Command;
 }
@@ -935,7 +951,7 @@ int CGnuDownload::Send(const void* lpBuf, int nBufLen, int nFlags)
 void CGnuDownload::OnSend(int nErrorCode) 
 {
 
-	CAsyncSocket::OnSend(nErrorCode);
+	CAsyncSocketEx::OnSend(nErrorCode);
 }
 
 void CGnuDownload::OnClose(int nErrorCode) 
@@ -944,7 +960,7 @@ void CGnuDownload::OnClose(int nErrorCode)
 
 	Close();
 
-	CAsyncSocket::OnClose(nErrorCode);
+	CAsyncSocketEx::OnClose(nErrorCode);
 }
 
 void CGnuDownload::Close()
@@ -966,12 +982,12 @@ void CGnuDownload::Close()
 		m_pShell->AddNaltLocation(HostInfo()->Address);// add to nalt list
 
 
-	if(m_hSocket != INVALID_SOCKET)
+	if(m_SocketData.hSocket != INVALID_SOCKET)
 	{
 		AsyncSelect(0);
 		ShutDown(2);	
 
-		CAsyncSocket::Close();
+		CAsyncSocketEx::Close();
 	}
 
 	StatusUpdate(TRANSFER_CLOSED);
@@ -1128,9 +1144,9 @@ void CGnuDownload::SendRequest()
 		char buf[1024];
 		DWORD len = sizeof buf;
 		if (InternetCanonicalizeUrl(HostInfo()->Path, buf, &len, ICU_BROWSER_MODE))
-            GetFile.Format("/%s HTTP/1.1\r\n", buf);
+            GetFile.Format("%s HTTP/1.1\r\n", buf);
 		else
-			GetFile.Format("/%s HTTP/1.1\r\n", HostInfo()->Path);
+			GetFile.Format("%s HTTP/1.1\r\n", HostInfo()->Path);
 	}
 	else
 	{
@@ -1168,18 +1184,21 @@ void CGnuDownload::SendRequest()
 	GetFile += "Connection: Keep-Alive\r\n";
 	
 	// Proxy-Connection header
-	if( m_pShell->m_UseProxy )
+	if( m_pShell->m_UseProxy && HostInfo()->Network != NETWORK_WEB )
 		GetFile += "Proxy-Connection: close\r\n";
 	
 	// Range header
-	if( !m_DoHead )
+	if( !m_DoHead && m_PausePos)
 		GetFile	+= "Range: bytes=" + NumtoStr(m_StartPos) + "-" + NumtoStr(m_PausePos - 1) + "\r\n";
 
-	// X-Queue
-	GetFile	+= "X-Queue: 0.1\r\n";
+	if( HostInfo()->Network != NETWORK_WEB )
+	{
+		// X-Queue
+		GetFile	+= "X-Queue: 0.1\r\n";
 
-	// X-Features
-	GetFile += "X-Features: g2/1.0\r\n";
+		// X-Features
+		GetFile += "X-Features: g2/1.0\r\n";
+	}
 
 
 	// X-Gnutella-Content-URN
@@ -1321,7 +1340,7 @@ bool CGnuDownload::StartDownload()
 
 	StatusUpdate(TRANSFER_CONNECTING);
 
-	if(m_hSocket == INVALID_SOCKET)
+	if(m_SocketData.hSocket == INVALID_SOCKET)
 		if(!Create())
 		{
 			SetError("Unable to create socket");
@@ -1652,7 +1671,9 @@ void CGnuDownload::Timer()
 		if(m_nSecsDead > TRANSFER_TIMEOUT)
 		{
 			SetError("Attempt Timed Out");
-			HostInfo()->Status = FileSource::eFailed;
+
+			if( HostInfo()->Tries > 10)
+				HostInfo()->Status = FileSource::eFailed;
 			
 			SendPushRequest();	
 			

@@ -459,9 +459,15 @@ void CG2Control::ManageNodes()
 	}
 
 
+	int MaxHalfConnects = m_pNet->GetMaxHalfConnects();
 
-	// No more than 5 simultaneous connections being attempted
-	if(Connecting > 5)
+	if( m_pNet->NetworkConnecting(NETWORK_GNUTELLA) )
+		MaxHalfConnects /= 2;
+
+	if( m_pNet->TransfersConnecting() )
+		MaxHalfConnects /= 2;
+
+	if(Connecting >= MaxHalfConnects)
 		return;
 
 
@@ -535,9 +541,6 @@ void CG2Control::CleanDeadSocks()
 
 void CG2Control::TryConnect()
 {
-	if( !m_pNet->ConnectingSlotsOpen() )
-		return;
-
 	int attempts = 10;
 
 	while( attempts > 0 )
@@ -617,7 +620,7 @@ void CG2Control::TryConnect()
 void CG2Control::CreateNode(Node HostInfo)
 {
 	// Check if already connected to node
-	if( FindNode( HostInfo.Host, 0 ) != NULL)
+	if( FindNode( HostInfo.Host, 0, false ) != NULL)
 		return;
 
 
@@ -689,12 +692,18 @@ void CG2Control::RemoveNode(CG2Node* pNode)
 	G2NodeUpdate(pNode);
 }
 
-CG2Node* CG2Control::FindNode(CString Host, UINT Port)
+CG2Node* CG2Control::FindNode(CString Host, UINT Port, bool Connected)
 {
 	std::map<uint32, CG2Node*>::iterator itNode = m_G2NodeAddrMap.find( StrtoIP(Host).S_addr);
 
 	if(itNode != m_G2NodeAddrMap.end())
+	{
+		if(Connected && itNode->second->m_Status != SOCK_CONNECTED)
+			return NULL;
+
 		return itNode->second;
+	}
+
 
 	return NULL;
 }
@@ -872,7 +881,8 @@ void CG2Control::HubBalancing()
 
 	// Meant as emergency get dialup, or messed up node out of hub mode
 	// Downgrade if less than 10 children for 10 minutes
-	if( CountHubConnects() && CountChildConnects() < 10 )
+	// New hubs not filling up quick enough, wait the 40 minutes
+	/*if( CountHubConnects() && CountChildConnects() < 10 )
 	{
 		m_MinsBelow10++;
 
@@ -883,7 +893,7 @@ void CG2Control::HubBalancing()
 		}
 	}
 	else
-		m_MinsBelow10 = 0;
+		m_MinsBelow10 = 0;*/
 
 }
 

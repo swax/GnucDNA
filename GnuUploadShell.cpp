@@ -482,13 +482,6 @@ void CGnuUploadShell::ParseRequest(CString Handshake)
 
 void CGnuUploadShell::PushFile()
 {
-
-	if( !m_pNet->ConnectingSlotsOpen() )
-	{
-		m_Error = "No Connect Slots";
-		return;
-	}
-
 	if(m_Socket)
 		delete m_Socket;
 

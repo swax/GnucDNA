@@ -56,6 +56,8 @@ public:
 	CString GetMetaXML(bool file);
 	
 	CString GetFilePath();
+	CString GetFinalPath();
+
 	void RunFile();
 	void ReSearch();
 
@@ -106,7 +108,10 @@ public:
 	bool    m_UpdatedInSecond;
 
 	CString m_Name;
-	CString m_FilePath;
+
+	CString m_OverrideName; // in case d/l copy fails need this because partials rely on m_Name
+	CString m_OverridePath;
+	
 	CString m_PartialPath;
 	CString m_BackupPath;
 
@@ -116,7 +121,6 @@ public:
 	byte*   m_TigerTree;
 	int		m_TreeSize;
 	int		m_TreeRes;
-	//CString m_BitprintHash;
 
 	CString m_MetaXml; // used because meta loaded after transfers loaded
 	int m_MetaID;

@@ -446,7 +446,8 @@ CGnuDownloadShell* CGnuTransfers::LoadDownloadHosts(CString FilePath)
 	Download->m_Name			= GetBackupString("Name", CurrentPos, Backup);
 	Download->m_FileLength		= atoi(GetBackupString("FileLength", CurrentPos, Backup));
 	Download->m_PartSize		= atoi(GetBackupString("PartSize", CurrentPos, Backup));
-	Download->m_FilePath		= GetBackupString("FilePath", CurrentPos, Backup);
+	Download->m_OverrideName	= GetBackupString("OverrideName", CurrentPos, Backup);
+	Download->m_OverridePath	= GetBackupString("OverridePath", CurrentPos, Backup);
 	Download->m_PartialPath		= GetBackupString("PartialPath", CurrentPos, Backup);
 	Download->m_BackupPath  	= FilePath;
 	Download->m_Sha1Hash		= GetBackupString("Sha1Hash", CurrentPos, Backup);

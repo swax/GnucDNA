@@ -146,6 +146,9 @@
 				Name="Common"
 				Filter="">
 				<File
+					RelativePath=".\AsyncSocketEx.cpp">
+				</File>
+				<File
 					RelativePath="Common.cpp">
 				</File>
 				<File
@@ -693,6 +696,9 @@
 			<Filter
 				Name="Common"
 				Filter="">
+				<File
+					RelativePath=".\AsyncSocketEx.h">
+				</File>
 				<File
 					RelativePath="Common.h">
 				</File>

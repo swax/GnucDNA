@@ -66,7 +66,7 @@ void CGnuUpdateSock::OnConnect(int nErrorCode)
 	Send(GetFile, GetFile.GetLength());
 
 
-	CAsyncSocket::OnConnect(nErrorCode);
+	CAsyncSocketEx::OnConnect(nErrorCode);
 }
 
 void CGnuUpdateSock::OnReceive(int nErrorCode)
@@ -187,24 +187,24 @@ void CGnuUpdateSock::OnReceive(int nErrorCode)
 
 	delete [] pBuff;
 
-	CAsyncSocket::OnReceive(nErrorCode);
+	CAsyncSocketEx::OnReceive(nErrorCode);
 }
 
 void CGnuUpdateSock::OnClose(int nErrorCode)
 {
 	Close();
 
-	CAsyncSocket::OnClose(nErrorCode);
+	CAsyncSocketEx::OnClose(nErrorCode);
 }
 
 void CGnuUpdateSock::Close()
 {
-	if(m_hSocket != INVALID_SOCKET)
+	if(m_SocketData.hSocket != INVALID_SOCKET)
 	{
 		AsyncSelect(0);
 		ShutDown(2);
 
-		CAsyncSocket::Close();
+		CAsyncSocketEx::Close();
 	}
 
 	m_Status = TRANSFER_CLOSED;

@@ -2,6 +2,12 @@ GnucDNA 1.1.0.9
 	swabby: Query Ack packet now sent to leaves who do direct tcp query
 	swabby: UDP firewall test messages sent over gnutella
 	imesh?: Set download and partial paths does not create extra directories
+	swabby: Ability to download to a specific directory
+	swabby: Meta directory/file not created unless required
+	swabby: Sped up transfers from http sources
+	swabby: Longer wait to auto-downgrade, allows time to collect leavess
+	swabby: Half-connects intelligently limited across G1/G2/Transfers for SP2
+	swabby: Revised order sources are tried for download using timestamps
 	
 GnucDNA 1.1.0.8
 	swabby: Ensure Ultrapeer upgrade ack is received by other side

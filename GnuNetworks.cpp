@@ -34,6 +34,7 @@
 #include "GnuSock.h"
 #include "GnuSearch.h"
 #include "G2Control.h"
+#include "G2Node.h"
 #include "G2Datagram.h"
 #include "GnuPrefs.h"
 
@@ -73,7 +74,7 @@ CGnuNetworks::CGnuNetworks(CGnuCore* pCore)
 CGnuNetworks::~CGnuNetworks(void)
 {
 	// Socket cleanup
-	if(m_hSocket != INVALID_SOCKET)
+	if(m_SocketData.hSocket != INVALID_SOCKET)
 		AsyncSelect(0);
 
 	while( m_SockList.size() )
@@ -110,14 +111,6 @@ CGnuNetworks::~CGnuNetworks(void)
 		m_pCache = NULL;
 	}
 }
-
-//// Do not edit the following lines, which are needed by ClassWizard.
-//#if 0
-//BEGIN_MESSAGE_MAP(CGnuNetworks, CAsyncSocket)
-//	//{{AFX_MSG_MAP(CGnuNetworks)
-//	//}}AFX_MSG_MAP
-//END_MESSAGE_MAP()
-//#endif	// 0
 
 void CGnuNetworks::Connect_Gnu()
 {
@@ -232,14 +225,21 @@ void CGnuNetworks::HourlyTimer()
 	if(m_pG2)
 		m_pG2->HourlyTimer();
 }
-bool CGnuNetworks::ConnectingSlotsOpen()
+
+/*bool CGnuNetworks::ConnectingSlotsOpen()
 {
 	int OccupiedSlots = 0;
 
-	// Node Sockets
+	// Gnu Sockets
 	if( m_pGnu )
 		for(int i = 0; i < m_pGnu->m_NodeList.size(); i++)
 			if(m_pGnu->m_NodeList[i]->m_Status == SOCK_CONNECTING)
+				OccupiedSlots++;
+
+	// G2 Sockets
+	if( m_pG2 )
+		for(int i = 0; i < m_pG2->m_G2NodeList.size(); i++)
+			if(m_pG2->m_G2NodeList[i]->m_Status == SOCK_CONNECTING)
 				OccupiedSlots++;
 
 	// Download Sockets
@@ -250,6 +250,47 @@ bool CGnuNetworks::ConnectingSlotsOpen()
 
 
 	return OccupiedSlots < 20 ? true : false;
+}*/
+
+int CGnuNetworks::GetMaxHalfConnects()
+{
+	if(m_pCore->m_IsSp2 && !m_pCore->m_pPrefs->m_Sp2Override)
+		return 6;
+
+	return 18;
+}
+
+int CGnuNetworks::NetworkConnecting(int Network)
+{
+	int Connecting = 0;
+
+	if(Network == NETWORK_GNUTELLA && m_pGnu)
+	{
+		for(int i = 0; i < m_pGnu->m_NodeList.size(); i++)
+			if(m_pGnu->m_NodeList[i]->m_Status == SOCK_CONNECTING)
+				Connecting++;
+	}
+
+	else if(Network == NETWORK_G2 && m_pG2)
+	{
+		for(int i = 0; i < m_pG2->m_G2NodeList.size(); i++)
+			if(m_pG2->m_G2NodeList[i]->m_Status == SOCK_CONNECTING)
+				Connecting++;
+	}
+
+	return Connecting;
+}
+
+int CGnuNetworks::TransfersConnecting()
+{
+	int Connecting = 0;
+
+	for(int i = 0; i < m_pCore->m_pTrans->m_DownloadList.size(); i++)
+		for(int j = 0; j < m_pCore->m_pTrans->m_DownloadList[i]->m_Sockets.size(); j++)
+			if(m_pCore->m_pTrans->m_DownloadList[i]->m_Sockets[j]->m_Status == TRANSFER_CONNECTING)
+				Connecting++;
+
+	return Connecting;
 }
 
 IP CGnuNetworks::GuessLocalHost()
@@ -346,7 +387,10 @@ void CGnuNetworks::OnAccept(int nErrorCode)
 	int Safe = Accept(*Incoming);
 
 	if(Safe)
+	{
 		m_SockList.push_back(Incoming);
+		Incoming->AsyncSelect(FD_WRITE|FD_READ|FD_CLOSE);
+	}
 	else
 		delete Incoming;
 }

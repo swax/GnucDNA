@@ -385,7 +385,7 @@ void CG2Node::OnConnect(int nErrorCode)
 	Handshake.Replace("\n\n", "\r\n\r\n");
 	m_WholeHandshake += Handshake;
 
-	CAsyncSocket::OnConnect(nErrorCode);
+	CAsyncSocketEx::OnConnect(nErrorCode);
 }
 
 void CG2Node::OnReceive(int nErrorCode) 
@@ -457,7 +457,7 @@ void CG2Node::OnReceive(int nErrorCode)
 	}
 
 
-	CAsyncSocket::OnReceive(nErrorCode);
+	CAsyncSocketEx::OnReceive(nErrorCode);
 
 }
 
@@ -509,7 +509,7 @@ void CG2Node::OnClose(int nErrorCode)
 
 	CloseWithReason(Reason, true);
 
-	CAsyncSocket::OnClose(nErrorCode);
+	CAsyncSocketEx::OnClose(nErrorCode);
 }
 
 void CG2Node::CloseWithReason(CString Reason, bool RemoteClosed, bool SendBye)
@@ -530,7 +530,7 @@ void CG2Node::CloseWithReason(CString Reason, bool RemoteClosed, bool SendBye)
 
 void CG2Node::Close() 
 {
-	if(m_hSocket != INVALID_SOCKET)
+	if(m_SocketData.hSocket != INVALID_SOCKET)
 	{
 		// Clear receive buffer
 		int RecvLength = 0;
@@ -546,13 +546,13 @@ void CG2Node::Close()
 
 
 		// Close socket
-		if(m_hSocket != INVALID_SOCKET)
+		if(m_SocketData.hSocket != INVALID_SOCKET)
 		{
 			AsyncSelect(0);
 			ShutDown(2);
 		}
 
-		CAsyncSocket::Close();
+		CAsyncSocketEx::Close();
 	}
 
 	m_Status = SOCK_CLOSED;
@@ -1482,7 +1482,7 @@ void CG2Node::OnSend(int nErrorCode)
 {
 	FlushSendQueue();
 
-	CAsyncSocket::OnSend(nErrorCode);
+	CAsyncSocketEx::OnSend(nErrorCode);
 }
 
 bool CG2Node::ValidAgent(CString Agent)

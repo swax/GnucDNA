@@ -44,7 +44,7 @@ class  PriorityPacket;
 struct MapNode;
 struct RecentQuery;
 
-class CGnuNode : public CAsyncSocket
+class CGnuNode : public CAsyncSocketEx
 {
 public:
 	CGnuNode(CGnuControl* pComm, CString Host, UINT Port);
@@ -92,7 +92,7 @@ public:
 	int  m_BackBuffLength;
 
 
-	// CAsyncSocket Overrides
+	// CAsyncSocketEx Overrides
 	virtual void OnConnect(int nErrorCode);
 	virtual void OnReceive(int nErrorCode);
 	virtual void OnSend(int nErrorCode);

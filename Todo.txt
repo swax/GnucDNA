@@ -1,7 +1,5 @@
-stablize connection to bearshare
-why 1.1 disconnecting?
-upgrade ack from 1.1.0.8
-xp2 test
+
+when plugin system in connection should be changed to udp test method
 
 Test
 	Gnutella Leaf Mode / Preferencing / Upgrade Path

@@ -9,7 +9,7 @@ class CGnuShare;
 class CGnuPrefs;
 
 
-class CGnuUpload : public CAsyncSocket
+class CGnuUpload : public CAsyncSocketEx
 {
 public:
 	CGnuUpload(CGnuUploadShell*);

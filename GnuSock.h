@@ -8,7 +8,7 @@ class CGnuShare;
 class CGnuPrefs;
 
 
-class CGnuSock : public CAsyncSocket
+class CGnuSock : public CAsyncSocketEx
 {
 public:
 	CGnuSock(CGnuNetworks*);

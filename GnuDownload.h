@@ -10,7 +10,7 @@ class CGnuDownloadShell;
 class CGnuPrefs;
 class CGnuTransfers;
 
-class CGnuDownload : public CAsyncSocket
+class CGnuDownload : public CAsyncSocketEx
 {
 public:
 	CGnuDownload(CGnuDownloadShell*, int);

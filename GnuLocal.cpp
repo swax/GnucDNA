@@ -57,7 +57,7 @@ CGnuLocal::~CGnuLocal()
 
 // Do not edit the following lines, which are needed by ClassWizard.
 #if 0
-BEGIN_MESSAGE_MAP(CGnuLocal, CAsyncSocket)
+BEGIN_MESSAGE_MAP(CGnuLocal, CAsyncSocketEx)
 	//{{AFX_MSG_MAP(CGnuLocal)
 	//}}AFX_MSG_MAP
 END_MESSAGE_MAP()

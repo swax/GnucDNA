@@ -58,6 +58,7 @@ void CGnuPrefs::LoadDefaults()
 
 	m_Update			= UPDATE_RELEASE;
 	GnuCreateGuid(&m_ClientID);
+	m_Sp2Override       = false;
 
 	// Local Network
 	m_SupernodeAble		= true;
@@ -136,6 +137,8 @@ void CGnuPrefs::LoadConfig(CString ConfigFile)
 	m_Update = atoi(buffer);
 	GetPrivateProfileString("Local", "ClientID", EncodeBase16((byte*) &m_ClientID, 16), buffer, 256, ConfigFile);
 	DecodeBase16( CString(buffer), 16, (byte*) &m_ClientID);
+	GetPrivateProfileString("Local",  "Sp2Override",		"0",		buffer, 256, ConfigFile);
+	m_Sp2Override = atoi(buffer);
 
 	GetPrivateProfileString("Local", "HighBandwidth",	"0",	buffer, 256, ConfigFile);
 	m_pCore->m_pNet->m_HighBandwidth = (0 != atoi(buffer));
@@ -353,7 +356,8 @@ void CGnuPrefs::SaveConfig(CString ConfigFile)
 
 	WritePrivateProfileString("Local", "UpdateMode",	  NumtoStr(m_Update),				ConfigFile);
 	WritePrivateProfileString("Local", "ClientID",        EncodeBase16((byte*) &m_ClientID, 16),		ConfigFile);
-
+	WritePrivateProfileString("Local", "Sp2Override",	  NumtoStr(m_Sp2Override),				ConfigFile);
+	
 	WritePrivateProfileString("Local", "HighBandwidth",   NumtoStr(m_pCore->m_pNet->m_HighBandwidth),		ConfigFile);
 
 

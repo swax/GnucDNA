@@ -42,7 +42,7 @@ public:
 	
 	int   m_Update;			  // Auto-Update Mode
 	GUID  m_ClientID;
-	
+	bool  m_Sp2Override;
 	
 	// Local network
 	bool	m_SupernodeAble;

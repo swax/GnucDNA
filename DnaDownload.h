@@ -61,6 +61,7 @@ public:
 	void SetMetaID(LONG DownloadID, LONG MetaID);
 	CString GetReasonClosed(LONG DownloadID);
 	void AnswerChallenge(LONG DownloadID, LONG SourceID, LPCTSTR Answer);
+	void OverrideDownloadPath(LONG DownloadID, LPCTSTR Path);
 };
 
 

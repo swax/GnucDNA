@@ -39,7 +39,7 @@ public:
 
 
 protected:
-	CAsyncSocket m_OutSock;
+	CAsyncSocketEx m_OutSock;
 
 	int  m_Broadcasted;
 

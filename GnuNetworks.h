@@ -13,7 +13,7 @@ class CGnuSock;
 class CGnuCache;
 class CGnuSearch;
 
-class CGnuNetworks : public CAsyncSocket
+class CGnuNetworks : public CAsyncSocketEx
 {
 public:
 	CGnuNetworks(CGnuCore* pCore);
@@ -29,7 +29,11 @@ public:
 	void HourlyTimer();
 
 	IP   GuessLocalHost();
-	bool ConnectingSlotsOpen();
+	//bool ConnectingSlotsOpen();
+	int  GetMaxHalfConnects();
+	int  NetworkConnecting(int Network);
+	int  TransfersConnecting();
+
 	bool NotLocal(Node);
 
 	// Networks 

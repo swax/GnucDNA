@@ -4,7 +4,7 @@
 class CGnuUpdate;
 class CGnuPrefs;
 
-class CGnuUpdateSock : public CAsyncSocket
+class CGnuUpdateSock : public CAsyncSocketEx
 {
 public:
 	CGnuUpdateSock(CGnuUpdate* pUpdate);

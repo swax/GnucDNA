@@ -70,7 +70,7 @@ CGnuUpload::~CGnuUpload()
 	while(Receive(pBuff, 4096) > 0)
 		;
 
-	if(m_hSocket != INVALID_SOCKET)
+	if(m_SocketData.hSocket!= INVALID_SOCKET)
 		AsyncSelect(0);
 
 	m_CanWrite.SetEvent();
@@ -87,7 +87,7 @@ CGnuUpload::~CGnuUpload()
 
 // Do not edit the following lines, which are needed by ClassWizard.
 #if 0
-BEGIN_MESSAGE_MAP(CGnuUpload, CAsyncSocket)
+BEGIN_MESSAGE_MAP(CGnuUpload, CAsyncSocketEx)
 	//{{AFX_MSG_MAP(CGnuUpload)
 	//}}AFX_MSG_MAP
 END_MESSAGE_MAP()
@@ -122,7 +122,7 @@ void CGnuUpload::OnConnect(int nErrorCode)
 	m_pShell->m_Handshake  = "";
 	m_pShell->m_Handshake += HttpGiv;
 	
-	CAsyncSocket::OnConnect(nErrorCode);
+	CAsyncSocketEx::OnConnect(nErrorCode);
 }
 
 void CGnuUpload::OnReceive(int nErrorCode) 
@@ -210,7 +210,7 @@ void CGnuUpload::OnReceive(int nErrorCode)
 		}
 	}
 
-	CAsyncSocket::OnReceive(nErrorCode);
+	CAsyncSocketEx::OnReceive(nErrorCode);
 }
 
 void CGnuUpload::Send_HttpOK()
@@ -934,7 +934,7 @@ int CGnuUpload::Send(const void* lpBuf, int nBufLen, int nFlags)
 {
 	CAutoLock SendLock(&m_SendSection);
 
-	return CAsyncSocket::Send(lpBuf, nBufLen, nFlags);
+	return CAsyncSocketEx::Send(lpBuf, nBufLen, nFlags);
 }
 
 
@@ -943,7 +943,7 @@ void CGnuUpload::OnSend(int nErrorCode)
 {	
 	m_CanWrite.SetEvent();
 
-	CAsyncSocket::OnSend(nErrorCode);
+	CAsyncSocketEx::OnSend(nErrorCode);
 }
 
 void CGnuUpload::OnClose(int nErrorCode) 
@@ -953,17 +953,17 @@ void CGnuUpload::OnClose(int nErrorCode)
 
 	Close();
 		
-	CAsyncSocket::OnClose(nErrorCode);
+	CAsyncSocketEx::OnClose(nErrorCode);
 }
 
 void CGnuUpload::Close()
 {
-	if(m_hSocket != INVALID_SOCKET)
+	if(m_SocketData.hSocket != INVALID_SOCKET)
 	{
 		AsyncSelect(0);
 		ShutDown(2);
 
-		CAsyncSocket::Close();
+		CAsyncSocketEx::Close();
 	}
 
 

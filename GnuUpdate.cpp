@@ -558,7 +558,7 @@ bool CGnuUpdate::DownloadComplete()
 			{
 				if(itDL->second->GetStatus() == TRANSFER_COMPLETED)
 				{
-					CString UpdateDir = itDL->second->m_FilePath;
+					CString UpdateDir = itDL->second->GetFinalPath();
 					
 					int SlashPos = UpdateDir.ReverseFind('\\');
 					if(SlashPos != -1)
@@ -567,7 +567,7 @@ bool CGnuUpdate::DownloadComplete()
 
 					// Move file to update dir
 					DeleteFile(UpdateDir);
-					if(MoveFile(itDL->second->m_FilePath, UpdateDir))
+					if(MoveFile(itDL->second->GetFinalPath(), UpdateDir))
 					{
 						m_FileList[i].Completed = true;
 						m_pTrans->RemoveDownload(itDL->second);

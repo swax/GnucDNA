@@ -56,6 +56,7 @@
 
 #include <afxsock.h>		// MFC socket extensions
 #include <afxinet.h>		// MFC INet extensions
+#include "AsyncSocketEx.h"  // CAsyncSocket replacement
 //#include <msxml2.h>
 
 
@@ -110,8 +111,8 @@
 
 
 // Prog defines
-#define CONNECT_TIMEOUT		5
-#define TRANSFER_TIMEOUT    10
+#define CONNECT_TIMEOUT		4
+#define TRANSFER_TIMEOUT    4
 
 // Hardcoded Enums
 #define NETWORK_GNUTELLA	1

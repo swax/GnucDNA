@@ -154,6 +154,7 @@ struct FileSource
 	CString	  Handshake;
 	CString   Error;
 	int		  RetryWait;
+	uint64	  LastTried;
 	int		  Tries;
 	bool	  TigerSupport;
 	bool	  TigerUseThex;
@@ -225,6 +226,7 @@ struct FileSource
 		// Download
 		RetryWait	 = 0;
 		Tries		 = 0;
+		LastTried    = 0;
 		TigerSupport = false;
 		TigerUseThex = false;
 		PushSent     = false;

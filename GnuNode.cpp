@@ -286,7 +286,7 @@ CGnuNode::~CGnuNode()
 
 // Do not edit the following lines, which are needed by ClassWizard.
 #if 0
-BEGIN_MESSAGE_MAP(CGnuNode, CAsyncSocket)
+BEGIN_MESSAGE_MAP(CGnuNode, CAsyncSocketEx)
 	//{{AFX_MSG_MAP(CGnuNode)
 	//}}AFX_MSG_MAP
 END_MESSAGE_MAP()
@@ -410,7 +410,7 @@ void CGnuNode::OnConnect(int nErrorCode)
 	Handshake.Replace("\n\n", "\r\n\r\n");
 	m_WholeHandshake += Handshake;
 
-	CAsyncSocket::OnConnect(nErrorCode);
+	CAsyncSocketEx::OnConnect(nErrorCode);
 }
 
 void CGnuNode::OnReceive(int nErrorCode) 
@@ -496,7 +496,7 @@ void CGnuNode::OnReceive(int nErrorCode)
 	}
 
 
-	CAsyncSocket::OnReceive(nErrorCode);
+	CAsyncSocketEx::OnReceive(nErrorCode);
 }
 
 
@@ -1753,7 +1753,7 @@ int CGnuNode::Send(const void* lpBuf, int nBuffLen, int nFlags)
 	int BytesSent = 0;
 
 	// Throttle leaf bandwidth
-	BytesSent = CAsyncSocket::Send(lpBuf, nBuffLen, nFlags);
+	BytesSent = CAsyncSocketEx::Send(lpBuf, nBuffLen, nFlags);
 					
 	if(BytesSent > 0)
 		m_dwSecBytes[1] += BytesSent;
@@ -1771,7 +1771,7 @@ void CGnuNode::OnSend(int nErrorCode)
 		m_BrowseSentBytes += Send(m_BrowseBuffer + m_BrowseSentBytes, m_BrowseBuffSize - m_BrowseSentBytes);
 	
 
-	CAsyncSocket::OnSend(nErrorCode);
+	CAsyncSocketEx::OnSend(nErrorCode);
 }
 
 void CGnuNode::OnClose(int nErrorCode) 
@@ -1784,7 +1784,7 @@ void CGnuNode::OnClose(int nErrorCode)
 
 	CloseWithReason(Reason, true);
 
-	CAsyncSocket::OnClose(nErrorCode);
+	CAsyncSocketEx::OnClose(nErrorCode);
 }
 
 void CGnuNode::CloseWithReason(CString Reason, bool RemoteClosed, bool SendBye)
@@ -1815,7 +1815,7 @@ void CGnuNode::CloseWithReason(CString Reason, bool RemoteClosed, bool SendBye)
 
 void CGnuNode::Close() 
 {
-	if(m_hSocket != INVALID_SOCKET)
+	if(m_SocketData.hSocket != INVALID_SOCKET)
 	{
 		// Clear receive buffer
 		int BuffLength = 0;
@@ -1835,13 +1835,13 @@ void CGnuNode::Close()
 
 
 		// Close socket
-		if(m_hSocket != INVALID_SOCKET)
+		if(m_SocketData.hSocket != INVALID_SOCKET)
 		{
 			AsyncSelect(0);
 			ShutDown(2);
 		}
 
-		CAsyncSocket::Close();
+		CAsyncSocketEx::Close();
 	}
 
 	m_Status = SOCK_CLOSED;

@@ -66,14 +66,14 @@ CGnuSock::~CGnuSock()
 	while(Receive(pBuff, 4096) > 0)
 		;
 
-	if(m_hSocket != INVALID_SOCKET)
+	if(m_SocketData.hSocket != INVALID_SOCKET)
 		AsyncSelect(0);
 }
 
 
 // Do not edit the following lines, which are needed by ClassWizard.
 #if 0
-BEGIN_MESSAGE_MAP(CGnuSock, CAsyncSocket)
+BEGIN_MESSAGE_MAP(CGnuSock, CAsyncSocketEx)
 	//{{AFX_MSG_MAP(CGnuSock)
 	//}}AFX_MSG_MAP
 END_MESSAGE_MAP()
@@ -152,30 +152,30 @@ void CGnuSock::OnReceive(int nErrorCode)
 		Close();
 	}
 
-	CAsyncSocket::OnReceive(nErrorCode);
+	CAsyncSocketEx::OnReceive(nErrorCode);
 }
 
 
 int CGnuSock::Send(const void* lpBuf, int nBufLen, int nFlags) 
 {
-	int Command = CAsyncSocket::Send(lpBuf, nBufLen, nFlags);
+	int Command = CAsyncSocketEx::Send(lpBuf, nBufLen, nFlags);
 
 	return Command;
 }
 
 void CGnuSock::OnSend(int nErrorCode) 
 {
-	CAsyncSocket::OnSend(nErrorCode);
+	CAsyncSocketEx::OnSend(nErrorCode);
 }
 
 void CGnuSock::Close()
 {
-	if(m_hSocket != INVALID_SOCKET)
+	if(m_SocketData.hSocket != INVALID_SOCKET)
 	{
 		AsyncSelect(0);
 		ShutDown(2);
 
-		CAsyncSocket::Close();
+		CAsyncSocketEx::Close();
 	}
 
 	m_bDestroy = true;

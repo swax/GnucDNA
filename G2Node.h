@@ -42,7 +42,7 @@ class CG2Datagram;
 
 class QueuedPacket;
 
-class CG2Node : public CAsyncSocket
+class CG2Node : public CAsyncSocketEx
 {
 public:
 	CG2Node(CG2Control* pG2Comm, CString Host, uint32 Port);

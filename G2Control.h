@@ -95,7 +95,7 @@ public:
 	void TrimMaps();
 	void CleanDeadSocks();
 
-	CG2Node* FindNode(CString, UINT);
+	CG2Node* FindNode(CString Host, UINT Port, bool Connected=true);
 	CG2Node* GetRandHub();
 	bool	 GetAltHubs(CString &HostList, CG2Node* NodeExclude=NULL);
 

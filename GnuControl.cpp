@@ -152,7 +152,7 @@ CGnuControl::~CGnuControl()
 
 void CGnuControl::AddNode(CString Host, UINT Port)
 {
-	if(FindNode(Host, Port) != NULL)
+	if(FindNode(Host, Port, false) != NULL)
 		return;
 
 	CGnuNode* Node = new CGnuNode(this, Host, Port);
@@ -195,12 +195,17 @@ void CGnuControl::RemoveNode(CGnuNode* pNode)
 	NodeUpdate(pNode);
 }
 
-CGnuNode* CGnuControl::FindNode(CString Host, UINT Port)
+CGnuNode* CGnuControl::FindNode(CString Host, UINT Port, bool Connected)
 {
 	std::map<uint32, CGnuNode*>::iterator itNode = m_GnuNodeAddrMap.find( StrtoIP(Host).S_addr);
 
 	if(itNode != m_GnuNodeAddrMap.end())
+	{
+		if(Connected && itNode->second->m_Status != SOCK_CONNECTED)
+			return NULL;
+
 		return itNode->second;
+	}
 
 	return NULL;
 }
@@ -447,9 +452,17 @@ void CGnuControl::ManageNodes()
 	}
 
 
-	// No more than 5 simultaneous connections being attempted
-	if(Connecting > 5)
+	int MaxHalfConnects = m_pNet->GetMaxHalfConnects();
+
+	if( m_pNet->NetworkConnecting(NETWORK_G2) )
+		MaxHalfConnects /= 2;
+
+	if( m_pNet->TransfersConnecting() )
+		MaxHalfConnects /= 2;
+
+	if(Connecting >= MaxHalfConnects)
 		return;
+
 
 	bool NeedDnaUltras = false;
 	if(UltraConnects && UltraDnaConnects * 100 / UltraConnects < 50)
@@ -496,10 +509,6 @@ void CGnuControl::ManageNodes()
 
 void CGnuControl::AddConnect()
 {
-	if( !m_pNet->ConnectingSlotsOpen() )
-		return;
-
-
 	// If Real list has values
 	if(m_pCache->m_GnuReal.size())
 	{
@@ -730,7 +739,8 @@ void CGnuControl::UltrapeerBalancing()
 
 	// Meant as emergency get dialup, or messed up node out of hub mode
 	// Downgrade if less than 10 children for 10 minutes
-	if( CountUltraConnects() && CountLeafConnects() < 10 )
+	// New ultrapeers not filling up quick enough, wait the 40 minutes
+	/*if( CountUltraConnects() && CountLeafConnects() < 10 )
 	{
 		m_MinsBelow10++;
 
@@ -741,7 +751,7 @@ void CGnuControl::UltrapeerBalancing()
 		}
 	}
 	else
-		m_MinsBelow10 = 0;
+		m_MinsBelow10 = 0;*/
 
 }
 

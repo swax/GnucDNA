@@ -54,7 +54,7 @@ public:
 
 	void AddNode(CString, UINT);
 	void RemoveNode(CGnuNode*);
-	CGnuNode* FindNode(CString, UINT);
+	CGnuNode* FindNode(CString Host, UINT Port, bool Connected=true);
 
 	CGnuNode* GetRandNode(int Type);
 

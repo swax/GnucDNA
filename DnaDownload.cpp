@@ -93,8 +93,6 @@ BOOL CDnaDownload::IsCompleted(LONG DownloadID)
 
 CString CDnaDownload::GetName(LONG DownloadID)
 {
-	
-
 	CString strResult;
 
 	std::map<int, CGnuDownloadShell*>::iterator itDL = m_gnuTrans->m_DownloadMap.find(DownloadID);
@@ -287,12 +285,13 @@ void CDnaDownload::RemoveCompleted()
 
 void CDnaDownload::ForceStart(LONG DownloadID)
 {
-	
-
 	std::map<int, CGnuDownloadShell*>::iterator itDL = m_gnuTrans->m_DownloadMap.find(DownloadID);
 
 	if(itDL != m_gnuTrans->m_DownloadMap.end())
+	{
 		itDL->second->Start();
+		itDL->second->Timer();
+	}
 }
 
 void CDnaDownload::Stop(LONG DownloadID)
@@ -645,8 +644,6 @@ CString CDnaDownload::GetFilePath(LONG DownloadID)
 
 void CDnaDownload::AddSource(LONG DownloadID, LONG NetworkID, LPCTSTR URL)
 {
-	
-
 	std::map<int, CGnuDownloadShell*>::iterator itDL = m_gnuTrans->m_DownloadMap.find(DownloadID);
 
 	if(itDL != m_gnuTrans->m_DownloadMap.end())
@@ -665,8 +662,6 @@ void CDnaDownload::AddSource(LONG DownloadID, LONG NetworkID, LPCTSTR URL)
 
 void CDnaDownload::Proxy(LONG DownloadID, BOOL Enabled, LPCTSTR Default)
 {
-	
-
 	std::map<int, CGnuDownloadShell*>::iterator itDL = m_gnuTrans->m_DownloadMap.find(DownloadID);
 
 	if(itDL != m_gnuTrans->m_DownloadMap.end())
@@ -775,4 +770,20 @@ void CDnaDownload::AnswerChallenge(LONG DownloadID, LONG SourceID, LPCTSTR Answe
 				pDown->m_Sockets[i]->m_RemoteChallengeAnswer = Answer;
 	}
 
+}
+
+void CDnaDownload::OverrideDownloadPath(LONG DownloadID, LPCTSTR Path)
+{
+	CString NewPath = Path;
+
+	if( !NewPath.IsEmpty() )
+		CreateDirectory(NewPath, NULL);
+
+	std::map<int, CGnuDownloadShell*>::iterator itDL = m_gnuTrans->m_DownloadMap.find(DownloadID);
+	if(itDL != m_gnuTrans->m_DownloadMap.end())
+	{
+		CGnuDownloadShell* pDown = itDL->second;
+
+		pDown->m_OverridePath = NewPath;
+	}
 }

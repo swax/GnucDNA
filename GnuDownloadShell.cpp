@@ -281,23 +281,26 @@ void CGnuDownloadShell::AddHost(FileSource HostInfo)
 
 void CGnuDownloadShell::TryNextHost()
 {
-	if(m_HostTryPos >= m_Queue.size())
-		m_HostTryPos = 1;
-	else
-		m_HostTryPos++;
+	// dont max out half connections
+	int MaxHalfConnects = m_pNet->GetMaxHalfConnects();
 
-	// Rolls through host list looking for untried hosts
-	int tried_hosts = 0; 
+	if( m_pNet->NetworkConnecting(NETWORK_GNUTELLA) )
+		MaxHalfConnects /= 2;
+	if( m_pNet->NetworkConnecting(NETWORK_G2) )
+		MaxHalfConnects /= 2;
 
-	// List already ordered to put fastest nodes at top
+	if( m_pNet->TransfersConnecting() >= MaxHalfConnects)
+		return;
+
+	// try oldest host next
+	int OldestPos  = -1;
+	int OldestTime = time(NULL);
+
 	for(int i = 0; i < m_Queue.size(); i++)
 		if(m_Queue[i].Status == FileSource::eUntested || m_Queue[i].Status == FileSource::eAlive )
 		{
 			if(m_Queue[i].RetryWait)
 				continue;
-			
-			if( !m_pNet->ConnectingSlotsOpen() )
-				return;
 
 			// Make sure host is not active
 			bool Active = false;
@@ -308,31 +311,41 @@ void CGnuDownloadShell::TryNextHost()
 			if(Active)
 				continue;
 
-			m_Queue[i].Error = "";
-			CGnuDownload* pSock = new CGnuDownload(this, m_Queue[i].SourceID);
-
-			if(pSock->StartDownload())
-				m_Sockets.push_back(pSock);
-			else
+			if( m_Queue[i].LastTried < OldestTime)
 			{
-				delete pSock;
-				pSock = NULL;
+				OldestPos  = i;
+				OldestTime = m_Queue[i].LastTried;
 			}
-			
-			m_Queue[i].Tries++;
-			m_Queue[i].Status = FileSource::eTrying;
-			m_Queue[i].RetryWait = RETRY_WAIT;
-
-			// eg. File has 90 results, try 3 at a time
-			tried_hosts++;
-			if (tried_hosts < (m_Queue.size() - 1) / RETRY_WAIT + 1) 
-				continue; 
-			
-			return;
 		}
 
-	if (tried_hosts) 
-		return;
+	if(OldestPos != -1)
+	{
+		i = OldestPos;
+
+		m_Queue[i].Error = "";
+		CGnuDownload* pSock = new CGnuDownload(this, m_Queue[i].SourceID);
+
+		if(pSock->StartDownload())
+			m_Sockets.push_back(pSock);
+		else
+		{
+			delete pSock;
+			pSock = NULL;
+		}
+		
+		m_Queue[i].Tries++;
+		m_Queue[i].Status = FileSource::eTrying;
+		m_Queue[i].RetryWait = RETRY_WAIT;
+		m_Queue[i].LastTried = time(NULL);
+
+		if(m_HostTryPos >= m_Queue.size())
+			m_HostTryPos = 1;
+		else
+			m_HostTryPos++;
+
+
+		return; // host being tried return
+	}
 
 
 	// All hosts in list have been attempted
@@ -597,11 +610,6 @@ bool CGnuDownloadShell::ReadyFile()
 		FileName.Replace("\\", "/");
 		FileName = FileName.Mid( FileName.ReverseFind('/') + 1);
 
-		// Set where the file will go upon completion
-		CreateDirectory(m_pPrefs->m_DownloadPath, NULL);
-		m_FilePath = m_pPrefs->m_DownloadPath + "\\" + FileName;
-		m_FilePath.Replace("\\\\", "\\");
-
 		// Create the file in the partial directory
 		CString PartialDir = m_pPrefs->m_PartialDir;
 		CreateDirectory(PartialDir, NULL);
@@ -710,6 +718,8 @@ bool CGnuDownloadShell::CheckCompletion()
 	m_File.Abort();
 
 
+	CString FinalPath = GetFinalPath();
+
 	// Match hash of download with expected hash
 	if(!m_HashComputed)
 	{
@@ -725,15 +735,13 @@ bool CGnuDownloadShell::CheckCompletion()
 
 			else
 			{
-				//AfxMessageBox(m_FilePath + "\nRight: " + m_Sha1Hash + "\nWrong: " + FinalHash);
-				
 				if( FinalHash.IsEmpty() )
 					m_ReasonDead = "Complete - Could not Check File Integrity";
 				else
 					m_ReasonDead = "Complete - Integrity Check Failed";
 
-				int slashpos = m_FilePath.ReverseFind('\\');
-				m_FilePath.Insert(slashpos + 1, "(Unverified) ");
+				int slashpos = FinalPath.ReverseFind('\\');
+				FinalPath.Insert(slashpos + 1, "(Unverified) ");
 			
 				
 			}
@@ -745,27 +753,24 @@ bool CGnuDownloadShell::CheckCompletion()
 
 	if( !m_FileMoved )
 	{
-		if( !MoveFile(m_PartialPath, m_FilePath) )
+		if( !MoveFile(m_PartialPath, FinalPath) )
 		{
-			CString TempName = m_Name;
+			m_OverrideName = m_Name;
+			m_OverrideName.Replace("\\", "/");
+			m_OverrideName = m_OverrideName.Mid( m_OverrideName.ReverseFind('/') + 1);
 
-			while( !MoveFile(m_PartialPath, m_FilePath) )
+			while( !MoveFile(m_PartialPath, FinalPath) )
 				if(GetLastError() == ERROR_ALREADY_EXISTS)
 				{
+					//crit test
+					m_OverrideName = IncrementName(m_OverrideName);
 
-					CString FileName = TempName;
-					FileName.Replace("\\", "/");
-					FileName = FileName.Mid( FileName.ReverseFind('/') + 1);
-
-
-					CString NewName = IncrementName(FileName);
-					TempName.Replace(FileName, NewName);
-				
-					m_FilePath = m_pPrefs->m_DownloadPath + "\\" + NewName;				
+					FinalPath = GetFinalPath();
+						
 				}
 				else
 				{
-					if(CopyFile(m_PartialPath, m_FilePath, false))
+					if(CopyFile(m_PartialPath, FinalPath, false))
 						m_FileMoved = true;
 
 					break;
@@ -775,29 +780,34 @@ bool CGnuDownloadShell::CheckCompletion()
 		}
 
 		// Save file meta
-		CString Path = m_FilePath;
-
-		int SlashPos = Path.ReverseFind('\\');
-		if(SlashPos != -1)
+		CString MetaString = GetMetaXML(true);
+		if( !MetaString.IsEmpty() )
 		{
-			CString Dirpath = Path.Left(SlashPos) + "\\Meta";
-			CreateDirectory(Dirpath, NULL);
-			
-			Path.Insert(SlashPos, "\\Meta");
-			Path += ".xml";
+			CString Path = FinalPath;
 
-			CStdioFile MetaFile;
-			if(MetaFile.Open(Path, CFile::modeWrite | CFile::modeCreate))
-				MetaFile.WriteString( GetMetaXML(true) );
+			int SlashPos = Path.ReverseFind('\\');
+			if(SlashPos != -1)
+			{
+				CString Dirpath = Path.Left(SlashPos) + "\\Meta";
+				CreateDirectory(Dirpath, NULL);
+				
+				Path.Insert(SlashPos, "\\Meta");
+				Path += ".xml";
+
+				CStdioFile MetaFile;
+				if(MetaFile.Open(Path, CFile::modeWrite | CFile::modeCreate))
+					MetaFile.WriteString( MetaString );
+			}
 		}
 
 		// Check for viruses
 		if( m_pPrefs->m_AntivirusEnabled )
-            _spawnl(_P_WAIT, m_pPrefs->m_AntivirusPath, "%s", m_FilePath, NULL);
+            _spawnl(_P_WAIT, m_pPrefs->m_AntivirusPath, "%s", FinalPath, NULL);
           
 
 		// Signal completed
-		m_UpdatedInSecond = true;
+		if(m_FileMoved)
+			m_pTrans->DownloadUpdate(m_DownloadID);
 
 		// Save hash computed/verified values
 		BackupHosts();
@@ -832,7 +842,8 @@ void CGnuDownloadShell::BackupHosts()
 	Backup += "Name="			+ m_Name + "\n";
 	Backup += "FileLength="		+ NumtoStr(m_FileLength) + "\n";
 	Backup += "PartSize="		+ NumtoStr(m_PartSize) + "\n";
-	Backup += "FilePath="		+ m_FilePath + "\n";
+	Backup += "OverrideName="	+ m_OverrideName + "\n";
+	Backup += "OverridePath="	+ m_OverridePath + "\n";
 	Backup += "PartialPath="	+ m_PartialPath + "\n";
 	Backup += "Sha1Hash="		+ m_Sha1Hash + "\n";
 	Backup += "Search="			+ m_Search + "\n";
@@ -1129,11 +1140,34 @@ CString CGnuDownloadShell::GetFilePath()
 		return "";
 
 	if(m_FileLength && m_FileLength == GetBytesCompleted())
-		Path = m_FilePath;
+		Path = GetFinalPath();
 	else
 		Path = m_PartialPath;
 
 	return Path;
+}
+
+CString CGnuDownloadShell::GetFinalPath()
+{
+	// Get Name
+	CString FileName = m_Name;
+	
+	if( !m_OverrideName.IsEmpty() )
+		FileName = m_OverrideName;
+
+	FileName.Replace("\\", "/");
+	FileName = FileName.Mid( FileName.ReverseFind('/') + 1);
+
+
+	// Attach Path
+	CString FilePath = m_pPrefs->m_DownloadPath + "\\" + FileName;
+
+	if( !m_OverridePath.IsEmpty() )
+		FilePath = m_OverridePath + "\\" + FileName;
+		
+	FilePath.Replace("\\\\", "\\");
+
+	return FilePath;
 }
 
 void CGnuDownloadShell::RunFile()
@@ -1450,6 +1484,9 @@ bool CGnuDownloadShell::URLtoSource(FileSource &WebSource, CString URL)
 	// Set Path
 	WebSource.HostStr = WebSite;
 	WebSource.Path    = strURL.Mid(EndPos);
+
+	if( WebSource.Path.IsEmpty() )
+		WebSource.Path = "/";
 
 	return true;
 }
