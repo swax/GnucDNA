@@ -4,6 +4,7 @@ GnucDNA 1.1.0.5
 	ruslan: Share add directory redone and event handles released
 	ruslan: GetNormalConnectedCount includes G2 Hubs
 	ruslan: ExitThread calls replaced with simple returns
+	swabby: Fixed share thread locking bug
 
 GnucDNA 1.1.0.4
 	swabby: Revised download re-search system

@@ -1,5 +1,3 @@
-After downloads share thread doesnt exit on close
-
 
 Test
 	Gnutella Leaf Mode / Preferencing / Upgrade Path

@@ -777,7 +777,10 @@ void CGnuShare::AddShareAltLocation(CString Hash, IPv4 Location)
 			FileIndex = itShare->second;
 
 		if(FileIndex == 0)
+		{
+			m_FilesAccess.Unlock();
 			return;
+		}
 
 
 		bool found = false;
@@ -809,8 +812,10 @@ CString CGnuShare::GetShareAltLocHeader(CString Hash, IP ToIP, int HostCount)
 			FileIndex = itShare->second;
 
 		if(FileIndex == 0)
+		{
+			m_FilesAccess.Unlock();
 			return "";
-
+		}
 
 		CString Header = "X-Alt: ";
 

@@ -1254,7 +1254,7 @@ void CGnuNode::ParseBrowseHandshakeRequest(CString Data)
 
 	std::list<UINT> FileIndexes;
 
-	m_pShare->m_FilesAccess.Lock();
+	m_pShare->m_FilesAccess.Lock(); 
 
 	int i = 0;
 	std::vector<SharedFile>::iterator itFile;
