@@ -1,4 +1,5 @@
 GnucDNA 1.1.0.8
+	swabby: Ensure Ultrapeer upgrade ack is received by other side
 	swabby: X-Try headers always parsed during handshake
 	swabby: Newer hosts to cache attempted first for connections
 	swabby: Put a max on alt hosts that will be used from one source

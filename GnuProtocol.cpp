@@ -1161,7 +1161,9 @@ void CGnuProtocol::Receive_VendMsg(Gnu_RecvdPacket &Packet)
 				}
 			
 				byte YesAck = 0x01;
+				// Send both tcp and udp to ensure it gets there	
 				Send_VendMsg(Packet.pTCP, AckMsg, &YesAck, 1);
+				Send_VendMsg(NULL, AckMsg, &YesAck, 1);
 					
 				m_pComm->SwitchGnuClientMode(GNU_ULTRAPEER);
 				return;

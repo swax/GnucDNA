@@ -803,13 +803,10 @@ void CGnuControl::SwitchGnuClientMode(int GnuMode)
 		return;
 
 	// Remove all connections
-	m_NodeAccess.Lock();
-		while( m_NodeList.size() )
-		{
-			delete m_NodeList.back();
-			m_NodeList.pop_back();
-		}
-	m_NodeAccess.Unlock();
+	CString Reason = (GnuMode == GNU_ULTRAPEER) ? "Upgrading to Ultrapeer" : "Downgrading to Leaf";
+	
+	for(int i = 0; i < m_NodeList.size(); i++)
+		m_NodeList[i]->CloseWithReason(Reason);
 
 	// Change mode
 	m_GnuClientMode = GnuMode;

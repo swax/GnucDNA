@@ -1937,7 +1937,14 @@ void CGnuNode::SplitBundle(byte* bundle, DWORD length)
 	if (0 < m_ExtraLength && m_ExtraLength < PACKET_BUFF)
 		memmove(m_pBuff, &m_pBuff[length - m_ExtraLength], m_ExtraLength);
 	else if(m_ExtraLength != 0)
-		ASSERT(0); // Shouldnt happen
+	{
+		// client, connecttime, variables log, disconnect
+		m_pCore->DebugLog("Gnu Network", "Extra Length Error - " + m_RemoteAgent + ", Uptime " + NumtoStr(time(NULL) - m_ConnectTime.GetTime()) + ", " + ", Length " + NumtoStr(length) + ", NextPos " + NumtoStr(nextPos) + ", ExtraLength " + NumtoStr(m_ExtraLength));
+		
+		CloseWithReason("Packet received too large"); // without this crashes in inflate
+		//ASSERT(0); // Shouldnt happen
+
+	}
 }
 
 void CGnuNode::ApplyPatchTable()

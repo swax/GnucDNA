@@ -1,6 +1,4 @@
 
-force 1.1 ultrapeer, test manual upgrade of child
-
 
 Test
 	Gnutella Leaf Mode / Preferencing / Upgrade Path
