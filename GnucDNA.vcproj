@@ -998,7 +998,7 @@
 			RelativePath=".\Gnutella.txt">
 		</File>
 		<File
-			RelativePath="LGPL.txt">
+			RelativePath=".\GPL.txt">
 		</File>
 		<File
 			RelativePath="ReadMe.txt">
