@@ -422,6 +422,11 @@ void CGnuNode::OnReceive(int nErrorCode)
 		return;
 	}
 
+	// Incoming bandwidth throttling
+	// if average bw in over 30 secs is greater than 1 kb/s, limit traffic to 1 kb/s
+	if( m_dwSecBytes[0] > 1024 && m_AvgBytes[0].GetAverage() > 1024)
+		return;
+
 
 	int BuffLength = 0;
 	

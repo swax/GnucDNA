@@ -503,31 +503,28 @@ void CGnuProtocol::Receive_QueryHit(Gnu_RecvdPacket &Packet)
 		if(QueryHit->Header.TTL != 0)
 			QueryHit->Header.TTL--;
 
-		// Route to another ultrapeer
-		if(QueryHit->Header.TTL > 0)
-		{
-			std::map<int, CGnuNode*>::iterator itNode = m_pComm->m_NodeIDMap.find(RouteID);
-			if(itNode != m_pComm->m_NodeIDMap.end() && itNode->second->m_Status == SOCK_CONNECTED)
-				itNode->second->SendPacket(QueryHit, Packet.Length, PACKET_QUERYHIT, QueryHit->Header.TTL - 1, false);
-		}
 
-		// Send if meant for child
 		std::map<int, CGnuNode*>::iterator itNode = m_pComm->m_NodeIDMap.find(RouteID);
-		if(itNode != m_pComm->m_NodeIDMap.end())
-			if(itNode->second->m_Status == SOCK_CONNECTED && itNode->second->m_GnuNodeMode == GNU_LEAF)
-			{	
+		if(itNode != m_pComm->m_NodeIDMap.end() && itNode->second->m_Status == SOCK_CONNECTED)
+		{
+			// Route to another ultrapeer
+			if(itNode->second->m_GnuNodeMode == GNU_ULTRAPEER && QueryHit->Header.TTL > 0)
+				itNode->second->SendPacket(QueryHit, Packet.Length, PACKET_QUERYHIT, QueryHit->Header.TTL - 1, false);
+
+			// Send if meant for child
+			if(itNode->second->m_GnuNodeMode == GNU_LEAF)
+			{
 				if(QueryHit->Header.TTL == 0)
 					QueryHit->Header.TTL++;
 
-				std::map<int, CGnuNode*>::iterator itNode = m_pComm->m_NodeIDMap.find(RouteID);
-				if(itNode != m_pComm->m_NodeIDMap.end() && itNode->second->m_Status == SOCK_CONNECTED)
-					itNode->second->SendPacket(QueryHit, Packet.Length, PACKET_QUERYHIT, QueryHit->Header.TTL - 1, false);
+				itNode->second->SendPacket(QueryHit, Packet.Length, PACKET_QUERYHIT, QueryHit->Header.TTL - 1, false);
 
 				// Update dyn query
 				std::map<uint32, DynQuery*>::iterator itDyn = m_pComm->m_DynamicQueries.find( HashGuid(QueryHit->Header.Guid) );
 				if( itDyn != m_pComm->m_DynamicQueries.end() )
 					itDyn->second->Hits += QueryHit->TotalHits;
 			}
+		}
 
 		if(pNode)
 			pNode->AddGoodStat(QueryHit->Header.Function);

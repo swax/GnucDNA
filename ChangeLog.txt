@@ -1,3 +1,7 @@
+GnucDNA 1.1.0.6
+	swabby: Adaptive incoming bandwidth throttling
+	swabby: Fixed bug where duplicate query hits were being relayed
+
 GnucDNA 1.1.0.5
 	swabby: Fixed rare meta parsing mem leak
 	ruslan: Meta schemas made easier to add and remove
