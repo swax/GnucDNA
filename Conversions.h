@@ -2,6 +2,8 @@
 
 #include "Packet.h"
 
+namespace gdna 
+{
 
 // Functions
 CString NumtoStr(int);		// Convert DWORD to a CString
@@ -38,4 +40,6 @@ CString CommaIze(CString in); // Add commas to big numbers
 CString InsertDecimal(double);
 CString GetPercentage(DWORD , DWORD );
 CString IncrementName(CString);
+
+} // end gdna namespace
 

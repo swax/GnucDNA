@@ -1553,12 +1553,6 @@ void CGnuNode::SetConnected()
 	//		return;
 	//	}
 
-	if(!m_SupportsDynQuerying)
-	{
-		CloseWithReason("No Dyn Q");
-		return;
-	}
-
 	// Setup inflate if remote host supports it
 	if(m_InflateRecv)
 	{

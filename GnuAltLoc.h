@@ -6,6 +6,8 @@ class CGnuShare;
 class CGnuPrefs;
 class CGnuCore;
 
+
+
 class CGnuAltLoc  
 {
 public:

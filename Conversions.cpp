@@ -30,6 +30,8 @@
 // Get rid of ugly warnings
 #pragma warning (disable : 4786)
 
+namespace gdna
+{
 
 static byte base16Chars[17] = "0123456789ABCDEF";
 static byte base32Chars[33] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
@@ -626,3 +628,4 @@ CString GetVendor(CString VendorID)
 	return VendorID;
 }
 
+} // end gdna namespace

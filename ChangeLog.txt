@@ -9,9 +9,10 @@ GnucDNA 1.1.0.1
 		swabby: Leaf guided dynamic queries
 		swabby: Out of Band QueryHits
 		swabby: Pongs only sent for hosts directly connected
-		
+	
+	jthomps: Removed mutex, moved to GnucCOM	
 	swabby: Download re-search performed with standard search class
-	jthomps: Removed mutex, moved to GnucCOM
+	swabby: gdna namespace created to avoid inter-lib conflicts
 	
 GnucDNA 1.1.0.0
 	swabby: Moved to new GnucDNAr3 code base

@@ -27,6 +27,9 @@
 #include "stdafx.h"
 #include "Common.h"
 
+namespace gdna
+{
+
 DWORD AssignThreadToCPU(CWinThread *pThread, DWORD cpuNumber)
 {
 	DWORD dwErr = 0;
@@ -185,86 +188,7 @@ CString ParseString( CString &Str, char delim /* = ',' */)
     return RetStr;
 }
 
-//
-// Build an AltLocation from a string
-//
-AltLocation& AltLocation::operator=(CString& str)
-{
-	Clear();
 
-	str.TrimLeft();
-
-	str.Remove('\"');
-
-	CString temp, newStr = str;
-	newStr.MakeLower();
-
-	// Strip the http: bit
-	temp = ParseString(newStr, '/');
-	if (temp != "http:")
-		return *this;
-
-	// Strip the second '/'
-	temp = ParseString(newStr, '/');
-
-	// Next should be the "host:Port" section
-	HostPort = ParseString(newStr, '/');
-	if (HostPort.Host.IsEmpty())
-		return *this;
-
-	temp = ParseString(newStr, '/');
-	if (temp == "get")
-	{
-		// this is a /get/<index>/<FileName> string
-		Index = atol(ParseString(newStr,'/'));
-		Name  = ParseString(newStr, ' ');
-		Name.Replace("%20", " ");
-	}
-	else if (temp == "uri-res")
-	{
-		// this is a /uri-res/N2R?urn:sha1:<hash> string
-		temp = ParseString(newStr, ':');
-		temp = ParseString(newStr, ':');
-		Sha1Hash = ParseString(newStr, ' ');
-	}
-
-	if (!newStr.IsEmpty())
-	{
-		// we still have stuff left hopefully it is a timestamp
-		HostPort.LastSeen = StrToCTime(newStr);
-	}
-
-	return *this;
-}
-
-//
-// Build an String from an AltLocation
-//
-CString AltLocation::GetString()
-{
-	// Start with the address
-	CString str;
-
-	if (HostPort.Host.IsEmpty() || (Name.IsEmpty() && Sha1Hash.IsEmpty()))
-	{
-		// Invalid Altlocation
-		return "";
-	}
-		
-	if(Sha1Hash.IsEmpty())
-	{
-		str = "http://" + HostPort.GetString() + "/get/" + NumtoStr(Index) + "/" + Name;
-		str.Replace(" ", "%20");
-	}
-	else
-		str = "http://" + HostPort.GetString() + "/uri-res/N2R?urn:sha1:" + Sha1Hash;
-
-
-	// Timestamp
-	str += " " + CTimeToStr(HostPort.LastSeen);
-
-	return str;
-}
 
 CString DecodeURL(CString URL)
 {
@@ -392,4 +316,87 @@ bool IsPrivateIP(IP Address)
 
 
 	return false;
+}
+
+} // end gdna namespace
+
+//
+// Build an AltLocation from a string
+//
+AltLocation& AltLocation::operator=(CString& str)
+{
+	Clear();
+
+	str.TrimLeft();
+
+	str.Remove('\"');
+
+	CString temp, newStr = str;
+	newStr.MakeLower();
+
+	// Strip the http: bit
+	temp = ParseString(newStr, '/');
+	if (temp != "http:")
+		return *this;
+
+	// Strip the second '/'
+	temp = ParseString(newStr, '/');
+
+	// Next should be the "host:Port" section
+	HostPort = ParseString(newStr, '/');
+	if (HostPort.Host.IsEmpty())
+		return *this;
+
+	temp = ParseString(newStr, '/');
+	if (temp == "get")
+	{
+		// this is a /get/<index>/<FileName> string
+		Index = atol(ParseString(newStr,'/'));
+		Name  = ParseString(newStr, ' ');
+		Name.Replace("%20", " ");
+	}
+	else if (temp == "uri-res")
+	{
+		// this is a /uri-res/N2R?urn:sha1:<hash> string
+		temp = ParseString(newStr, ':');
+		temp = ParseString(newStr, ':');
+		Sha1Hash = ParseString(newStr, ' ');
+	}
+
+	if (!newStr.IsEmpty())
+	{
+		// we still have stuff left hopefully it is a timestamp
+		HostPort.LastSeen = StrToCTime(newStr);
+	}
+
+	return *this;
+}
+
+//
+// Build an String from an AltLocation
+//
+CString AltLocation::GetString()
+{
+	// Start with the address
+	CString str;
+
+	if (HostPort.Host.IsEmpty() || (Name.IsEmpty() && Sha1Hash.IsEmpty()))
+	{
+		// Invalid Altlocation
+		return "";
+	}
+		
+	if(Sha1Hash.IsEmpty())
+	{
+		str = "http://" + HostPort.GetString() + "/get/" + NumtoStr(Index) + "/" + Name;
+		str.Replace(" ", "%20");
+	}
+	else
+		str = "http://" + HostPort.GetString() + "/uri-res/N2R?urn:sha1:" + Sha1Hash;
+
+
+	// Timestamp
+	str += " " + CTimeToStr(HostPort.LastSeen);
+
+	return str;
 }

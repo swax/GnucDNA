@@ -52,7 +52,7 @@ void CGnuDatagram::Init()
 	Close();
 
 	// Cant use same port, g2 already using it
-	m_pComm->m_UdpPort = m_pComm->m_pNet->m_CurrentPort + 1;
+	m_pComm->m_UdpPort = m_pComm->m_pNet->m_CurrentPort + 13;
 
 	if(!Create(m_pComm->m_UdpPort, SOCK_DGRAM))
 	{

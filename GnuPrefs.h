@@ -5,7 +5,7 @@ class CGnuShare;
 
 struct IPRule;
 struct BlockedHost;
-struct ProxyHost;
+struct ProxyAddr;
 
 class CGnuPrefs
 {
@@ -29,7 +29,7 @@ public:
 	bool	MatchIP(IP, IPRule&);
 
 	int CalcMaxLeaves();
-	ProxyHost GetRandProxy();
+	ProxyAddr GetRandProxy();
 
 
 	// Local	
@@ -101,7 +101,7 @@ public:
 	float m_MinUpSpeed;    // KBs
 
 	// Proxy setup
-	std::vector<ProxyHost> m_ProxyList;
+	std::vector<ProxyAddr> m_ProxyList;
 	
 	// Geo location
 	uint16 m_GeoLatitude;
@@ -137,12 +137,12 @@ struct BlockedHost
 	CString Reason;
 };
 
-struct ProxyHost
+struct ProxyAddr
 {
 	CString host;
 	uint16  port;
 
-	ProxyHost()
+	ProxyAddr()
 	{
 		port = 80;
 	};
@@ -156,4 +156,4 @@ CString IPRuletoStr(IPRule in);		// ExtendedIP to String
 BlockedHost StrtoBlocked(CString strBlocked);
 CString		BlockedtoStr(BlockedHost badHost);
 
-ProxyHost StrtoProxy(CString strProxy);
+ProxyAddr StrtoProxy(CString strProxy);

@@ -73,7 +73,7 @@
 
 
 // DNA Build Options, only define one
-#define DNA_VERSION "1.1.0.0"
+#define DNA_VERSION "1.1.0.1"
 
 #define BUILD_STATIC           // Compiling or using DNA as library
 //#define BUILD_DYNAMIC_DNA    // Compiling DNA as DLL
@@ -200,6 +200,10 @@ typedef unsigned char    uint8;
 typedef unsigned short   uint16;
 typedef unsigned int     uint32;
 typedef unsigned __int64 uint64;
+
+
+namespace gdna { };
+using namespace gdna;
 
 #include "./Conversions.h"
 #include "./Packet.h"

@@ -78,7 +78,7 @@ public:
 	CString   m_ServerName;
 	int       m_Status;
 	bool      m_Push;
-	ProxyHost m_LocalProxy;
+	ProxyAddr m_LocalProxy;
 	
 	CString   m_RemoteChallenge;
 	CString   m_RemoteChallengeAnswer;

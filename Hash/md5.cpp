@@ -19,6 +19,9 @@
 #include "stdafx.h"
 #include "md5.h"
 
+namespace gdna
+{
+
 #ifndef WORDS_BIGENDIAN
 #define byteReverse(buf, len)	/* Nothing */
 #else
@@ -249,3 +252,4 @@ void MD5Transform(word32 buf[4], word32 const in[16])
     buf[3] += d;
 }
 
+} // end namespace gdna

@@ -3,11 +3,8 @@
 
 #include "stdafx.h"
 
-
-// Pre-definitions
-struct Result;
-struct ResultGroup;
-
+namespace gdna 
+{
 
 // Functions
 DWORD	AssignThreadToCPU(CWinThread *pThread, DWORD cpuNumber);
@@ -17,6 +14,7 @@ void    GnuEndThread(CWinThread* &pTarget);
 void	SetRandColor(COLORREF &);
 
 CString	GetFileError(CFileException* error);
+
 
 CString DecodeURL(CString URL);
 
@@ -52,6 +50,9 @@ struct IPv4
 	};
 };
 #pragma pack (pop)
+
+} // end gdna namespace
+
 
 // Definitions
 class AltLocation /* : public HashedFile */
@@ -334,5 +335,6 @@ public:
 		return 0;
 	}
 };
+
 
 

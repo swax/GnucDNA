@@ -639,7 +639,7 @@ void CGnuPrefs::LoadProxies(CString FilePath)
 		CString NextLine;
 		while(infile.ReadString(NextLine))
 		{
-			ProxyHost proxy = StrtoProxy(NextLine);
+			ProxyAddr proxy = StrtoProxy(NextLine);
 			if (proxy.host != "" && proxy.port != 0) m_ProxyList.push_back(proxy);
 		}
 
@@ -664,7 +664,7 @@ void CGnuPrefs::SaveProxies(CString FilePath)
 	}
 }
 
-ProxyHost CGnuPrefs::GetRandProxy()
+ProxyAddr CGnuPrefs::GetRandProxy()
 {
 	int index = rand() % m_ProxyList.size();
 
@@ -761,9 +761,9 @@ CString	BlockedtoStr(BlockedHost badHost)
 	return strBlocked;
 }
 
-ProxyHost StrtoProxy(CString strProxy)
+ProxyAddr StrtoProxy(CString strProxy)
 {
-	ProxyHost Proxy;
+	ProxyAddr Proxy;
 
 	strProxy.Remove(' ');
 	int BreakPos = strProxy.Find(':');

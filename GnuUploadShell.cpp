@@ -41,7 +41,6 @@
 #include "GnuUploadQueue.h"
 #include "GnuUploadShell.h"
 
-
 CGnuUploadShell::CGnuUploadShell(CGnuTransfers* pTrans)
 {
 	m_pTrans = pTrans;

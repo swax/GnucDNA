@@ -623,7 +623,7 @@ void CDnaPrefs::SetProxyList(std::vector<CString> &ProxyList)
 
 	for(int i = 0; i < ProxyList.size(); i++)
 	{
-		ProxyHost proxy = StrtoProxy(ProxyList[i]);
+		ProxyAddr proxy = StrtoProxy(ProxyList[i]);
 		m_gnuPrefs->m_ProxyList.push_back(proxy);
 	}
 

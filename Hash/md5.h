@@ -1,6 +1,9 @@
 
 #pragma once
 
+namespace gdna
+{
+
 
 struct MD5Context {
 	word32 buf[4];
@@ -19,3 +22,4 @@ void MD5Transform(word32 buf[4], word32 const in[16]);
  */
 typedef struct MD5Context MD5_CTX;
 
+} // end namespace gdna
