@@ -1,0 +1,33 @@
+
+
+Hops setup at gathered from LW
+
+	Leaf Query T:3, H:0 -> Ultrapeer
+	Ultrapeer Query T:3, H:1 -> Ultrapeer
+	Ultrapeer Query T:2, H:2 -> Ultrapeer
+	Ultrapeer Query T:1, H:3 -> Ultrapeer (last hop qrp)
+	Ultrapeer Query T:0, H:4 -> Leaf (ttl 0 should not be forwarded, but it is)
+	
+	Leaf QueryHit T:4, H:0 -> Ultrapeer
+	Ultrapeer QueryHit T:3, H:1 -> Ultrapeer
+	Ultrapeer QueryHit T:2, H:2 -> Ultrapeer
+	Ultrapeer QueryHit T:1, H:3 -> Ultrapeer
+	Ultrapeer QueryHit T:2, H:4 -> Leaf (ttl 2?)
+
+
+BEAR/7v1 // TCP Connect Back
+BEAR/11v1 // LGDQ Query Status Req
+LIME/21v1 // Push Proxy Req
+GTKG/7v2 // UDP Connect Back
+
+G1 Clustering
+	Start in supernode mode
+	At least half leaf/normal connects to dna
+	If connections at zero, re-alalyze ultrapeer able
+	Set default child connects to 1
+	Factor only dna child nodes when calcing if node is full
+	
+	
+Splitting Packets
+	Greater than 16k in size disconnect
+	
