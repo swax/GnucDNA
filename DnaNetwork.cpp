@@ -314,7 +314,7 @@ LONG CDnaNetwork::GetNormalConnectedCount(void)
 	
 
 	if( m_gnuNetwork->m_pGnu )
-		return m_gnuNetwork->m_pGnu->CountNormalConnects();
+		return m_gnuNetwork->m_pGnu->CountUltraConnects();
 
 	return 0;
 }
@@ -811,7 +811,7 @@ LONG CDnaNetwork::GetNormalConnectedCount2(LONG NetworkID)
 	
 
 	if( NetworkID == NETWORK_GNUTELLA && m_gnuNetwork->m_pGnu )
-		return m_gnuNetwork->m_pGnu->CountNormalConnects();
+		return m_gnuNetwork->m_pGnu->CountUltraConnects();
 
 	if( NetworkID == NETWORK_G2 && m_gnuNetwork->m_pG2 )
 		return m_gnuNetwork->m_pG2->CountHubConnects();

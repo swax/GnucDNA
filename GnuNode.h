@@ -77,7 +77,7 @@ public:
 
 
 	// Sending packets
-	void SendPacket(void*, int, int, int, bool thread=false);
+	void SendPacket(void* packet, int length, int type, int distance, bool thread=false);
 	void SendPacket(PriorityPacket* OutPacket);
 
 	CCriticalSection m_TransferPacketAccess;
@@ -127,7 +127,7 @@ public:
 	int m_CloseWait;
 
 	int m_NextRequeryWait;
-
+	int m_NextStatUpdate;
 
 	// Connection vars
 	CString m_StatusText;
@@ -146,6 +146,8 @@ public:
 	bool m_SupportsVendorMsg;
 	bool m_SupportsLeafGuidance;
 	bool m_SupportsDynQuerying;
+	bool m_SupportsStats;
+	bool m_SupportsModeChange;
 	
 	IPv4 m_PushProxy;
 
@@ -175,13 +177,22 @@ public:
 
 
 	// Ultrapeers
-	CTime     m_HostUpSince;
 	CTime     m_ConnectTime;
 	UINT	  m_NodeFileCount;
-	int		  m_NodeLeafMax;
+	bool	  m_TriedUpgrade;
 
-	bool m_DowngradeRequest; // Is true if we request node to become child, or remote node requests us to become a child node
-	
+	// In stat msg (stats for crawler)
+	bool   m_StatsRecvd;
+	int    m_LeafMax;
+	int	   m_LeafCount;
+	uint64 m_UpSince;
+	int    m_Cpu;
+	int    m_Mem;
+	bool   m_UltraAble;
+	bool   m_Router;
+	bool   m_FirewallTcp;
+	bool   m_FirewallUdp;
+
 	// QRP - Recv
 	void ApplyPatchTable();
 	void SetPatchBit(int &remotePos, double &Factor, byte value);
@@ -236,6 +247,7 @@ public:
 	DWORD m_dwSecPackets[3];
 	DWORD m_dwSecBytes[3];
 
+	int m_QueryThrottle;
 
 	CGnuNetworks*  m_pNet;
 	CGnuPrefs*     m_pPrefs;

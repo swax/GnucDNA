@@ -26,6 +26,13 @@ public:
 
 	byte m_pRecvBuff[GNU_RECV_BUFF];
 
+	// Bandwidth
+	CRangeAvg m_AvgUdpDown;
+	CRangeAvg m_AvgUdpUp;
+
+	int m_UdpSecBytesDown;
+	int m_UdpSecBytesUp;
+
 	CGnuControl*  m_pComm;
 	CGnuProtocol* m_pProtocol;
 };

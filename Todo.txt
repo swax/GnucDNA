@@ -1,14 +1,27 @@
 
-receiving results when search not open
+Request push proxy, send in hits
+Serve push proxy, forward push
+
+Test
+	Check remote vendor messages that we match
+	Gnutella Leaf Mode / Preferencing / Upgrade Path
+	Gnutella Ultrapeer Mode / Preferencing / Upgrade Path
+	G2 Leaf Mode / Preferencing / Upgrade Path
+	G2 Hub Mode / Preferencing / Upgrade Path
+	Version 2 UDP Connect back
+	Receiving TCP / UDP firewall tests
+
+New System 
+	Target network load at 80%
+	Prevents people who cant handle load from staying in hub mode
+	200 leaf max
+	Two connections per child G1/G2
 
 
-    
-Paragraph on main test changes
-
-Ultrapeer up/downgrade path
+----------------------------------------------------------------------
 
 Download
-	x-alt
+	x-alt header
 	Using push proxy
 	Sending push proxy with hits
 	Serving push proxy
@@ -17,13 +30,10 @@ Download
 	Make sure G1/G2 download sources dont conflict
 
 G2
+	Cached query keys fix qkr/qka
 	Q2/NAT
-	QH2/FW
-	NAT detection, map of 10000 ips, once 10000 hit turn off detection
-	add ips from udp send and sock connects
+	
 	If PI/RELAY recved with UDP address of directly connected host (but not from directly	 connected host), disconnect youngest link
-
-	15 minute upgrade only if setconnected never called
 	ASSERT size of udp being sent, make sure QH does not overflow
 	
 Now	
@@ -31,12 +41,6 @@ Now
 	IPrefs::SetSpeedDown
 	Set upload speed only if uploaded, take other speed stuff out
 	
-	check % full of g2 hash tables
-
-
-Test
-	*forwarding q2, blank q2s are being forwarded
-	/TO packet
 	table % full doesnt get too large
 	sending/recving 64kb packets
 

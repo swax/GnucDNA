@@ -121,7 +121,10 @@ UINT HashWorker(LPVOID pVoidHash)
 			WaitForSingleObject(pHash->m_HashEvent, INFINITE);
 
 		if(pHash->m_StopThread)
+		{
 			ExitThread(0);
+			return 0;
+		}
 
 		if(pHash->m_EverythingHashed || pHash->m_StopHashing)
 			continue;
@@ -186,8 +189,10 @@ UINT HashWorker(LPVOID pVoidHash)
 		while(HashFile.m_hFile != CFile::hFileNull)
 		{
 			if(pHash->m_StopThread)
+			{
 				ExitThread(0);
-
+				return 0;
+			}
 			
 			// Read data
 			try

@@ -60,6 +60,7 @@ CGnuNetworks::CGnuNetworks(CGnuCore* pCore)
 	m_RealSpeedUp	= 0;
 	m_RealSpeedDown	= 0;
 	m_HaveUploaded	= false;
+	m_HighBandwidth = false;
 
 	// Searching
 	m_NextSearchID = 1;
@@ -200,6 +201,20 @@ void CGnuNetworks::Timer()
 			itSock++;
 		}
 	}
+
+	// NAT detect clean
+	if(m_UdpFirewall != UDP_FULL)
+		while(m_NatDetectMap.size() > 5000)
+		{
+			uint32 addy = m_NatDetectVect.front();
+
+			std::map<uint32, bool>::iterator itHost = m_NatDetectMap.find(addy);
+			if(itHost != m_NatDetectMap.end())
+				m_NatDetectMap.erase(itHost);
+
+			m_NatDetectVect.pop_front();
+		}
+
 }
 
 void CGnuNetworks::HourlyTimer()
@@ -386,4 +401,15 @@ void CGnuNetworks::IncomingSource(GUID &SearchGuid, FileSource &Source)
 		if(itDown != m_pCore->m_pTrans->m_DownloadHashMap.end())
 			itDown->second->AddHost(Source);
 	}
+}
+
+void CGnuNetworks::AddNatDetect(IP Host)
+{
+	if(m_UdpFirewall == UDP_FULL)
+		return;
+
+	// If node already in map its replaced, and dupe put on top of vector
+
+	m_NatDetectMap[Host.S_addr] = true;
+	m_NatDetectVect.push_back(Host.S_addr);
 }

@@ -536,6 +536,8 @@ void CG2Datagram::FlushSendBuffer()
 		if( m_SendBytesAvail <= 0)
 			return;
 
+		m_pG2Comm->m_pNet->AddNatDetect((*itAck).Address.Host);
+
 		SOCKADDR_IN sa;
 		sa.sin_family = AF_INET;
 		sa.sin_port   = htons((*itAck).Address.Port);
@@ -596,6 +598,8 @@ void CG2Datagram::FlushSendBuffer()
 
 				if( !pFrag->Sent || (pPacket->AckRequired && pPacket->Timeout >= pFrag->Wait ) )
 				{
+					m_pG2Comm->m_pNet->AddNatDetect(pPacket->Address.Host);
+
 					SOCKADDR_IN sa;
 					sa.sin_family = AF_INET;
 					sa.sin_port   = htons(pPacket->Address.Port);

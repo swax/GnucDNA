@@ -198,6 +198,36 @@ struct packet_VendMsg // Size 31+
 	// Message Payload...
 };
 
+struct packet_StatsMsg	// 13
+{
+	uint16 LeafMax;				// 0 - 1
+	uint16 LeafCount;			// 2 - 3
+	uint32 Uptime;				// 4 - 7
+	uint16 Cpu;					// 8 - 9
+	uint16 Mem;					// 10 - 11
+	
+	byte FlagUltraAble	 : 1;	// 12
+	byte FlagRouter		 : 1;   
+	byte FlagTcpFirewall : 1;
+	byte FlagUdpFirewall : 1;
+	byte FlagEmpty		 : 4;
+
+	packet_StatsMsg()
+	{
+		LeafMax		= 0;
+		LeafCount	= 0;
+		Uptime		= 0;
+		Cpu		= 0;
+		Mem		= 0;
+	
+		FlagUltraAble	= 0;
+		FlagRouter		= 0;
+		FlagTcpFirewall = 0;
+		FlagUdpFirewall = 0;
+		FlagEmpty		= 0;
+	};	
+};
+
 struct packet_GGEPHeaderFlags
 {
 	byte NameLength	 : 4;

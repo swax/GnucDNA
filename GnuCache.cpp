@@ -566,7 +566,10 @@ UINT WebCacheWorker(LPVOID pVoidCache)
 				attempts--;
 
 			if ( pCache->m_StopThread )
+			{
 				ExitThread(0);
+				return 0;
+			}
 		}
 	}
 
@@ -599,7 +602,10 @@ UINT WebCacheWorker(LPVOID pVoidCache)
 				attempts--;
 
 			if(pCache->m_StopThread)
+			{
 				ExitThread(0);
+				return 0;
+			}
 		}
 		
 	}
@@ -657,7 +663,10 @@ UINT WebCacheWorker(LPVOID pVoidCache)
 				attempts--;
 			}
 			if(pCache->m_StopThread)
+			{
 				ExitThread(0);
+				return 0;
+			}
 		}
 	}	
 	// *** ADD CACHE ***
@@ -671,7 +680,10 @@ UINT WebCacheWorker(LPVOID pVoidCache)
 		CString strFile = pCache->WebCacheDoRequest(pCache->m_NewSite + "?ping=1");
 		
 		if(pCache->m_StopThread)
+		{
 			ExitThread(0);
+			return 0;
+		}
 
 		if ( strFile.Find("|") == 1 )
 			GWCVer = GWC_VERSION2;
@@ -721,7 +733,10 @@ UINT WebCacheWorker(LPVOID pVoidCache)
 				}
 
 				if(pCache->m_StopThread)
+				{
 					ExitThread(0);
+					return 0;
+				}
 			}
 
 			// Add New Cache to our list
@@ -773,8 +788,10 @@ UINT WebCacheWorker(LPVOID pVoidCache)
 				attempts--;
 
 			if(pCache->m_StopThread)
+			{
 				ExitThread(0);
-
+				return 0;
+			}
 		}
 
 	}

@@ -43,14 +43,14 @@ public:
 
 	// Runtime Variables
 	IP		m_CurrentIP;
-	UINT    m_CurrentPort;
+	uint16  m_CurrentPort;
 	bool	m_TcpFirewall;		   // Assumes there is a firewall until someone connects
 	int 	m_UdpFirewall;
 	bool    m_BehindRouter;		   // Set in GuessLocalHost
 	int		m_RealSpeedUp;		   // Bytes per sec up
 	int		m_RealSpeedDown;	   // Bytes per sec down
 	bool	m_HaveUploaded;		   // If client has uploaded successfully
-
+	bool    m_HighBandwidth;
 
 	// Listening control
 	bool StartListening();
@@ -69,6 +69,13 @@ public:
 	std::map<int, CGnuSearch*> m_SearchIDMap;
 
 	void IncomingSource(GUID &SearchGuid, FileSource &Source);
+
+
+	// NAT Detection
+	void AddNatDetect(IP Host);
+
+	std::map<uint32, bool> m_NatDetectMap;
+	std::deque<uint32>    m_NatDetectVect;
 
 
 	CGnuCore* m_pCore;

@@ -81,8 +81,13 @@ CG2Control::CG2Control(CGnuNetworks* pNet)
 	m_CleanGlobalNext = time(NULL) + 3*60;
 
 	// Hub Balancing
-	m_HubBalanceCheck = 60;
-	m_NextUpgrade     = time(NULL);
+	m_HubBalanceCheck   = 60;
+	m_NextUpgrade       = time(NULL);
+	m_ModeChangeTimeout = 0;
+
+	m_MinsBelow10   = 0;
+	m_MinsBelow70   = 0;
+	m_NoConnections = 0;
 
 	// Bandwidth
 	m_NetSecBytesDown	= 0;
@@ -139,11 +144,13 @@ CG2Control::CG2Control(CGnuNetworks* pNet)
 
 CG2Control::~CG2Control()
 {
+	m_G2NodeAccess.Lock();
 	while( m_G2NodeList.size() )
 	{
 		delete m_G2NodeList.back();
 		m_G2NodeList.pop_back();
 	}
+	m_G2NodeAccess.Unlock();
 
 	while( m_G2Searches.size() )
 	{
@@ -388,9 +395,11 @@ void CG2Control::ManageNodes()
 	m_NetSecBytesDown = 0;
 	m_NetSecBytesUp	  = 0;
 
-	int Connecting    = 0;
-	int HubConnects   = 0;
-	int ChildConnects = 0;
+	int Connecting		 = 0;
+	int HubConnects		 = 0;
+	int HubDnaConnects   = 0;
+	int ChildConnects    = 0;
+	int ChildDnaConnects = 0;
 
 	// Add bandwidth and count connections
 	for(int i = 0; i < m_G2NodeList.size(); i++)
@@ -406,10 +415,20 @@ void CG2Control::ManageNodes()
 			m_NetSecBytesUp   += m_G2NodeList[i]->m_AvgBytes[1].GetAverage();
 
 			if( m_G2NodeList[i]->m_NodeMode == G2_HUB )
+			{
 				HubConnects++;
 
+				if(m_G2NodeList[i]->m_RemoteAgent.Find("GnucDNA") > 0)
+					HubDnaConnects++;
+			}
+
 			else if( m_G2NodeList[i]->m_NodeMode == G2_CHILD )
+			{
 				ChildConnects++;
+
+				if(m_G2NodeList[i]->m_RemoteAgent.Find("GnucDNA") > 0)
+					ChildDnaConnects++;
+			}
 		}
 	}
 
@@ -417,30 +436,50 @@ void CG2Control::ManageNodes()
 	m_NetSecBytesDown += m_pDispatch->m_AvgUdpDown.GetAverage();
 	m_NetSecBytesUp   += m_pDispatch->m_AvgUdpUp.GetAverage();
 
+
 	// After 10 mins, if no connects, go into hub mode
 	if( m_ClientMode == G2_CHILD )
-		if(CTime::GetCurrentTime() - m_ClientUptime == CTimeSpan(0, 0, 10, 0) )
-			if( CountHubConnects() == 0 )
-				if( !m_pNet->m_TcpFirewall && m_pNet->m_UdpFirewall == UDP_FULL && !m_pNet->m_BehindRouter)
-					SwitchG2ClientMode( G2_HUB, true);
+	{
+		if(CountHubConnects() == 0)
+		{
+			m_NoConnections++;
+
+			// After 10 minutes of no connections upgrade to hub
+			if(m_NoConnections >= 10 * 60)
+			{
+				SwitchG2ClientMode( G2_HUB, true);
+				m_NoConnections = 0;
+			}
+		}	
+		else
+			m_NoConnections = 0;
+	}
 
 
+
+	// No more than 5 simultaneous connections being attempted
 	if(Connecting > 5)
 		return;
 
+
+	bool NeedDnaHubs = false;
+	if(HubConnects && HubDnaConnects * 100 / HubConnects < 50)
+		NeedDnaHubs = true;
 
 	if( m_ClientMode == G2_CHILD )
 	{
 		// More hub connects only means people will find your files faster
 		// Searching on G2 does not require a hub connection
 
-		m_pPrefs->m_G2ChildConnects = (m_pNet->m_UdpFirewall != UDP_FULL) ? 3 : 1;
-
 		if(HubConnects < m_pPrefs->m_G2ChildConnects)
 			TryConnect();
 
+		else if(HubConnects && NeedDnaHubs)
+			TryConnect(); // Half connects dna
+
+
 		if(m_pPrefs->m_G2ChildConnects && HubConnects > m_pPrefs->m_G2ChildConnects)
-			DropNode(G2_HUB);
+			DropNode(G2_HUB, NeedDnaHubs);
 	}
 
 	else if( m_ClientMode == G2_HUB )
@@ -451,13 +490,20 @@ void CG2Control::ManageNodes()
 		if(m_pPrefs->m_G2MinConnects && HubConnects < m_pPrefs->m_G2MinConnects)
 			TryConnect();
 
+		else if(HubConnects && NeedDnaHubs)
+			TryConnect(); 
+
 		if(m_pPrefs->m_G2MaxConnects && HubConnects > m_pPrefs->m_G2MaxConnects)
-			DropNode(G2_HUB);
+			DropNode(G2_HUB, NeedDnaHubs);
 
 
 		while(ChildConnects > m_pPrefs->m_MaxLeaves)
 		{
-			DropNode(G2_CHILD);
+			bool NeedDnaChildren = false;
+			if(ChildConnects && ChildDnaConnects * 100 / ChildConnects < 50)
+				NeedDnaChildren = true;
+
+			DropNode(G2_CHILD, NeedDnaChildren);
 			ChildConnects--;
 		}
 	}
@@ -600,22 +646,24 @@ void CG2Control::CreateNode(Node HostInfo)
 	G2NodeUpdate(NewNode);
 }
 
-void CG2Control::DropNode(int G2Mode)
+void CG2Control::DropNode(int G2Mode, bool NeedDna)
 {
 	CG2Node* DeadNode = NULL;
 	CTime CurrentTime = CTime::GetCurrentTime();
 	CTimeSpan LowestTime(0);
 
-	// Drop Normal nodes first
+	// Drop youngest
 	for(int i = 0; i < m_G2NodeList.size(); i++)
-		if(SOCK_CONNECTED == m_G2NodeList[i]->m_Status)
+		if(SOCK_CONNECTED == m_G2NodeList[i]->m_Status && m_G2NodeList[i]->m_NodeMode == G2Mode)
 		{
-			if(m_G2NodeList[i]->m_NodeMode == G2Mode) 
-				if(LowestTime.GetTimeSpan() == 0 || CurrentTime - m_G2NodeList[i]->m_ConnectTime < LowestTime)
-				{
-					DeadNode	 = m_G2NodeList[i];
-					LowestTime   = CurrentTime - m_G2NodeList[i]->m_ConnectTime;
-				}
+			if(NeedDna && m_G2NodeList[i]->m_RemoteAgent.Find("GnucDNA") != -1)
+				continue;
+
+			if(LowestTime.GetTimeSpan() == 0 || CurrentTime - m_G2NodeList[i]->m_ConnectTime < LowestTime)
+			{
+				DeadNode	 = m_G2NodeList[i];
+				LowestTime   = CurrentTime - m_G2NodeList[i]->m_ConnectTime;
+			}
 		}
 
 	if(DeadNode)
@@ -678,12 +726,20 @@ bool CG2Control::GetAltHubs(CString &HostList, CG2Node* NodeExclude)
 {
 	int Hosts = 0;
 
+	bool PrefDna = false;
+	if(NodeExclude->m_RemoteAgent.Find("GnucDNA") != -1 && NodeExclude->m_NodeMode == G2_CHILD)
+		PrefDna = true;
+
 	for(int i = 0; i < m_G2NodeList.size() && Hosts < 10; i++)
 		if(m_G2NodeList[i]->m_NodeMode == G2_HUB && 
 		   m_G2NodeList[i]->m_Status == SOCK_CONNECTED && 
 		   m_G2NodeList[i] != NodeExclude )
 		{
 			CG2Node* pNode = m_G2NodeList[i];
+			
+			if(PrefDna && pNode->m_RemoteAgent.Find("GnucDNA") == -1)
+				continue;
+			
 			HostList += IPtoStr(pNode->m_Address.Host) + ":" + NumtoStr(pNode->m_Address.Port) + " " + CTimeToStr( CTime::GetCurrentTime() ) + ",";	
 			Hosts++;
 		}
@@ -735,7 +791,7 @@ void CG2Control::HubBalancing()
 	if(m_ClientMode != G2_HUB)
 		return;
 
-	// Only run his function once per minute
+	// Only run this function once per minute
 	if(m_HubBalanceCheck > 0)
 	{
 		m_HubBalanceCheck--;
@@ -744,10 +800,14 @@ void CG2Control::HubBalancing()
 	else
 		m_HubBalanceCheck = 60;
 
+
 	// Get load of local hub cluster
-	int LocalLoad = CountChildConnects() * 100 / m_pPrefs->m_MaxLeaves;
+	int LocalLoad = 0;
+	if(m_pPrefs->m_MaxLeaves)
+		LocalLoad = CountChildConnects() * 100 / m_pPrefs->m_MaxLeaves;
 	
-	std::vector<int> ClusterLoad;	
+
+	/*std::vector<int> ClusterLoad;	
 	for(int i = 0; i < m_G2NodeList.size(); i++)
 		if(m_G2NodeList[i]->m_Status == SOCK_CONNECTED && m_G2NodeList[i]->m_NodeMode == G2_HUB)
 			if(m_G2NodeList[i]->m_NodeInfo.LeafMax)
@@ -759,125 +819,78 @@ void CG2Control::HubBalancing()
 
 	AvgLoad /= 1 + ClusterLoad.size();
 	TRACE("\nAverage Cluster Load " + NumtoStr(AvgLoad) + "%\n");
+	*/
 
-	// Wait an hour between upgrading nodes
-	if( time(NULL) > m_NextUpgrade )
+
+	// Upgrade node if running above 90%, every 40 mins
+	if( time(NULL) > m_NextUpgrade && LocalLoad > 90)
 	{
-		/* 
-		bool DoUpgrade = true;
+		// Find child with highest score
+		int HighScore = 0;
+		CG2Node* UpgradeNode = NULL;
 
-		if(LocalLoad > HIGH_HUB_CAPACITY)
-			DoUpgrade = false;
-
-		/*for(i = 0; i < ClusterLoad.size(); i++)
-			if( ClusterLoad[i] < HIGH_HUB_CAPACITY )
+		for(int i = 0; i < m_G2NodeList.size(); i++)	
+			if(m_G2NodeList[i]->m_Status == SOCK_CONNECTED && m_G2NodeList[i]->m_NodeMode == G2_CHILD)
 			{
-				DoUpgrade = false;
-				break;
-			}*/
+				int NodeScore = ScoreNode(m_G2NodeList[i]);
 
-		bool DoUpgrade = false;
-
-		if(AvgLoad > HIGH_HUB_CAPACITY)
-			DoUpgrade = true;
-
-		if( DoUpgrade )
-		{
-			// Find child with highest score
-			int HighScore = 0;
-			CG2Node* UpgradeNode = NULL;
-
-			for(i = 0; i < m_G2NodeList.size(); i++)	
-				if(m_G2NodeList[i]->m_Status == SOCK_CONNECTED && m_G2NodeList[i]->m_NodeMode == G2_CHILD)
+				if(NodeScore > HighScore)
 				{
-					int NodeScore = ScoreNode(m_G2NodeList[i]);
-
-					if(NodeScore > HighScore)
-					{
-						HighScore = NodeScore;
-						UpgradeNode = m_G2NodeList[i];
-					}
+					HighScore = NodeScore;
+					UpgradeNode = m_G2NodeList[i];
 				}
-
-			// Send MCR to child node
-			if(HighScore > 0)
-			{
-				Send_MCR(UpgradeNode);
-				UpgradeNode->m_TriedUpgrade = true;
 			}
 
-			// When MCA received set timeout to an hour from now
-		}
-
-	}
-
-
-	// Dont downgrade if this is the only hub
-	if( ClusterLoad.size() && time(NULL) > m_ModeChangeTimeout )
-	{
-		/*bool DoDowngrade = true;
-
-		if(LocalLoad > LOW_HUB_CAPACITY)
-			DoDowngrade = false;
-
-		for(i = 0; i < ClusterLoad.size(); i++)
-			if( ClusterLoad[i] > LOW_HUB_CAPACITY )
-			{
-				DoDowngrade = false;
-				break;
-			}
-		*/
-
-		bool DoDowngrade = false;
-
-		if(AvgLoad < LOW_HUB_CAPACITY)
-			DoDowngrade = true;
-
-		if( DoDowngrade )
+		// Send MCR to child node
+		if(HighScore > 0)
 		{
-			// Create a node of local host to be scored
-			CG2Node LocalNode(this, IPtoStr(m_pNet->m_CurrentIP), m_pNet->m_CurrentPort);
-			LocalNode.m_NodeMode = G2_HUB;
-			LocalNode.m_NodeInfo.HubAble   = m_pPrefs->m_SupernodeAble;
-			LocalNode.m_NodeInfo.Firewall  = (m_pNet->m_TcpFirewall || m_pNet->m_UdpFirewall != UDP_FULL); 
-			//LocalNode.m_NodeInfo.BpsIn   = m_pPrefs->m_SpeedDown * 1024;
-			//LocalNode.m_NodeInfo.BpsOut  = m_pPrefs->m_SpeedUp * 1024;
-			LocalNode.m_NodeInfo.LeafCount = CountChildConnects();
-			LocalNode.m_NodeInfo.LeafMax   = m_pPrefs->m_MaxLeaves;
-			LocalNode.m_NodeInfo.UpSince   = m_ClientUptime.GetTime();
-
-			// Check if local node the lowest scored in cluster
-			int LowScore = ScoreNode(&LocalNode); ASSERT(LowScore != 0);
-			CG2Node* DowngradeNode = NULL;
-
-			for(i = 0; i < m_G2NodeList.size(); i++)	
-				if(m_G2NodeList[i]->m_Status == SOCK_CONNECTED && m_G2NodeList[i]->m_NodeMode == G2_HUB)
-				{
-					int NodeScore = ScoreNode(m_G2NodeList[i]);
-
-					if(NodeScore && NodeScore < LowScore)
-					{
-						LowScore = NodeScore;
-						DowngradeNode = m_G2NodeList[i];
-					}
-				}
-			
-			// Downgrade self
-			if(DowngradeNode == NULL && !m_ForcedHub)
-				SwitchG2ClientMode(G2_CHILD);
+			Send_MCR(UpgradeNode);
+			UpgradeNode->m_TriedUpgrade = true;
 		}
 	}
+
+
+	// Downgrade if running below 70% capacity for 40 minutes
+	if( CountHubConnects() && LocalLoad < 70 )
+	{
+		m_MinsBelow70++;
+
+		if(m_MinsBelow70 > 40 && !m_ForcedHub)
+		{
+			SwitchG2ClientMode(G2_CHILD);
+			m_MinsBelow70 = 0;
+		}
+	}
+	else
+		m_MinsBelow70 = 0;
+
+
+	// Meant as emergency get dialup, or messed up node out of hub mode
+	// Downgrade if less than 10 children for 10 minutes
+	if( CountHubConnects() && CountChildConnects() < 10 )
+	{
+		m_MinsBelow10++;
+
+		if(m_MinsBelow10 > 10 && !m_ForcedHub)
+		{
+			SwitchG2ClientMode(G2_CHILD);
+			m_MinsBelow10 = 0;
+		}
+	}
+	else
+		m_MinsBelow10 = 0;
+
 }
 
 int CG2Control::ScoreNode(CG2Node* pNode)
 {
-	int Score = 0;
-
 	// Check for HubAble or Firewall
 	if(pNode->m_NodeInfo.HubAble == false || 
 	   pNode->m_NodeInfo.Firewall == true ||
 	   pNode->m_TriedUpgrade == true)
 		return 0;
+
+	int Score = 0;
 
 	// Leaves connected may be a better indicator of hub performance than
 	// bandwidth stats
@@ -895,6 +908,7 @@ int CG2Control::ScoreNode(CG2Node* pNode)
 
 	Score += bwup * 100 / OPT_BANDWIDTH_UP;*/
 
+	// Used for downgrading (not used)
 	if(pNode->m_NodeMode == G2_HUB)
 	{
 		// Leaf Max
@@ -905,6 +919,7 @@ int CG2Control::ScoreNode(CG2Node* pNode)
 		Score += leafcount * 100 / OPT_LEAFMAX;
 	}
 
+	// Used for upgrading
 	if(pNode->m_NodeMode == G2_CHILD)
 	{
 		// Leaf Max
@@ -913,10 +928,6 @@ int CG2Control::ScoreNode(CG2Node* pNode)
 			leafmax = OPT_LEAFMAX;
 
 		Score += leafmax * 100 / OPT_LEAFMAX;
-
-		// Dont need uptime here, because first leaf selected has high uptime
-		// Prevent high uptime nodes from always being elected, if election fails they
-		// Go back to bottom of list
 
 		// Upgrade nodes of equal or greater versions only, dont use for downgrade 
 		if(pNode->m_RemoteAgent.Find("GnucDNA") > 0)
@@ -934,15 +945,17 @@ int CG2Control::ScoreNode(CG2Node* pNode)
 		}
 	}
 
-	/* Uptime
-	uint64 Uptime = time(NULL) - pNode->m_NodeInfo.UpSince;
+	// Nodes with high uptime and capacity will have a chance to be hubs
+
+	// Uptime of connection to local node, so long lasting nodes are proven trustworthy
+	uint64 Uptime = time(NULL) - pNode->m_ConnectTime.GetTime();
 	if( Uptime  > OPT_UPTIME)
 		Uptime  = OPT_UPTIME;
 
-	Score += Uptime  * 100 / (OPT_UPTIME); // () because OPT_UPTIME is 3*60*60
-	*/
+	Score += Uptime * 100 / (OPT_UPTIME); // () because OPT_UPTIME is 6*60*60
+	
 
-	ASSERT(Score <= 400);
+	ASSERT(Score <= 200);
 
 	return Score;
 }
@@ -984,16 +997,18 @@ void CG2Control::SwitchG2ClientMode(int G2Mode, bool DownG1)
 		return;
 
 	// Remove all connections
-	while( m_G2NodeList.size() )
-	{
-		delete m_G2NodeList.back();
-		m_G2NodeList.pop_back();
-	}
+	m_G2NodeAccess.Lock();
+		while( m_G2NodeList.size() )
+		{
+			delete m_G2NodeList.back();
+			m_G2NodeList.pop_back();
+		}
+	m_G2NodeAccess.Unlock();
 
 	// Change mode
 	m_ClientMode = G2Mode;
 
-	m_ModeChangeTimeout = time(NULL) + 60*60;
+	m_ModeChangeTimeout = time(NULL) + 40*60;
 }
 
 void CG2Control::TestEncodeDecode()
@@ -1441,7 +1456,11 @@ void CG2Control::Receive_PO(G2_RecvdPacket &PacketPO)
 	if(PacketPO.pTCP == NULL && !Local)
 	{
 		if(Pong.Relay)
-			m_pNet->m_UdpFirewall = UDP_FULL;
+		{
+			std::map<uint32, bool>::iterator itHost = m_pNet->m_NatDetectMap.find(PacketPO.Source.Host.S_addr);
+			if(itHost == m_pNet->m_NatDetectMap.end())
+				m_pNet->m_UdpFirewall = UDP_FULL;	
+		}
 
 		// If this turned on and NAT really doesnt work, net spam and dead acks ensue
 		//else if(m_pNet->m_UdpFirewall != UDP_FULL)
@@ -2096,7 +2115,7 @@ void CG2Control::Receive_QA(G2_RecvdPacket &PacketQA)
 	//TRACE0("\n");
 
 	// Add alt hubs to cache
-	for( i = 0; i < QueryAck.AltHubs.size(); i++)
+	for(int i = 0; i < QueryAck.AltHubs.size(); i++)
 	{
 		if(QueryAck.AltHubs[i].Address.Host.S_addr == 0)
 			continue;
@@ -2191,6 +2210,9 @@ void CG2Control::Receive_QH2(G2_RecvdPacket &PacketQH2)
 
 		G2Source.Size = QueryHit.Hits[i].ObjectSize;
 		
+		if(QueryHit.Firewalled)
+			G2Source.Firewall = true;
+
 		// Hash
 		G2Source.Sha1Hash  = "";
 		G2Source.TigerHash = "";
@@ -2283,9 +2305,6 @@ void CG2Control::Receive_MCR(G2_RecvdPacket &PacketMCR)
 
 	if(ModeChangeRequest.Hub)
 	{
-		if(time(NULL) < m_ModeChangeTimeout)
-			return;
-
 		if( PacketMCR.pTCP->m_NodeMode != G2_HUB ||
 			m_ClientMode != G2_CHILD)
 		{
@@ -2294,10 +2313,13 @@ void CG2Control::Receive_MCR(G2_RecvdPacket &PacketMCR)
 			return;
 		}
 
-		if(m_pPrefs->m_SupernodeAble == false ||
-			m_pNet->m_TcpFirewall ||
-			m_pNet->m_UdpFirewall != UDP_FULL ||
-			!m_pNet->m_BehindRouter)
+		if(time(NULL) < m_ModeChangeTimeout ||    // Dont upgrade within 40 mins of downgrading
+			m_pPrefs->m_SupernodeAble == false || // Supernode able
+			m_pNet->m_TcpFirewall ||			  // Not behind firewall
+			m_pNet->m_UdpFirewall != UDP_FULL ||  // Full UDP support
+			!m_pNet->m_BehindRouter ||			  // Not behind a router
+			!m_pCore->m_IsKernalNT ||			  // Running Windows NT
+			!m_pNet->m_HighBandwidth)			  // Must have a lot of bandwidth
 		{
 			Send_MCA(PacketMCR.pTCP, false);
 			return;
@@ -2314,19 +2336,20 @@ void CG2Control::Receive_MCA(G2_RecvdPacket &PacketMCA)
 	G2_MCA ModeChangeAck;
 	m_pProtocol->Decode_MCA(PacketMCA.Root, ModeChangeAck);
 
-	CG2Node* UpgradedNode = NULL;
-
-	std::map<uint32, CG2Node*>::iterator itNode = m_G2NodeAddrMap.find(PacketMCA.Source.Host.S_addr);
-	if(itNode != m_G2NodeAddrMap.end())
-		UpgradedNode = itNode->second;
-
-	if(UpgradedNode == NULL)
+	ASSERT(PacketMCA.pTCP);
+	if( PacketMCA.pTCP == NULL)
 		return;
+
+	CG2Node* UpgradedNode = PacketMCA.pTCP;
 
 	if(UpgradedNode->m_TriedUpgrade && ModeChangeAck.Hub)
 	{
-		m_NextUpgrade = time(NULL) + 60*60; // Node upgrade do not upgrade another for a hour
+		m_NextUpgrade = time(NULL) + 40*60; // Node upgrade do not upgrade another 40 mins
 		UpgradedNode->CloseWithReason("Child Upgraded");
+
+		// Reset 'tried' children so next time they're eligible
+		for(int i = 0; i < m_G2NodeList.size(); i++)
+			m_G2NodeList[i]->m_TriedUpgrade = false;
 	}
 }
 
@@ -2404,10 +2427,14 @@ void CG2Control::Receive_CRAWLR(G2_RecvdPacket &PacketCRAWLR)
 				GnuNodeInfo GnuNode;
 				GnuNode.Address      = m_pNet->m_pGnu->m_NodeList[i]->m_Address;
 				GnuNode.Client       = m_pNet->m_pGnu->m_NodeList[i]->m_RemoteAgent;
-				GnuNode.LeafMax      = m_pNet->m_pGnu->m_NodeList[i]->m_NodeLeafMax;
 				GnuNode.LibraryCount = m_pNet->m_pGnu->m_NodeList[i]->m_NodeFileCount;
-				GnuNode.UpSince      = m_pNet->m_pGnu->m_NodeList[i]->m_HostUpSince.GetTime();
 				GnuNode.ConnectUptime = time(NULL) - m_pNet->m_pGnu->m_NodeList[i]->m_ConnectTime.GetTime();
+
+				if( m_pNet->m_pGnu->m_NodeList[i]->m_StatsRecvd )
+				{
+					GnuNode.LeafMax = m_pNet->m_pGnu->m_NodeList[i]->m_LeafMax;
+					GnuNode.UpSince = m_pNet->m_pGnu->m_NodeList[i]->m_UpSince;
+				}
 
 				if(m_pNet->m_pGnu->m_NodeList[i]->m_GnuNodeMode == GNU_ULTRAPEER)
 					CrawlAck.GnuUPs.push_back( GnuNode );
@@ -2847,6 +2874,8 @@ void CG2Control::Send_QH2(GnuQuery &FileQuery, std::list<UINT> &MatchingIndexes)
 
 	QueryHit.Address.Host = m_pNet->m_CurrentIP;
 	QueryHit.Address.Port = m_pNet->m_CurrentPort;
+
+	QueryHit.Firewalled = m_pNet->m_TcpFirewall;
 
 	m_G2NodeAccess.Lock();
 

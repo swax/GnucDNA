@@ -69,12 +69,12 @@ void CGnuPrefs::LoadDefaults()
 	m_BehindFirewall	= false;
 
 	// Connect
-	m_LeafModeConnects	= 4;
+	m_LeafModeConnects	= 2;
 	m_MinConnects		= 24;
 	m_MaxConnects		= 32;
 
 	// G2 Connect Prefs
-	m_G2ChildConnects = 1;
+	m_G2ChildConnects = 2;
 	m_G2MinConnects   = 6;
 	m_G2MaxConnects   = 9;
 
@@ -137,7 +137,9 @@ void CGnuPrefs::LoadConfig(CString ConfigFile)
 	GetPrivateProfileString("Local", "ClientID", EncodeBase16((byte*) &m_ClientID, 16), buffer, 256, ConfigFile);
 	DecodeBase16( CString(buffer), 16, (byte*) &m_ClientID);
 
-	
+	GetPrivateProfileString("Local", "HighBandwidth",	"0",	buffer, 256, ConfigFile);
+	m_pCore->m_pNet->m_HighBandwidth = (0 != atoi(buffer));
+
 	// Local Network
 	GetPrivateProfileString("LocalNetwork", "Lan",				"0",	buffer, 256, ConfigFile);
 	m_LanMode = (0 != atoi(buffer));
@@ -361,6 +363,9 @@ void CGnuPrefs::SaveConfig(CString ConfigFile)
 
 	WritePrivateProfileString("Local", "UpdateMode",	  NumtoStr(m_Update),				ConfigFile);
 	WritePrivateProfileString("Local", "ClientID",        EncodeBase16((byte*) &m_ClientID, 16),		ConfigFile);
+
+	WritePrivateProfileString("Local", "HighBandwidth",   NumtoStr(m_pCore->m_pNet->m_HighBandwidth),		ConfigFile);
+
 
 	// Local Network
 	WritePrivateProfileString("LocalNetwork", "Lan",				NumtoStr(m_LanMode),		ConfigFile);
@@ -611,19 +616,22 @@ bool CGnuPrefs::MatchIP(IP ipTest, IPRule &ipCompare)
 
 int CGnuPrefs::CalcMaxLeaves()
 {
-	int maxLeaves = 10;	
+	int maxLeaves = 5;	
 
-	if(m_pCore->m_SysSpeed > 500 && m_pCore->m_SysMemory > 100)
+	//  Gnutella high out-degree now, G2 being hammered, test this for now
+
+	if(m_pCore->m_SysSpeed > 500 && m_pCore->m_SysMemory > 150)
 		maxLeaves = 100;
 
 	if(m_pCore->m_SysSpeed > 1000 && m_pCore->m_SysMemory > 200)
+		maxLeaves = 150;
+
+	if(m_pCore->m_SysSpeed > 1500 && m_pCore->m_SysMemory > 250)
 		maxLeaves = 200;
 
-	if(m_pCore->m_SysSpeed > 1500 && m_pCore->m_SysMemory > 300)
-		maxLeaves = 300;
-
-	if(m_pCore->m_SysSpeed > 2000 && m_pCore->m_SysMemory > 400)
-		maxLeaves = 400;
+//  Gnutella high out-degree now, G2 being hamme
+//	if(m_pCore->m_SysSpeed > 2000 && m_pCore->m_SysMemory > 400)
+//		maxLeaves = 400;
 
 	return maxLeaves;
 }

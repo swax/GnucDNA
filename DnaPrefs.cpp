@@ -180,10 +180,8 @@ LONG CDnaPrefs::GetMaxLeaves(void)
 
 void CDnaPrefs::SetMaxLeaves(LONG newVal)
 {
-	  
-
-	if(newVal > 1500)
-		newVal = 1500;
+	if(newVal > 500)
+		newVal = 500;
 
 	m_gnuPrefs->m_MaxLeaves = newVal;
 }
@@ -239,16 +237,13 @@ void CDnaPrefs::SetBehindFirewall(BOOL newVal)
 
 LONG CDnaPrefs::GetLeafModeConnects(void)
 {
-	  
-
 	return m_gnuPrefs->m_LeafModeConnects;
 }
 
 void CDnaPrefs::SetLeafModeConnects(LONG newVal)
 {
-	  
-
-	m_gnuPrefs->m_LeafModeConnects = newVal;
+	// Needs to be consistent across all clients for network to succeed
+	//m_gnuPrefs->m_LeafModeConnects = newVal;
 }
 
 LONG CDnaPrefs::GetMinConnects(void)
@@ -260,13 +255,12 @@ LONG CDnaPrefs::GetMinConnects(void)
 
 void CDnaPrefs::SetMinConnects(LONG newVal)
 {
-	  
-
-	m_gnuPrefs->m_MinConnects = newVal;
+	// Needs to be consistent across all clients for network to succeed
+	//m_gnuPrefs->m_MinConnects = newVal;
 	
-	if(m_gnuPrefs->m_MinConnects != -1 && m_gnuPrefs->m_MaxConnects != -1)
-		if(m_gnuPrefs->m_MinConnects > m_gnuPrefs->m_MaxConnects)
-			m_gnuPrefs->m_MinConnects = m_gnuPrefs->m_MaxConnects;
+	//if(m_gnuPrefs->m_MinConnects != -1 && m_gnuPrefs->m_MaxConnects != -1)
+	//	if(m_gnuPrefs->m_MinConnects > m_gnuPrefs->m_MaxConnects)
+	//		m_gnuPrefs->m_MinConnects = m_gnuPrefs->m_MaxConnects;
 
 }
 
@@ -279,16 +273,15 @@ LONG CDnaPrefs::GetMaxConnects(void)
 
 void CDnaPrefs::SetMaxConnects(LONG newVal)
 {
-	  
-
-	m_gnuPrefs->m_MaxConnects = newVal;
+	// Needs to be consistent across all clients for network to succeed
+	//m_gnuPrefs->m_MaxConnects = newVal;
 	
-	if(m_gnuPrefs->m_MinConnects != -1 && m_gnuPrefs->m_MaxConnects != -1)
-		if(m_gnuPrefs->m_MinConnects > m_gnuPrefs->m_MaxConnects)
-		{
-			m_gnuPrefs->m_MaxConnects = m_gnuPrefs->m_MinConnects;
-			return;
-		}
+	//if(m_gnuPrefs->m_MinConnects != -1 && m_gnuPrefs->m_MaxConnects != -1)
+	//	if(m_gnuPrefs->m_MinConnects > m_gnuPrefs->m_MaxConnects)
+	//	{
+	//		m_gnuPrefs->m_MaxConnects = m_gnuPrefs->m_MinConnects;
+	//		return;
+	//	}
 
 	
 }

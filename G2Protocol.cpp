@@ -920,7 +920,11 @@ void CG2Protocol::Decode_QH2(G2_Header PacketQH2, G2_QH2 &QueryHit)
 		if( strcmp(childPacket.Name, "/QH2/V") == 0 )
 			if( ReadPayload(childPacket)  && childPacket.PayloadSize == 4)
 				memcpy( &QueryHit.Vendor, childPacket.Payload, 4);
-				
+			
+		// Firewall Tag
+		if( strcmp(childPacket.Name, "/QH2/FW") == 0 )
+			QueryHit.Firewalled = true;
+
 		// Browse User Profile Tag
 		if( strcmp(childPacket.Name, "/QH2/BUP") == 0 )
 			QueryHit.Profile = true;
@@ -1616,6 +1620,10 @@ void CG2Protocol::Encode_QH2(G2_QH2 &QueryHit)
 
 	// Vendor Code
 	WritePacket(pQH2, "V", &QueryHit.Vendor, 4);
+
+	// Firewall Tag
+	if(QueryHit.Firewalled)
+		WritePacket(pQH2, "FW");
 
 	// Hit Group Descriptors
 	for( i = 0; i < QueryHit.HitGroups.size(); i++)

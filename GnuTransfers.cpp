@@ -233,6 +233,13 @@ void CGnuTransfers::ManageDownloads()
 
 	if(TotalDownSpeed > m_pNet->m_RealSpeedDown)
 		m_pNet->m_RealSpeedDown = TotalDownSpeed;	
+
+
+	// If client is downloading more than 20 KB/s flag it as a high bandwidth node
+	if( !m_pNet->m_HighBandwidth && TotalDownSpeed > 20 * 1024)
+	{
+		m_pNet->m_HighBandwidth = true;
+	}
 }
 
 void CGnuTransfers::ManageUploads()
@@ -241,6 +248,10 @@ void CGnuTransfers::ManageUploads()
 	
 	if( m_pNet->m_pGnu )
 		NetBytes += m_pNet->m_pGnu->m_NetSecBytesUp;
+
+	if( m_pNet->m_pG2 )
+		NetBytes += m_pNet->m_pG2->m_NetSecBytesUp;
+
 
 	m_UploadSecBytes = 0;
 
@@ -305,6 +316,13 @@ void CGnuTransfers::ManageUploads()
 
 	//Manage upload queues
 	m_UploadQueue.Timer();
+
+
+	// If client is uploading more than 20 KB/s flag it as a high bandwidth node
+	if( !m_pNet->m_HighBandwidth && (NetBytes + m_UploadSecBytes) > 20 * 1024)
+	{
+		m_pNet->m_HighBandwidth = true;
+	}
 }
 
 void CGnuTransfers::LoadDownloads()

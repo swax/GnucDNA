@@ -46,9 +46,9 @@ public:
 	void Send_Query(GnuQuery &FileQuery, std::list<int> &MatchingNodes);
 	void Send_QueryHit(GnuQuery &FileQuery, byte* pQueryHit, DWORD ReplyLength, byte ReplyCount, CString &MetaTail);
 	void Send_Push(FileSource Download);
-	void Send_VendMsg(CGnuNode* pTCP, packet_VendMsg VendMsg, byte* payload=NULL, int length=0, IPv4 Target=IPv4());
+	void Send_VendMsg(CGnuNode* pTCP, packet_VendMsg VendMsg, void* payload=NULL, int length=0, IPv4 Target=IPv4());
 	void Send_Bye(CGnuNode* pTCP, CString Reason);
-
+	void Send_StatsMsg(CGnuNode* pTCP);
 	// Other
 	void Decode_QueryHit( std::vector<FileSource> &Sources, Gnu_RecvdPacket &QHPacket);
 	void Encode_QueryHit(GnuQuery &FileQuery, std::list<UINT> &MatchingIndexes, byte* QueryReply);

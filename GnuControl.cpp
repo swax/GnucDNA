@@ -70,18 +70,20 @@ CGnuControl::CGnuControl(CGnuNetworks* pNet)
 
 	m_NetworkName		= "GNUTELLA";
 
-//#ifdef _DEBUG
-//	m_GnuClientMode = GNU_CHILD;
-//#else
-	m_GnuClientMode = GNU_ULTRAPEER;
-//#endif
 
+	// Ultrapeers
+	m_GnuClientMode   = GNU_LEAF;
 	m_ForcedUltrapeer = false;
-	
-	m_NormalConnectsApprox = 0;
-	
 
-	// Bandwidth
+	m_NextUpgrade	= time(NULL);
+	m_ModeChangeTimeout = 0;
+	
+	m_MinsBelow10   = 0;
+	m_MinsBelow70   = 0;
+	m_NoConnections = 0;
+
+	
+		// Bandwidth
 	m_NetSecBytesDown	= 0;
 	m_NetSecBytesUp		= 0;
 
@@ -207,32 +209,7 @@ CGnuNode* CGnuControl::FindNode(CString Host, UINT Port)
 /////////////////////////////////////////////////////////////////////////////
 // TRANSFER CONTROL
 
-int CGnuControl::CountNormalConnects()
-{
-	int NormalConnects = 0;
-
-	for(int i = 0; i < m_NodeList.size(); i++)	
-	{
-		CGnuNode *p = m_NodeList[i];
-
-		if(p->m_Status == SOCK_CONNECTED)
-		{
-			if(m_GnuClientMode ==GNU_ULTRAPEER)
-			{
-				if(p->m_GnuNodeMode != GNU_LEAF)
-					NormalConnects++;
-			}
-			else
-				NormalConnects++;
-		}
-	}
-
-	m_NormalConnectsApprox = NormalConnects;
-
-	return NormalConnects;
-}
-
-int CGnuControl::CountSuperConnects()
+int CGnuControl::CountUltraConnects()
 {
 	int SuperConnects = 0;
 
@@ -334,6 +311,9 @@ void CGnuControl::Timer()
 
 void CGnuControl::MinuteTimer()
 {
+	UltrapeerBalancing();
+
+
 	// Purge old OOB Guids from conversion list
 	std::map<uint32, GUID>::iterator itGuid = m_OobtoRealGuid.begin();
 
@@ -369,7 +349,7 @@ void CGnuControl::MinuteTimer()
 	*/
 
 	// Trace nodes, percent full of hash vs. bandwidth out
-	TRACE0("\n");
+	/*TRACE0("\n");
 	TRACE0("Remote Ultrapeer, % Full vs. Out Bandwidth\n");
 
 	int TotalBW = 0;
@@ -393,7 +373,7 @@ void CGnuControl::MinuteTimer()
 	
 	TRACE0("\nTotal Bandwidth out " + CommaIze(NumtoStr(TotalBW)) + "B/s\n");
 
-	TRACE0("\n");
+	TRACE0("\n");*/
 }
 
 void CGnuControl::HourlyTimer()
@@ -405,111 +385,112 @@ void CGnuControl::HourlyTimer()
 
 void CGnuControl::ManageNodes()
 {
-	int Connecting     = 0;
-	int NormalConnects = 0;
-	int UltraConnects  = 0;
-	int LeafConnects   = 0;
-	int DnaConnects    = 0;
-
 	m_NetSecBytesDown = 0;
 	m_NetSecBytesUp	  = 0;
 
+	int Connecting			= 0;
+	int UltraConnects		= 0;
+	int UltraDnaConnects	= 0;
+	int LeafConnects		= 0;
+	int LeafDnaConnects		= 0;
 
-	// Add up bandwidth used by all nodes and take count
+	// Add bandwidth and count connections
 	for(int i = 0; i < m_NodeList.size(); i++)
 	{
-		if(SOCK_CONNECTED == m_NodeList[i]->m_Status)
+		m_NodeList[i]->Timer();
+
+		if( m_NodeList[i]->m_Status == SOCK_CONNECTING )
+			Connecting++;
+
+		else if( m_NodeList[i]->m_Status == SOCK_CONNECTED )
 		{
 			m_NetSecBytesDown += m_NodeList[i]->m_AvgBytes[0].GetAverage();
 			m_NetSecBytesUp   += m_NodeList[i]->m_AvgBytes[1].GetAverage();
-			
-				
-			// Client in ultrapeer mode
-			if(m_GnuClientMode == GNU_ULTRAPEER)
+
+			if( m_NodeList[i]->m_GnuNodeMode == GNU_ULTRAPEER )
 			{
-				if(m_NodeList[i]->m_GnuNodeMode == GNU_LEAF)
-					LeafConnects++;
-				else
-				{
-					NormalConnects++;
-
-					if(m_NodeList[i]->m_RemoteAgent.Find("GnucDNA") > 0)
-						DnaConnects++;
-
-					if(m_NodeList[i]->m_GnuNodeMode == GNU_ULTRAPEER)
-						UltraConnects++;
-				}
-			}
-
-			// Client in child mode
-			else
-			{
-				NormalConnects++;
+				UltraConnects++;
 
 				if(m_NodeList[i]->m_RemoteAgent.Find("GnucDNA") > 0)
-					DnaConnects++;
+					UltraDnaConnects++;
+			}
+
+			else if( m_NodeList[i]->m_GnuNodeMode == GNU_LEAF )
+			{
+				LeafConnects++;
+
+				if(m_NodeList[i]->m_RemoteAgent.Find("GnucDNA") > 0)
+					LeafDnaConnects++;
 			}
 		}
-		else if(SOCK_CONNECTING == m_NodeList[i]->m_Status)
-			Connecting++;
-
-		m_NodeList[i]->Timer();
 	}
 
-	m_NormalConnectsApprox = NormalConnects;
+	// Add in udp bandwidth
+	m_NetSecBytesDown += m_pDatagram->m_AvgUdpDown.GetAverage();
+	m_NetSecBytesUp   += m_pDatagram->m_AvgUdpUp.GetAverage();
 
 
-	// Maybe go to ultrapeer after an amount of time?
-	// No connects, reset leaf mode and check if we are supernode able
-	/*if(NormalConnects == 0)
+	// After 10 mins, if no connects, go into ultrapeer mode
+	if( m_GnuClientMode == GNU_LEAF)
 	{
-		if(m_LeafModeActive)
-			m_LeafModeActive = false;
+		if(CountUltraConnects() == 0)
+		{
+			m_NoConnections++;
 
-		SuperNodeReady();
-	}*/
+			// After 10 minutes of no connections upgrade to hub
+			if(m_NoConnections >= 10 * 60)
+			{
+				SwitchGnuClientMode( GNU_ULTRAPEER);
+				m_NoConnections = 0;
+			}
+		}	
+		else
+			m_NoConnections = 0;
+	}
 
-	// Keep connecting less than 5
+
+	// No more than 5 simultaneous connections being attempted
+	if(Connecting > 5)
+		return;
+
+	bool NeedDnaUltras = false;
+	if(UltraConnects && UltraDnaConnects * 100 / UltraConnects < 50)
+		NeedDnaUltras = true;
+
 
 	if(m_GnuClientMode == GNU_LEAF)
 	{
-		if(Connecting < 5)
-		{
-			if(NormalConnects < m_pPrefs->m_LeafModeConnects)
-				AddConnect();
+		if(UltraConnects < m_pPrefs->m_LeafModeConnects)
+			AddConnect();
 
-			else if(NormalConnects && DnaConnects * 100 / NormalConnects < 50)
-				AddConnect();
-		}
+		else if(UltraConnects && NeedDnaUltras)
+			AddConnect();
 
-		if(m_pPrefs->m_LeafModeConnects && NormalConnects > m_pPrefs->m_LeafModeConnects)
-			DropNode();
+		if(m_pPrefs->m_LeafModeConnects && UltraConnects > m_pPrefs->m_LeafModeConnects)
+			DropNode(GNU_ULTRAPEER, NeedDnaUltras);
 	}
 	
+
 	if(m_GnuClientMode == GNU_ULTRAPEER)
 	{
-		if(m_pPrefs->m_MinConnects)
-			if(NormalConnects < m_pPrefs->m_MinConnects)
-				if(Connecting < 5)
-				{
-					AddConnect();
-					return;
-				}
+		if(m_pPrefs->m_MinConnects && UltraConnects < m_pPrefs->m_MinConnects)
+			AddConnect();
 
-		if(m_pPrefs->m_MaxConnects)
-			if(NormalConnects > m_pPrefs->m_MaxConnects)
-				DropNode();
+		else if(UltraConnects && NeedDnaUltras)
+			AddConnect();
 
-		// Keep a 2/3rds connect to ultrapeers
-		if(m_GnuClientMode == GNU_ULTRAPEER && NormalConnects)
-			if((UltraConnects * 100 / NormalConnects < 66) ||
-				(DnaConnects * 100   / NormalConnects < 50))
-				if(Connecting < 5)
-					AddConnect();
+
+		if(m_pPrefs->m_MaxConnects && UltraConnects > m_pPrefs->m_MaxConnects)
+			DropNode(GNU_ULTRAPEER, NeedDnaUltras);
+
 
 		while(LeafConnects > m_pPrefs->m_MaxLeaves)
 		{
-			DropLeaf();
+			bool NeedDnaLeaves = false;
+			if(LeafConnects && LeafDnaConnects * 100 / LeafConnects < 50)
+				NeedDnaLeaves = true;
+
+			DropNode(GNU_LEAF, NeedDnaLeaves);
 			LeafConnects--;
 		}
 	}
@@ -538,7 +519,7 @@ void CGnuControl::AddConnect()
 
 
 	// No nodes in cache, if not connected to anyone either, web cache update
-	if(CountNormalConnects() == 0)
+	if(CountUltraConnects() == 0)
 		m_pCache->WebCacheRequest(true);
 
 
@@ -557,65 +538,34 @@ void CGnuControl::AddConnect()
 	}	
 }
 
-void CGnuControl::DropNode()
+void CGnuControl::DropNode(int GnuMode, bool NeedDna)
 {
 	
-	for(int mode = 0; mode < 2; mode++)
-	{
-		CGnuNode* DeadNode = NULL;
-		CTime CurrentTime = CTime::GetCurrentTime();
-		CTimeSpan LowestTime(0);
+	CGnuNode* DeadNode = NULL;
+	CTime CurrentTime = CTime::GetCurrentTime();
+	CTimeSpan LowestTime(0);
 
-		// Drop Normal nodes first
-		for(int i = 0; i < m_NodeList.size(); i++)
-			if(SOCK_CONNECTED == m_NodeList[i]->m_Status)
-			{
-				if((mode == 0 && m_NodeList[i]->m_GnuNodeMode == GNU_ULTRAPEER && m_NodeList[i]->m_RemoteAgent.Find("GnucDNA") == -1) ||
-				   (mode == 1 && m_NodeList[i]->m_GnuNodeMode == GNU_ULTRAPEER))
-
-					if(LowestTime.GetTimeSpan() == 0 || CurrentTime - m_NodeList[i]->m_ConnectTime < LowestTime)
-					{
-						DeadNode	 = m_NodeList[i];
-						LowestTime   = CurrentTime - m_NodeList[i]->m_ConnectTime;
-					}
-			}
-
-		if(DeadNode)
+	// Drop youngest
+	for(int i = 0; i < m_NodeList.size(); i++)
+		if(SOCK_CONNECTED == m_NodeList[i]->m_Status && m_NodeList[i]->m_GnuNodeMode == GnuMode)
 		{
-			DeadNode->CloseWithReason("Node Bumped");
-			return;
+			if(NeedDna && m_NodeList[i]->m_RemoteAgent.Find("GnucDNA") != -1)
+				continue;
+
+			if(LowestTime.GetTimeSpan() == 0 || CurrentTime - m_NodeList[i]->m_ConnectTime < LowestTime)
+			{
+				DeadNode	 = m_NodeList[i];
+				LowestTime   = CurrentTime - m_NodeList[i]->m_ConnectTime;
+			}
 		}
+
+	if(DeadNode)
+	{
+		DeadNode->CloseWithReason("Node Bumped");
+		return;
 	}
 }
 
-void CGnuControl::DropLeaf()
-{
-	for(int i = 0; i < 2; i++)
-	{
-		CGnuNode* DeadNode = NULL;
-		CTime CurrentTime = CTime::GetCurrentTime();
-		CTimeSpan LowestTime(0);
-
-		for(int j = 0; j < m_NodeList.size(); j++)
-			if(SOCK_CONNECTED == m_NodeList[j]->m_Status && m_NodeList[j]->m_GnuNodeMode == GNU_LEAF) 
-			{
-				if((i == 0 && m_NodeList[j]->m_RemoteAgent.Find("GnucDNA") == -1) ||
-				   (i == 1))
-					
-					if(LowestTime.GetTimeSpan() == 0 || CurrentTime - m_NodeList[j]->m_ConnectTime < LowestTime)
-					{
-						DeadNode	 = m_NodeList[j];
-						LowestTime   = CurrentTime - m_NodeList[j]->m_ConnectTime;
-					}
-			}
-
-		if(DeadNode)
-		{
-			DeadNode->CloseWithReason("Leaf Bumped");
-			return;
-		}
-	}
-}
 
 void CGnuControl::ShareUpdate()
 {
@@ -666,24 +616,32 @@ void CGnuControl::CleanDeadSocks()
 bool CGnuControl::UltrapeerAble()
 {
 	// Check prefs
-	if(!m_pPrefs->m_SupernodeAble)
+	if( !m_pPrefs->m_SupernodeAble )
 		return false;
 
 	// Must be an NT based system
-	if(!m_pCore->m_IsKernalNT)
+	if( !m_pCore->m_IsKernalNT )
 		return false;
 	
 	// Cant be behind firewall
-	if(m_pNet->m_TcpFirewall)
+	if( m_pNet->m_TcpFirewall )
 		return false;
 
-	// Need an uptime of at least an 3 hours
-	if( time(NULL) - m_ClientUptime.GetTime() < 3*60*60)
+	// Full udp support
+	if( m_pNet->m_UdpFirewall != UDP_FULL )
 		return false;
 
-	if(m_pNet->m_pG2)
-		if(m_pNet->m_pG2->m_ClientMode == G2_HUB)
-			return false;
+	// Must have sufficient bandwidth
+	if( !m_pNet->m_HighBandwidth )
+		return false;
+
+	// Only upgrade if 40 minutes of last downgrade, start at 0
+	if(time(NULL) < m_ModeChangeTimeout)
+		return false;
+	
+	// Cant be in 2 supernode modes at once
+	if(m_pNet->m_pG2 && m_pNet->m_pG2->m_ClientMode == G2_HUB)
+		return false;
 
 	return true;
 }
@@ -703,6 +661,142 @@ void CGnuControl::DowngradeClient()
 	m_ForcedUltrapeer = false;
 }
 
+void CGnuControl::UltrapeerBalancing()
+{
+	// Run once per minute
+
+	if(m_GnuClientMode != GNU_ULTRAPEER)
+		return;
+
+
+	// Get local load
+	int LocalLoad = 0;
+	if(m_pPrefs->m_MaxLeaves)
+		LocalLoad = CountLeafConnects() * 100 / m_pPrefs->m_MaxLeaves;
+	
+
+
+
+	// Upgrade node if running above 90%, every 40 mins
+	if( time(NULL) > m_NextUpgrade && LocalLoad > 90)
+	{
+		// Find child with highest score
+		int HighScore = 0;
+		CGnuNode* UpgradeNode = NULL;
+
+		for(int i = 0; i < m_NodeList.size(); i++)	
+			if(m_NodeList[i]->m_Status == SOCK_CONNECTED && m_NodeList[i]->m_GnuNodeMode == GNU_LEAF)
+			{
+				if(!m_NodeList[i]->m_StatsRecvd || !m_NodeList[i]->m_SupportsModeChange)
+					continue;
+
+				int NodeScore = ScoreNode(m_NodeList[i]);
+
+				if(NodeScore > HighScore)
+				{
+					HighScore = NodeScore;
+					UpgradeNode = m_NodeList[i];
+				}
+			}
+
+		if(HighScore > 0)
+		{
+			packet_VendMsg RequestMsg;
+			GnuCreateGuid(&RequestMsg.Header.Guid);
+			RequestMsg.Ident = packet_VendIdent("GNUC", 61, 1);
+			
+			byte ReqUpgrade = 0x01; // signal upgrade request
+
+			m_pProtocol->Send_VendMsg(UpgradeNode, RequestMsg, &ReqUpgrade, 1);
+
+			UpgradeNode->m_TriedUpgrade = true;
+		}
+	}
+
+
+	// Downgrade if running below 70% capacity for 40 minutes
+	if( CountUltraConnects() && LocalLoad < 70 )
+	{
+		m_MinsBelow70++;
+
+		if(m_MinsBelow70 > 40 && !m_ForcedUltrapeer)
+		{
+			SwitchGnuClientMode(GNU_LEAF);
+			m_MinsBelow70 = 0;
+		}
+	}
+	else
+		m_MinsBelow70 = 0;
+
+
+	// Meant as emergency get dialup, or messed up node out of hub mode
+	// Downgrade if less than 10 children for 10 minutes
+	if( CountUltraConnects() && CountLeafConnects() < 10 )
+	{
+		m_MinsBelow10++;
+
+		if(m_MinsBelow10 > 10 && !m_ForcedUltrapeer)
+		{
+			SwitchGnuClientMode(GNU_LEAF);
+			m_MinsBelow10 = 0;
+		}
+	}
+	else
+		m_MinsBelow10 = 0;
+
+}
+
+int CGnuControl::ScoreNode(CGnuNode* pNode)
+{
+	// Check for HubAble or Firewall
+	if( !pNode->m_UltraAble ||
+		pNode->m_FirewallTcp ||
+	    pNode->m_TriedUpgrade)
+		return 0;
+
+	
+	ASSERT(pNode->m_GnuNodeMode == GNU_LEAF);
+	
+	int Score = 0;
+
+	// Leaf Max
+	int leafmax = pNode->m_LeafMax;
+	if( leafmax > OPT_LEAFMAX)
+		leafmax = OPT_LEAFMAX;
+
+	Score += leafmax * 100 / OPT_LEAFMAX;
+
+	// Upgrade nodes of equal or greater versions only, dont use for downgrade 
+	if(pNode->m_RemoteAgent.Find("GnucDNA") > 0)
+	{
+		int dnapos = pNode->m_RemoteAgent.Find("GnucDNA");
+
+		CString CurrentVersion = m_pCore->m_DnaVersion;
+		CString RemoteVersion  = pNode->m_RemoteAgent.Mid(dnapos + 8, 7);
+
+		CurrentVersion.Remove('.');
+		RemoteVersion.Remove('.');
+
+		if( atoi(RemoteVersion) < atoi(CurrentVersion) )
+			return 0;
+	}
+	
+
+	// Nodes with high uptime and capacity will have a chance to be hubs
+
+	// Uptime of connection to local node, so long lasting nodes are proven trustworthy
+	uint64 Uptime = time(NULL) - pNode->m_ConnectTime.GetTime();
+	if( Uptime  > OPT_UPTIME)
+		Uptime  = OPT_UPTIME;
+
+	Score += Uptime * 100 / (OPT_UPTIME); // () because OPT_UPTIME is 6*60*60
+	
+
+	ASSERT(Score <= 200);
+
+	return Score;
+}
+
 void CGnuControl::SwitchGnuClientMode(int GnuMode)
 {
 	// Requested mode already set
@@ -710,14 +804,18 @@ void CGnuControl::SwitchGnuClientMode(int GnuMode)
 		return;
 
 	// Remove all connections
-	while( m_NodeList.size() )
-	{
-		delete m_NodeList.back();
-		m_NodeList.pop_back();
-	}
+	m_NodeAccess.Lock();
+		while( m_NodeList.size() )
+		{
+			delete m_NodeList.back();
+			m_NodeList.pop_back();
+		}
+	m_NodeAccess.Unlock();
 
 	// Change mode
 	m_GnuClientMode = GnuMode;
+
+	m_ModeChangeTimeout = time(NULL) + 40*60;
 }
 
 void CGnuControl::StopSearch(GUID SearchGuid)
@@ -747,7 +845,7 @@ void CGnuControl::StopSearch(GUID SearchGuid)
 			if(m_NodeList[i]->m_GnuNodeMode == GNU_ULTRAPEER && 
 				m_NodeList[i]->m_Status == SOCK_CONNECTED &&
 				m_NodeList[i]->m_SupportsVendorMsg)
-				m_pProtocol->Send_VendMsg(m_NodeList[i], ReplyMsg, (byte*) &Hits, 2);
+				m_pProtocol->Send_VendMsg(m_NodeList[i], ReplyMsg, &Hits, 2);
 	}
 }
 

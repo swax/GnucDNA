@@ -59,11 +59,9 @@ public:
 	CGnuNode* GetRandNode(int Type);
 
 	void AddConnect();
-	void DropNode();
-	void DropLeaf();
+	void DropNode(int GnuMode, bool NeedDna);
 
-	int	 CountSuperConnects();
-	int  CountNormalConnects();
+	int	 CountUltraConnects();
 	int  CountLeafConnects();
 	
 	void NodeUpdate(CGnuNode* pNode);
@@ -89,14 +87,20 @@ public:
 	DWORD   m_dwFilesSize;
 
 
-	// SuperNodes
+	// Ultrapeers
+	void UltrapeerBalancing();
+	int  ScoreNode(CGnuNode* pNode);
 	void SwitchGnuClientMode(int GnuMode);
 
 	int     m_GnuClientMode;
 	bool	m_ForcedUltrapeer;
 
-	int m_NormalConnectsApprox;
-
+	uint32 m_NextUpgrade;
+	uint32 m_ModeChangeTimeout;
+	
+	int m_MinsBelow10;
+	int m_MinsBelow70;
+	int m_NoConnections;
 
 	// Hash tables
 	CGnuRouting m_TableRouting;

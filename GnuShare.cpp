@@ -573,6 +573,7 @@ UINT ShareWorker(LPVOID pVoidShare)
 		{
 			TRACE0("*** Search Thread Ended\n");
 			ExitThread(0);
+			return 0;
 		}
 
 		if(pShare->m_BlockUpdate)
@@ -604,6 +605,7 @@ UINT ShareWorker(LPVOID pVoidShare)
 			{
 				TRACE0("*** Search Thread Ended\n");
 				ExitThread(0);
+				return 0;
 			}
 
 			// Check if shared files need to be updated

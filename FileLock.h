@@ -8,7 +8,7 @@
 
 #pragma once
 
-#define IGNORE_ID3 true
+#define IGNORE_ID3 false // turned off for now
 
 #include <afxmt.h>
 

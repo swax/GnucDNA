@@ -32,8 +32,8 @@ class CG2Node;
 #define MAX_KEYS	 50000
 #define MAX_GLOBAL	 30000
 
-#define HIGH_HUB_CAPACITY 75
-#define LOW_HUB_CAPACITY  50
+#define HIGH_HUB_CAPACITY 90
+#define LOW_HUB_CAPACITY  70
 
 #define OPT_BANDWIDTH_DOWN 512 // 512 kilobits // use ping?
 #define OPT_BANDWIDTH_UP   512 // 512 kilobits
@@ -66,7 +66,7 @@ public:
 	void ManageNodes();
 	
 	void TryConnect();
-	void DropNode(int G2Mode);
+	void DropNode(int G2Mode, bool NeedDna);
 
 	void CreateNode(Node HostInfo);
 	void RemoveNode(CG2Node*);
@@ -81,6 +81,10 @@ public:
 	int    m_HubBalanceCheck;
 	uint32 m_NextUpgrade;
 	uint32 m_ModeChangeTimeout;
+	
+	int m_MinsBelow10;
+	int m_MinsBelow70;
+	int m_NoConnections;
 
 	// Counting
 	int CountHubConnects();

@@ -62,6 +62,8 @@ CG2Node::CG2Node(CG2Control* pG2Comm, CString Host, uint32 Port)
 
 	m_pG2Comm->m_G2NodeAddrMap[m_Address.Host.S_addr] = this;
 
+	m_pNet->AddNatDetect(m_Address.Host);
+
 	m_Inbound      = false;
 	m_TriedUpgrade = false;
 
@@ -496,9 +498,9 @@ void CG2Node::CloseWithReason(CString Reason, bool RemoteClosed)
 	}
 
 	if(	RemoteClosed )
-		m_StatusText = "Remote: " + Reason;
+		m_StatusText = "G2 Remote: " + Reason;
 	else
-		m_StatusText = "Local: " + Reason;
+		m_StatusText = "G2 Local: " + Reason;
 
 	Close();
 }

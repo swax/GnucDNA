@@ -30,15 +30,80 @@ BEAR/7v1 // TCP Connect Back
 BEAR/11v1 // LGDQ Query Status Req
 LIME/21v1 // Push Proxy Req
 GTKG/7v2 // UDP Connect Back
-
-G1 Clustering
-	Start in supernode mode
-	At least half leaf/normal connects to dna
-	If connections at zero, re-alalyze ultrapeer able
-	Set default child connects to 1
-	Factor only dna child nodes when calcing if node is full
-	
 	
 Splitting Packets
 	Greater than 16k in size disconnect
+
+////////////////////////////////////////////////////////////////////	
 	
+// Node Stats Vendor Message
+GNUC/60v1
+	LeafMax		(2 bytes)
+	LeafCount	(2 bytes)
+	Uptime		(4 bytes
+	Cpu			(2 bytes)
+	Mem			(2 bytes)
+	Flags		(1 byte)
+		Ultrapeer Able
+		Router
+		TCP Firewall
+		UDP Firewall
+	
+// Mode Change Request Vendor Message
+GNUC/61v1
+	Flags		(1 byte)
+		Ultrapeer
+	
+// Mode Change Ack Vendor Message
+GNUC/62v1
+	Flags		(1 byte)
+		Accept
+		Deny
+	
+////////////////////////////////////////////////////////////////////
+
+Balancing System
+
+	Start in Child Mode
+	
+	Upgrading
+		When requested by hub
+			No Firewall
+			No Router (g2 only)
+			Full UDP
+			Windows NT
+			40 minutes from downgrade
+			Bandwidth Marker reached (20 KB/s up or down)
+			Last upgrade timer reset, so if new hub fills up quick another upgrade can fire
+	
+		Gnutella Temporary
+			If ultrapeer-needed = true
+			If all ultrapeer criteria met
+			Upgrade
+	
+		No connections for 10 minutes
+			No criteria to upgrade
+			Normal downgrade will filter out bad upgrades
+		
+	Requesting Upgrade
+		Hub more than 90% full for 40 minutes
+		Node with highest uptime and leaf max selected
+	
+	Downgrading
+		Hub connections present
+		Less than 10 children for 10 minutes
+			Downgrade 
+		Less than 70% full for 40 minutes
+		
+		
+Preferencing
+	Send only dna hosts to leaves (cluster leaves, hubs integrated)
+
+	Hubs
+		Continue trying connects until half dna
+
+	Dropping
+		If connects less than 50% dna
+			Drop youngest non-dna
+		Else
+			Drop youngest

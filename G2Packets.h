@@ -388,6 +388,7 @@ struct G2_QH2
 	GUID NodeID;
 	char Vendor[4];
 	int  HopCount;
+	bool Firewalled;
 
 	std::vector<IPv4> NeighbouringHubs;
 
@@ -403,10 +404,11 @@ struct G2_QH2
 	{
 		memset(Vendor, 0, 4);
 
-		HopCount = 0;
+		HopCount   = 0;
+		Firewalled = false;
 
 		Profile = false;
-		Chat = false;
+		Chat    = false;
 	};
 };
 

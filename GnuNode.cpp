@@ -77,11 +77,13 @@ CGnuNode::CGnuNode(CGnuControl* pComm, CString Host, UINT Port)
 	m_CloseWait			= 0;
 	
 	m_NextRequeryWait   = 0;
-
+	m_NextStatUpdate    = time(NULL) + 30*60;
 
 	// Connection vars
 	m_Address.Host = StrtoIP(Host);
 	m_Address.Port = Port;
+
+	m_pNet->AddNatDetect(m_Address.Host);
 
 	m_NetworkName = m_pComm->m_NetworkName;
 	
@@ -93,6 +95,8 @@ CGnuNode::CGnuNode(CGnuControl* pComm, CString Host, UINT Port)
 	m_SupportsVendorMsg    = false;
 	m_SupportsLeafGuidance = false;
 	m_SupportsDynQuerying  = false;
+	m_SupportsStats		   = false;
+	m_SupportsModeChange   = false;
 
 	m_RemoteMaxTTL = 0;
 
@@ -116,10 +120,20 @@ CGnuNode::CGnuNode(CGnuControl* pComm, CString Host, UINT Port)
 
 
 	// Ultrapeers
-	m_NodeFileCount		= 0;
-	m_NodeLeafMax		= 0;
-	
-	m_DowngradeRequest  = false;
+	m_NodeFileCount	= 0;
+	m_TriedUpgrade  = false;
+
+	m_StatsRecvd	= false;
+	m_LeafMax		= 0;
+	m_LeafCount		= 0;
+	m_UpSince		= 0;
+	m_Cpu			= 0;
+	m_Mem			= 0;
+	m_UltraAble		= false;
+	m_Router		= false;
+	m_FirewallTcp   = false;
+	m_FirewallUdp   = false;
+
 
 	// QRP
 	m_CurrentSeq = 1;
@@ -190,6 +204,8 @@ CGnuNode::CGnuNode(CGnuControl* pComm, CString Host, UINT Port)
 		m_dwSecPackets[i] = 0;
 		m_dwSecBytes[i]   = 0;
 	}
+
+	m_QueryThrottle = 0;
 
 	m_pComm->NodeUpdate(this);
 }
@@ -344,10 +360,7 @@ void CGnuNode::OnConnect(int nErrorCode)
 			Handshake += "X-Ultrapeer: False\r\n";
 
 		if(m_pComm->m_GnuClientMode == GNU_ULTRAPEER)
-		{
 			Handshake += "X-Ultrapeer: True\r\n";
-			Handshake += "X-Leaf-Max: " + NumtoStr(m_pPrefs->m_MaxLeaves) + "\r\n";
-		}
 
 		// X-Degree
 		Handshake += "X-Degree: " + NumtoStr(m_pPrefs->m_MaxConnects) + "\r\n";
@@ -373,10 +386,6 @@ void CGnuNode::OnConnect(int nErrorCode)
 		// Accept-Encoding Header
 		if(m_dnapressionOn)
 			Handshake += "Accept-Encoding: deflate\r\n";
-
-		// Uptime Header
-		CTimeSpan Uptime(CTime::GetCurrentTime() - m_pComm->m_ClientUptime);
-		Handshake += "Uptime: " + Uptime.Format("%DD %HH %MM") + "\r\n";
 
 		// Bye Header
 		Handshake += "Bye-Packet: 0.1\r\n";
@@ -544,15 +553,6 @@ void CGnuNode::ParseIncomingHandshake06(CString Data, byte* Stream, int StreamLe
 		if(m_dnapressionOn && EncodingHeader == "deflate")
 			m_DeflateSend = true;
 
-		// Parse Uptime
-		int days = 0, hours = 0, minutes = 0;
-		CString UptimeHeader = FindHeader("Uptime");
-		if(!UptimeHeader.IsEmpty())
-		{
-			sscanf(UptimeHeader, "%dD %dH %dM", &days, &hours, &minutes);
-			m_HostUpSince = CTime::GetCurrentTime() - CTimeSpan(days, hours, minutes, 0);
-		}
-
 
 		// Parse Authentication Challenge
 		CString ChallengeHeader = FindHeader("X-Auth-Challenge");
@@ -583,17 +583,6 @@ void CGnuNode::ParseIncomingHandshake06(CString Data, byte* Stream, int StreamLe
 		}
 
 
-		// Parse leaf max header
-		CString LeafMax = FindHeader("X-Leaf-Max");		
-		if(!LeafMax.IsEmpty())
-			m_NodeLeafMax = atoi(LeafMax);
-		else
-			m_NodeLeafMax = 75;
-
-		if(m_NodeLeafMax > 1000)
-			m_NodeLeafMax = 1000;
-
-
 		if(m_lowHandshake.Find("bearshare 2.") != -1)
 			m_GnuNodeMode = GNU_ULTRAPEER;
 
@@ -604,11 +593,7 @@ void CGnuNode::ParseIncomingHandshake06(CString Data, byte* Stream, int StreamLe
 			// Ultrapeer Connecting
 			if(m_GnuNodeMode == GNU_ULTRAPEER)
 			{
-				// If we have 66% free room of their max leaf count, request downgrade
-				if(m_pShare->FreeCapacity(m_NodeLeafMax) > 66)
-					m_DowngradeRequest = true;
-				
-				else if(m_pPrefs->m_MaxConnects != -1 && m_pComm->CountNormalConnects() >= m_pPrefs->m_MaxConnects)
+				if(m_pPrefs->m_MaxConnects != -1 && m_pComm->CountUltraConnects() >= m_pPrefs->m_MaxConnects)
 				{
 					Send_ConnectError("503 Connects Maxed");
 					return;
@@ -623,7 +608,7 @@ void CGnuNode::ParseIncomingHandshake06(CString Data, byte* Stream, int StreamLe
 			{
 				if(!QueryRouting)
 				{
-					Send_ConnectError("503 In Leaf Mode");
+					Send_ConnectError("503 No QRP");
 					return;
 				}
 
@@ -648,7 +633,7 @@ void CGnuNode::ParseIncomingHandshake06(CString Data, byte* Stream, int StreamLe
 			if(m_GnuNodeMode == GNU_ULTRAPEER)
 			{
 				
-				if(m_pComm->CountNormalConnects() >= m_pPrefs->m_LeafModeConnects || !QueryRouting)
+				if(m_pComm->CountUltraConnects() >= m_pPrefs->m_LeafModeConnects || !QueryRouting)
 				{
 					Send_ConnectError("503 Ultrapeer Connects Maxed");
 					return;
@@ -666,22 +651,13 @@ void CGnuNode::ParseIncomingHandshake06(CString Data, byte* Stream, int StreamLe
 			}
 		}
 
-		// Connecting Node a Normal Node
-		/*else
+		// Not ultra or leaf, not supported
+		else
 		{
-			if(m_pComm->m_GnuClientMode == GNU_LEAF)
-			{
-				Send_ConnectError("503 In Leaf Mode");
-				return;
-			}
+			Send_ConnectError("503 Not Supported");
+			return;
+		}
 
-			if(m_pPrefs->m_MaxConnects != -1 && m_pComm->CountNormalConnects() >= m_pPrefs->m_MaxConnects)
-			{
-				Send_ConnectError("503 Connects Maxed");
-				return;
-			}
-
-		}*/
 	}
 
 
@@ -711,18 +687,6 @@ void CGnuNode::ParseIncomingHandshake06(CString Data, byte* Stream, int StreamLe
 			CString UltraHeader = FindHeader("X-Ultrapeer");
 			if(!UltraHeader.IsEmpty())
 				UltraHeader.MakeLower();
-			
-
-			if(m_DowngradeRequest)
-			{
-				if(UltraHeader == "false")
-					m_GnuNodeMode = GNU_LEAF;
-				else if(m_pPrefs->m_MaxConnects != -1 && m_pComm->CountNormalConnects() >= m_pPrefs->m_MaxConnects)
-				{
-					CloseWithReason("Connects Maxed");
-					return;
-				}
-			}
 		}
 
 
@@ -843,15 +807,6 @@ void CGnuNode::ParseOutboundHandshake06(CString Data, byte* Stream, int StreamLe
 		if(m_dnapressionOn && EncodingHeader == "deflate")
 			m_InflateRecv = true;
 		
-		// Parse Uptime
-		int days = 0, hours = 0, minutes = 0;
-		CString UptimeHeader = FindHeader("Uptime");
-		if(!UptimeHeader.IsEmpty())
-		{
-			sscanf(UptimeHeader, "%dD %dH %dM", &days, &hours, &minutes);
-			m_HostUpSince = CTime::GetCurrentTime() - CTimeSpan(days, hours, minutes, 0);
-		}
-
 		// Parse Accept header
 		CString AcceptHeader = FindHeader("Accept");
 		if(!AcceptHeader.IsEmpty())
@@ -907,17 +862,6 @@ void CGnuNode::ParseOutboundHandshake06(CString Data, byte* Stream, int StreamLe
 		}
 
 
-		// Parse leaf max header
-		CString LeafMax = FindHeader("X-Leaf-Max");		
-		if(!LeafMax.IsEmpty())
-			m_NodeLeafMax = atoi(LeafMax);
-		else
-			m_NodeLeafMax = 75;
-
-		if(m_NodeLeafMax > 1500)
-			m_NodeLeafMax = 1500;
-
-
 		if(m_lowHandshake.Find("bearshare 2.") != -1)
 			m_GnuNodeMode = GNU_ULTRAPEER;
 
@@ -927,47 +871,7 @@ void CGnuNode::ParseOutboundHandshake06(CString Data, byte* Stream, int StreamLe
 		{
 			// Connecting Ultrapeer
 			if(m_GnuNodeMode == GNU_ULTRAPEER)
-			{
-				// Parse the Ultrapeers Needed header
-				CString NeededHeader = FindHeader("X-Ultrapeer-Needed");
-				NeededHeader.MakeLower();
-
-
-				// This SuperNode wants more leaves
-				if(NeededHeader == "false" && QueryRouting && !m_pComm->m_ForcedUltrapeer)
-				{
-					// Only downgrade if remote dna
-					// If we are handling less than 33% of what they can handle, downgrade
-					// If our uptime is longer do not become leaf unless real firewall is false
-					if(m_RemoteAgent.Find("GnucDNA") > 0)
-					{
-						int dnapos = m_RemoteAgent.Find("GnucDNA");
-
-						CString CurrentVersion = m_pCore->m_DnaVersion;
-						CString RemoteVersion  = m_RemoteAgent.Mid(dnapos + 8, 7);
-
-						CurrentVersion.Remove('.');
-						RemoteVersion.Remove('.');
-
-						if(atoi(RemoteVersion) >= atoi(CurrentVersion))
-							if(m_HostUpSince.GetTime() < m_pComm->m_ClientUptime.GetTime())
-								if(m_pShare->RunningCapacity(m_NodeLeafMax) < 33)
-								{
-									m_DowngradeRequest		  = true;
-
-									for(int i = 0; i < m_pComm->m_NodeList.size(); i++)
-									{
-										CGnuNode *p = m_pComm->m_NodeList[i];
-
-										if(p != this && p->m_Status == SOCK_CONNECTED)
-											p->CloseWithReason("Node Downgrading");
-									}
-
-									m_pComm->m_GnuClientMode = GNU_LEAF;
-								}
-					}	
-				}
-				
+			{		
 				Send_ConnectOK(true);
 				SetConnected();
 				return;
@@ -1038,19 +942,14 @@ void CGnuNode::ParseOutboundHandshake06(CString Data, byte* Stream, int StreamLe
 				return;
 			}
 		}
-		
-		// Ultrapeer header not found, we are connecting to a normal node
-		/*else
-		{
-			if(m_pComm->m_GnuClientMode == GNU_LEAF)
-			{
-				Send_ConnectError("503 In Leaf Mode");
-				return;
-			}
 
-			Send_ConnectOK(true);
-			SetConnected();
-		}*/
+		// Not ultra or leaf, not supported
+		else
+		{
+			Send_ConnectError("503 Not Supported");
+			return;
+		}
+	
 	}
 
 
@@ -1151,11 +1050,6 @@ void CGnuNode::Send_ConnectOK(bool Reply)
 	{
 		Handshake = m_NetworkName + "/0.6 200 OK\r\n";
 
-		
-		// We are converting from supernode to a leaf
-		if(m_DowngradeRequest)
-			Handshake += "X-Ultrapeer: False\r\n";
-
 		// If remote host accepts deflate encoding
 		if(m_DeflateSend)
 		{
@@ -1195,13 +1089,7 @@ void CGnuNode::Send_ConnectOK(bool Reply)
 
 		// Ultrapeer header
 		if(m_pComm->m_GnuClientMode == GNU_ULTRAPEER)
-		{
 			Handshake += "X-Ultrapeer: True\r\n";
-			Handshake += "X-Leaf-Max: " + NumtoStr(m_pPrefs->m_MaxLeaves) + "\r\n";
-
-			if(m_DowngradeRequest)
-				Handshake += "X-Ultrapeer-Needed: False\r\n";
-		}
 		else
 			Handshake += "X-Ultrapeer: False\r\n";
 		
@@ -1232,10 +1120,6 @@ void CGnuNode::Send_ConnectOK(bool Reply)
 		if(m_DeflateSend)
 			Handshake += "Content-Encoding: deflate\r\n";
 
-		// Uptime header
-		CTimeSpan Uptime(CTime::GetCurrentTime() - m_pComm->m_ClientUptime);
-		Handshake += "Uptime: " + Uptime.Format("%DD %HH %MM")+ "\r\n";
-
 		// Bye Header
 		Handshake += "Bye-Packet: 0.1\r\n";
 
@@ -1248,11 +1132,6 @@ void CGnuNode::Send_ConnectOK(bool Reply)
 		if( !m_Challenge.IsEmpty() && !m_ChallengeAnswer.IsEmpty() )
 			Handshake += "X-Auth-Challenge: " + m_Challenge + "\r\n";
 
-
-		// X-Try header
-		CString HostsToTry;
-		if(GetAlternateHostList(HostsToTry))
-			Handshake += "X-Try: " + HostsToTry + "\r\n";
 
 
 		// X-Try-Ultrapeers header
@@ -1297,12 +1176,6 @@ void CGnuNode::Send_ConnectError(CString Reason)
 	GetPeerName(HostIP, nTrash);
 	m_Address.Host = StrtoIP(HostIP);
 	Handshake += "Remote-IP: " + HostIP + "\r\n";
-
-
-	// X-Try header
-	CString HostsToTry;
-	if(GetAlternateHostList(HostsToTry))
-		Handshake += "X-Try: " + HostsToTry + "\r\n";
 
 
 	// X-Try-Ultrapeers header
@@ -1596,17 +1469,20 @@ void CGnuNode::SetConnected()
 
 	m_pProtocol->Send_Ping(this, 1);	
 
+
 	if(m_SupportsVendorMsg)
 	{
 		// Put together vector of support message types
 		std::vector<packet_VendIdent> SupportedMessages;
-		SupportedMessages.push_back( packet_VendIdent("BEAR", 7, 1) );
-		//SupportedMessages.push_back( packet_VendIdent("BEAR", 11, 1) );
-		SupportedMessages.push_back( packet_VendIdent("BEAR", 12, 1) );
-		SupportedMessages.push_back( packet_VendIdent("GTKG", 7, 2) );
-		//SupportedMessages.push_back( packet_VendIdent("LIME", 11, 2) );
-		//SupportedMessages.push_back( packet_VendIdent("LIME", 12, 1) );
-		//SupportedMessages.push_back( packet_VendIdent("LIME", 21, 1) );
+		SupportedMessages.push_back( packet_VendIdent("BEAR", 7, 1) );		// tcp connect back
+		SupportedMessages.push_back( packet_VendIdent("BEAR", 11, 1) );		// leaf guidance
+		//SupportedMessages.push_back( packet_VendIdent("BEAR", 12, 1) );	// leaf guidance
+		SupportedMessages.push_back( packet_VendIdent("GNUC", 60, 1) );		// mode change
+		SupportedMessages.push_back( packet_VendIdent("GNUC", 61, 1) );		// mode change
+		SupportedMessages.push_back( packet_VendIdent("GTKG", 7, 2) );		// udp connect back
+		//SupportedMessages.push_back( packet_VendIdent("LIME", 11, 2) );	// oob query
+		//SupportedMessages.push_back( packet_VendIdent("LIME", 12, 1) );	// oob query
+		//SupportedMessages.push_back( packet_VendIdent("LIME", 21, 1) );	// push proxy
 
 		uint16 VectorSize = SupportedMessages.size();
 
@@ -1625,15 +1501,6 @@ void CGnuNode::SetConnected()
 		m_pProtocol->Send_VendMsg( this, SupportedMsg, payload, length );
 
 		delete [] payload;
-
-		// Send PushProxy Request
-		/*if(m_pComm->m_GnuClientMode == GNU_LEAF && m_pNet->m_TcpFirewall)
-		{
-			packet_VendMsg PushProxyRequest;
-			PushProxyRequest.Header.Guid = m_pPrefs->m_ClientID;
-			PushProxyRequest.Ident = packet_VendIdent("LIME", 21, 2);
-			m_pProtocol->Send_VendMsg( this, PushProxyRequest);
-		}*/
 	}
 }
 
@@ -1900,9 +1767,9 @@ void CGnuNode::CloseWithReason(CString Reason, bool RemoteClosed)
 	}
 
 	if(	RemoteClosed )
-		m_StatusText = "Remote: " + Reason;
+		m_StatusText = "Gnu Remote: " + Reason;
 	else
-		m_StatusText = "Local: " + Reason;
+		m_StatusText = "Gnu Local: " + Reason;
 
 
 	if( m_SecsAlive > 30 && m_GnuNodeMode == GNU_ULTRAPEER)
@@ -2143,45 +2010,20 @@ void CGnuNode::SetPatchBit(int &remotePos, double &Factor, byte value)
 	}
 }
 
-
-bool CGnuNode::GetAlternateHostList(CString &HostList)
-{
-	// Give 5 hosts from real cache and 5 hosts from perm cache
-
-	int Hosts = 0;
-	int Count = 5;
-
-	while(Count > 0 && m_pCache->m_GnuPerm.size())
-	{
-		int randIndex = rand() % m_pCache->m_GnuPerm.size();
-
-		std::list<Node>::iterator itNode = m_pCache->m_GnuPerm.begin();
-		for(int i = 0; itNode != m_pCache->m_GnuPerm.end(); itNode++, i++)
-			if(i == randIndex)
-			{
-				HostList += (*itNode).Host + ":" + NumtoStr((*itNode).Port) + ",";	
-				Count--;
-				Hosts++;
-			}
-	}
-
-	// Delete Extra comma
-	if(Hosts)
-	{
-		HostList = HostList.Left(HostList.ReverseFind(','));
-		return true;
-	}
-
-	return false;
-}
-
 bool CGnuNode::GetAlternateSuperList(CString &HostList)
 {
 	int Hosts = 0;
 
+	bool PrefDna = false;
+	if(m_RemoteAgent.Find("GnucDNA") != -1 && m_GnuNodeMode == GNU_LEAF)
+		PrefDna = true;
+
 	for(int i = 0; i < m_pComm->m_NodeList.size() && Hosts < 10; i++)
 		if(m_pComm->m_NodeList[i] != this && m_pComm->m_NodeList[i]->m_GnuNodeMode == GNU_ULTRAPEER)
 		{
+			if(PrefDna && m_pComm->m_NodeList[i]->m_RemoteAgent.Find("GnucDNA") == -1)
+				continue;
+
 			HostList += IPtoStr(m_pComm->m_NodeList[i]->m_Address.Host) + ":" + NumtoStr(m_pComm->m_NodeList[i]->m_Address.Port) + ",";	
 			Hosts++;
 		}
@@ -2225,6 +2067,7 @@ void CGnuNode::Timer()
 		m_dwSecBytes[i]   = 0;	
 	}
 	
+	m_QueryThrottle = 0;
 
 	// Efficiency calculation
 	UINT dPart  = m_StatPings[1] + m_StatPongs[1] + m_StatQueries[1] + m_StatQueryHits[1] + m_StatPushes[1]; 
@@ -2313,19 +2156,60 @@ void CGnuNode::NodeManagement()
 			m_SecsDead = 0;
 
 
-		// Re-Search on new connect after 30 seconds
-		if(m_SecsAlive == 15 && m_GnuNodeMode == GNU_ULTRAPEER)
-		{
-			m_pProtocol->Send_Ping(this, MAX_TTL);
+		if(m_SecsAlive < 60 * 10)
+			m_SecsAlive++;
 
+		// Stable Connection
+		if(m_SecsAlive == 30)
+		{
+			packet_VendMsg FirewallTest;
+			CoCreateGuid(&FirewallTest.Header.Guid);
+
+			// Send TCP test if needed
+			if(m_SupportsVendorMsg && m_pNet->m_TcpFirewall)
+			{
+				FirewallTest.Ident = packet_VendIdent("BEAR", 7, 1);
+				m_pProtocol->Send_VendMsg( this, FirewallTest, &m_pNet->m_CurrentPort, 2);
+			}
+
+			// Send UDP test if needed
+			if(m_SupportsVendorMsg && m_pNet->m_UdpFirewall)
+			{
+				FirewallTest.Ident = packet_VendIdent("GNUC", 7, 1);
+				IPv4 SendBack;
+				SendBack.Host = m_pNet->m_CurrentIP;
+				SendBack.Port = m_pComm->m_UdpPort;
+				m_pProtocol->Send_VendMsg( this, FirewallTest, &SendBack, 6);
+			}
+
+			// Update searches with a new host
 			for(i = 0; i < m_pNet->m_SearchList.size(); i++)
 				m_pNet->m_SearchList[i]->IncomingGnuNode(this);
-
-			m_SecsAlive++;
 		}
-		else if(m_SecsAlive < 600)
-			m_SecsAlive++;
 
+		// Allow 20 secs for tcp and udp tests to come back
+		if(m_SecsAlive == 50)
+		{
+			// Send node our stats
+			if(m_SupportsStats)
+				m_pProtocol->Send_StatsMsg(this);
+
+			// Send PushProxy Request
+			/*if(m_pComm->m_GnuClientMode == GNU_LEAF && m_pNet->m_TcpFirewall)
+			{
+				packet_VendMsg PushProxyRequest;
+				PushProxyRequest.Header.Guid = m_pPrefs->m_ClientID;
+				PushProxyRequest.Ident = packet_VendIdent("LIME", 21, 2);
+				m_pProtocol->Send_VendMsg( this, PushProxyRequest);
+			}*/
+		}
+		
+		// Send stat update at 30 min interval
+		if( time(NULL) > m_NextStatUpdate && m_SupportsStats)
+		{
+			m_pProtocol->Send_StatsMsg(this);
+			m_NextStatUpdate = time(NULL) + 30*60;
+		}
 
 		// Close if we're browsing host and all bytes received
 		if(m_BrowseID)
