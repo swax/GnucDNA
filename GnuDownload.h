@@ -39,6 +39,7 @@ public:
 	void SetError(CString);
 	void Timer();
 
+
 	FileSource* HostInfo();
 
 

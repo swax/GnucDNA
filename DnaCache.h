@@ -29,6 +29,7 @@ public:
 	LONG GetWebCacheSize(void);
 	LONG GetWebCacheMaxSize(void);
 	void AddNode(LPCTSTR HostPort, BOOL SuperNode);
+	void RemoveIP(LPCTSTR Host, int Port);
 };
 
 

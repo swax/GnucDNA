@@ -162,3 +162,8 @@ void CDnaCache::AddNode(LPCTSTR HostPort, BOOL SuperNode)
 
 	m_gnuCache->AddKnown( addNode );
 }
+
+void CDnaCache::RemoveIP(LPCTSTR Host, int Port)
+{
+	m_gnuCache->RemoveIP( Host, Port );
+}

@@ -376,8 +376,9 @@ void CGnuControl::MinuteTimer()
 void CGnuControl::HourlyTimer()
 {
 	// Web Cache check in
-	if(m_GnuClientMode == GNU_ULTRAPEER && !m_pNet->m_TcpFirewall)
-		m_pCache->WebCacheUpdate();
+	if(m_GnuClientMode == GNU_ULTRAPEER)
+		if(CountUltraConnects() == 0 ||  !m_pNet->m_TcpFirewall)
+			m_pCache->WebCacheUpdate();
 }
 
 void CGnuControl::ManageNodes()

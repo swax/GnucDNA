@@ -1768,6 +1768,3 @@ bool CGnuDownload::LoadTigerTree()
 
 	return false;
 }
-
-
-
