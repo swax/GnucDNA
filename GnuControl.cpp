@@ -951,7 +951,7 @@ void CGnuControl::DynQueryTimer()
 		
 
 		// Send request to leaf to update hit count each interval
-		if(pQuery->Secs % DQ_UPDATE_INTERVAL == 0 && itNode->second->m_SupportsLeafGuidance)
+		if(pQuery->Secs % DQ_UPDATE_INTERVAL == 0 && itNode != m_NodeIDMap.end() && itNode->second->m_SupportsLeafGuidance)
 		{
 			CGnuNode* pLeaf = itNode->second;
 
