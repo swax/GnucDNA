@@ -141,6 +141,7 @@
 #define PACKET_PUSH			1
 #define PACKET_BYE			1
 #define PACKET_VENDMSG		1
+#define PACKET_PATCH		1
 
 #define ERROR_NONE			0
 #define ERROR_HOPS			1

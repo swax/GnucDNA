@@ -182,7 +182,7 @@ public:
 	void Recv_Close(G2_CLOSE &Close);
 	void Send_Close(CString Reason);
 
-	void CloseWithReason(CString Reason, bool RemoteClosed=false);
+	void CloseWithReason(CString Reason, bool RemoteClosed=false, bool SendBye=true);
 
 
 	CG2Control*   m_pG2Comm;

@@ -322,6 +322,8 @@ void CG2Datagram::Decode_GND(IPv4 Address, GND_Header* RecvPacket, int length)
 			if( streamStatus == PACKET_GOOD )
 			{
 				ASSERT(PacketSize == 0);
+				if(PacketSize != 0)
+					m_pG2Comm->m_pCore->DebugLog("G2 Network", "UDP Recvd Error: " + HexDump(FinBuffer, FinSize));
 
 				G2_RecvdPacket Packet(Address, undefPacket);
 				m_pG2Comm->ReceivePacket( Packet );
@@ -600,10 +602,11 @@ void CG2Datagram::FlushSendBuffer()
 
 					if(UdpSent < pFrag->Length)
 					{
+						//crit broadcast address WSAEACCES causes never ending loop, packet timeout?
 						if(UdpSent < 0)
 						{
 							int ErrorCode = GetLastError();
-							ASSERT(0);
+							//ASSERT(0);
 						}
 
 						return;

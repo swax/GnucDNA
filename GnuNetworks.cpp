@@ -81,6 +81,13 @@ CGnuNetworks::~CGnuNetworks(void)
 		delete m_SockList.back();
 		m_SockList.pop_back();
 	}
+	
+	// Erase Searches
+	while( m_SearchList.size() )
+	{
+		delete m_SearchList.back();
+		m_SearchList.pop_back();
+	}
 
 	// Network cleanup
 	if( m_pGnu )

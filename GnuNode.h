@@ -100,7 +100,7 @@ public:
 	virtual int  Send(const void* lpBuf, int nBufLen, int nFlags = 0);
 	virtual void Close();
 
-	void CloseWithReason(CString Reason, bool RemoteClosed=false);
+	void CloseWithReason(CString Reason, bool RemoteClosed=false, bool SendBye=true);
 
 
 	// Other
@@ -247,7 +247,7 @@ public:
 	DWORD m_dwSecPackets[3];
 	DWORD m_dwSecBytes[3];
 
-	int m_QueryThrottle;
+	int m_QuerySendThrottle;
 
 	CGnuNetworks*  m_pNet;
 	CGnuPrefs*     m_pPrefs;

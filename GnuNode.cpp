@@ -204,7 +204,7 @@ CGnuNode::CGnuNode(CGnuControl* pComm, CString Host, UINT Port)
 		m_dwSecBytes[i]   = 0;
 	}
 
-	m_QueryThrottle = 0;
+	m_QuerySendThrottle = 0;
 
 	m_pComm->NodeUpdate(this);
 }
@@ -1427,7 +1427,7 @@ void CGnuNode::SetConnected()
 	/*if( m_RemoteAgent.Find("1.1.0.0") == -1 )
 		if( m_RemoteAgent.Find("Lime") == -1 && m_RemoteAgent.Find("Bear") == -1 )
 		{
-			CloseWithReason("Not DNA");
+			CloseWithReason("Not DNA", false, false);
 			return;
 		}*/
 
@@ -1529,6 +1529,14 @@ void CGnuNode::SendPacket(void* packet, int length, int type, int distance, bool
 
 	ASSERT(packet);
 
+
+	// Throttle outbound query rate at 1 KB/s
+	if(type == PACKET_QUERY)
+	{
+		m_QuerySendThrottle += length;
+		if( m_QuerySendThrottle > 1024 )
+			return;
+	}
 	
 	// Build a priority packet
 	PriorityPacket* OutPacket = new PriorityPacket((byte*) packet, length, type, distance);	
@@ -1577,6 +1585,8 @@ void CGnuNode::SendPacket(PriorityPacket* OutPacket)
 
 void CGnuNode::FlushSendBuffer(bool FullFlush)
 {
+// DO NOT CALL CloseWithReason() from here, causes infinite loop
+
 	if(m_Status != SOCK_CONNECTED)
 		return;
 
@@ -1615,7 +1625,7 @@ void CGnuNode::FlushSendBuffer(bool FullFlush)
 			{
 				int lastError = GetLastError();
 				if(lastError != WSAEWOULDBLOCK)
-					CloseWithReason("Send Buffer Error " + NumtoStr(lastError), true);
+					CloseWithReason("Send Buffer Error " + NumtoStr(lastError), true, false);
 				
 				return;
 			}
@@ -1692,7 +1702,7 @@ void CGnuNode::FlushSendBuffer(bool FullFlush)
 					{
 						int lastError = GetLastError();
 						if(lastError != WSAEWOULDBLOCK)
-							CloseWithReason("Send Error " + NumtoStr(lastError), true);
+							CloseWithReason("Send Error " + NumtoStr(lastError), true, false);
 					}
 					else
 					{
@@ -1763,9 +1773,9 @@ void CGnuNode::OnClose(int nErrorCode)
 	CAsyncSocket::OnClose(nErrorCode);
 }
 
-void CGnuNode::CloseWithReason(CString Reason, bool RemoteClosed)
+void CGnuNode::CloseWithReason(CString Reason, bool RemoteClosed, bool SendBye)
 {
-	if(m_Status == SOCK_CONNECTED && !RemoteClosed)
+	if(m_Status == SOCK_CONNECTED && SendBye && !RemoteClosed)
 	{
 		m_pProtocol->Send_Bye(this, Reason);
 		FlushSendBuffer(true);
@@ -2068,7 +2078,7 @@ void CGnuNode::Timer()
 		m_dwSecBytes[i]   = 0;	
 	}
 	
-	m_QueryThrottle = 0;
+	m_QuerySendThrottle = 0;
 
 	// Efficiency calculation
 	UINT dPart  = m_StatPings[1] + m_StatPongs[1] + m_StatQueries[1] + m_StatQueryHits[1] + m_StatPushes[1]; 

@@ -537,16 +537,22 @@ void CGnuDownload::OnReceive(int nErrorCode)
 					// X-Push-Proxy
 					else if (HeaderName == "x-push-proxy" && HostInfo()->Network == NETWORK_GNUTELLA)
 					{
-						HostInfo()->DirectHubs.clear();
+						// Parse headers breaks up commas
+						IPv4 PushProxy = StrtoIPv4( HeaderValue );
 
-						while( !HeaderValue.IsEmpty() )
-						{
-							IPv4 PushProxy = StrtoIPv4( ParseString(HeaderValue, ',') );
+						if(PushProxy.Port == 0)
+							PushProxy.Port = 6346;
+							
+						bool found = false;
+						for(int i = 0; i < HostInfo()->DirectHubs.size(); i++)
+							if(HostInfo()->DirectHubs[i].Host.S_addr == PushProxy.Host.S_addr)
+							{
+								HostInfo()->DirectHubs[i] = PushProxy;
+								found = true;
+							}
 
-							if(PushProxy.Port)
-								HostInfo()->DirectHubs.push_back(PushProxy);
-						}
-
+						if(!found)
+							HostInfo()->DirectHubs.push_back(PushProxy);
 					}
 
 					// Location header (redirected)

@@ -497,12 +497,20 @@ void CGnuWordHash::BreakupMeta(CString &QueryEx, std::vector< std::basic_string<
 			// Get attributes
 			int EqualPos = QueryEx.Find("=");
 
+			int failsafe = 0;
 			while(EqualPos != -1 && SpacePos != -1 && SpacePos < EqualPos)
 			{
+				failsafe++; // upredictable parsing problems make this a neccesity
+				if(failsafe > 50)
+					break;
+
 				CString AttributeName = QueryEx.Mid(SpacePos + 1, EqualPos - SpacePos - 1);
 				
 				int FrontQuotePos = QueryEx.Find("'", EqualPos);
 				int BackQuotePos  = QueryEx.Find("'", FrontQuotePos + 1);
+
+				if( FrontQuotePos == -1 || BackQuotePos == -1)
+					break;
 
 				if( !AttributeName.IsEmpty() && FrontQuotePos < BackQuotePos)
 				{

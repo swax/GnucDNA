@@ -311,12 +311,7 @@ void CGnuProtocol::Receive_Query(Gnu_RecvdPacket &Packet)
 				if(Query->Header.TTL != 0)
 					Query->Header.TTL--;
 
-				pNode->m_QueryThrottle += Packet.Length;
-
-				//if(pNode->m_QueryThrottle > 1024)
-				//	TRACE0("Query Throttle Tripped at " + NumtoStr(pNode->m_QueryThrottle) + " by " + pNode->m_RemoteAgent + "\n");
-
-				if(Query->Header.TTL > 1 && pNode->m_QueryThrottle < 1024) // Throttle broadcasting of incoming queries at 1kb/s
+				if(Query->Header.TTL > 1) 
 					for(int i = 0; i < m_pComm->m_NodeList.size(); i++)	
 					{
 						CGnuNode *p = m_pComm->m_NodeList[i];
@@ -1483,7 +1478,7 @@ void CGnuProtocol::Send_PatchReset(CGnuNode* pTCP)
 	Reset.TableLength	= 1 << GNU_TABLE_BITS;
 	Reset.Infinity		= TABLE_INFINITY;
 
-	pTCP->SendPacket(&Reset, 29, PACKET_QUERY, Reset.Header.Hops);
+	pTCP->SendPacket(&Reset, 29, PACKET_PATCH, Reset.Header.Hops);
 }
 
 void CGnuProtocol::Send_PatchTable(CGnuNode* pTCP)
@@ -1616,7 +1611,7 @@ void CGnuProtocol::Send_PatchTable(CGnuNode* pTCP)
 	}
 
 	// This mega packet includes the reset and all patches
-	pTCP->SendPacket(PacketBuff, NextPos, PACKET_QUERY, PatchPacket->Header.Hops);
+	pTCP->SendPacket(PacketBuff, NextPos, PACKET_PATCH, PatchPacket->Header.Hops);
 
 	delete [] PacketBuff;
 	delete [] CompBuff;

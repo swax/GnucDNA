@@ -36,6 +36,9 @@
 #include "GnuUpdate.h"
 #include "GnuChat.h"
 
+#include "psapi.h"
+#include "process.h"
+
 #include "GnuCore.h"
 
 
@@ -287,6 +290,25 @@ void CGnuCore::DebugLog(CString Section, CString Entry)
 	
 #endif
 }
+
+#ifdef _DEBUG
+uint32 CGnuCore::GetVirtualMemUsage()
+{
+	HANDLE handle = OpenProcess(PROCESS_QUERY_INFORMATION, FALSE, _getpid());
+
+	if(handle)
+	{
+		PROCESS_MEMORY_COUNTERS pmemory;
+		GetProcessMemoryInfo(handle, &pmemory, sizeof(PROCESS_MEMORY_COUNTERS));
+
+		CloseHandle(handle);
+
+		return pmemory.PagefileUsage;
+	}
+
+	return 0;
+}
+#endif
 
 void CGnuCore::DebugTrigger(bool details)
 {

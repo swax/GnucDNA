@@ -1106,6 +1106,10 @@ void CGnuDownloadShell::ReSearch()
 	m_HostTryPos	= 1;
 
 	// research done at 15m, 30m, 1h, 2h, 4h, 8h, 8h...
+	ASSERT(m_ReSearchInterval);
+	if(m_ReSearchInterval == 0)
+		m_ReSearchInterval = 15;
+
 	if(m_ReSearchInterval < 8 * 60)
 		m_ReSearchInterval *= 2;
 	else

@@ -196,31 +196,31 @@ void CGnuShare::LoadFiles()
 
 	m_FilesAccess.Lock();
 
-	m_pWordTable->ClearLocalTable();
+		m_pWordTable->ClearLocalTable();
 
-	for(int i = 0; i < m_SharedFiles.size(); i++)
-	{
-		m_SharedFiles[i].Name		= "";
-		m_SharedFiles[i].NameLower	= "";
-		m_SharedFiles[i].Dir		= "";
-
-		for(int j = 0; j < HASH_TYPES; j++)
-			m_SharedFiles[i].HashValues[j] = "";
-
-		m_SharedFiles[i].TimeStamp	= "";
-
-		if(m_SharedFiles[i].TigerTree)
+		for(int i = 0; i < m_SharedFiles.size(); i++)
 		{
-			delete [] m_SharedFiles[i].TigerTree;
-			m_SharedFiles[i].TigerTree = NULL;
+			m_SharedFiles[i].Name		= "";
+			m_SharedFiles[i].NameLower	= "";
+			m_SharedFiles[i].Dir		= "";
+
+			for(int j = 0; j < HASH_TYPES; j++)
+				m_SharedFiles[i].HashValues[j] = "";
+
+			m_SharedFiles[i].TimeStamp	= "";
+
+			if(m_SharedFiles[i].TigerTree)
+			{
+				delete [] m_SharedFiles[i].TigerTree;
+				m_SharedFiles[i].TigerTree = NULL;
+			}
 		}
-	}
 
 
-	// Load shared files
-	m_SharedFiles.clear();
-	m_FileIDMap.clear();
-	m_SharedHashMap.clear();
+		// Load shared files
+		m_SharedFiles.clear();
+		m_FileIDMap.clear();
+		m_SharedHashMap.clear();
 	
 	m_FilesAccess.Unlock();
 
@@ -381,12 +381,12 @@ void CGnuShare::RecurseLoad(CString FullPath, CString DirPath, bool doRecurse, D
 
 			m_FilesAccess.Lock();
 			
-			CString Sha1Hash = NewShare.HashValues[HASH_SHA1].c_str();
-			if( !Sha1Hash.IsEmpty() )
-				m_SharedHashMap[Sha1Hash] = m_SharedFiles.size();
+				CString Sha1Hash = NewShare.HashValues[HASH_SHA1].c_str();
+				if( !Sha1Hash.IsEmpty() )
+					m_SharedHashMap[Sha1Hash] = m_SharedFiles.size();
 
-			m_FileIDMap[NewShare.FileID] = m_SharedFiles.size();
-			m_SharedFiles.push_back(NewShare);
+				m_FileIDMap[NewShare.FileID] = m_SharedFiles.size();
+				m_SharedFiles.push_back(NewShare);
 			
 			m_FilesAccess.Unlock();
 

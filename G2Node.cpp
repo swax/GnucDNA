@@ -512,9 +512,9 @@ void CG2Node::OnClose(int nErrorCode)
 	CAsyncSocket::OnClose(nErrorCode);
 }
 
-void CG2Node::CloseWithReason(CString Reason, bool RemoteClosed)
+void CG2Node::CloseWithReason(CString Reason, bool RemoteClosed, bool SendBye)
 {
-	if(m_Status == SOCK_CONNECTED && !RemoteClosed)
+	if(m_Status == SOCK_CONNECTED && SendBye && !RemoteClosed)
 	{
 		Send_Close(Reason);
 		FlushSendQueue(true);
@@ -1146,6 +1146,12 @@ void CG2Node::SetConnected()
 	m_StatusText = "Connected";
 	m_pG2Comm->G2NodeUpdate(this);
 
+	/*if( m_RemoteAgent.Find("2.0.0.0") == -1)
+	{
+		CloseWithReason("Not Shareaza 2.0", false, false);
+		return;
+	}*/
+
 	// Setup inflate if remote host supports it
 	if(m_InflateRecv)
 	{
@@ -1350,8 +1356,8 @@ void CG2Node::FlushSendQueue(bool FullFlush)
 			// No progress possible keep going
 			if(stat != Z_BUF_ERROR)
 			{
-				ASSERT(0);
-				CloseWithReason("Deflate Error " + NumtoStr(stat));
+				ASSERT(0); 
+				CloseWithReason("Deflate Error " + NumtoStr(stat), false, false);
 				return;
 			}
 		}
@@ -1374,7 +1380,7 @@ void CG2Node::FlushSendQueue(bool FullFlush)
 			{
 				int lastError = GetLastError();
 				if(lastError != WSAEWOULDBLOCK)
-					CloseWithReason("Send Buffer Error " + NumtoStr(lastError), true);
+					CloseWithReason("Send Buffer Error " + NumtoStr(lastError), true, false);
 
 				return;
 			}
@@ -1411,6 +1417,7 @@ void CG2Node::FlushSendQueue(bool FullFlush)
 			if(m_DeflateStreamSize > 4096) // Flush buffer every 4kb
 			{
 				flushMode = Z_SYNC_FLUSH;
+
 				m_DeflateStreamSize = 0;
 			}
 
@@ -1420,7 +1427,7 @@ void CG2Node::FlushSendQueue(bool FullFlush)
 				if( stat < 0)
 				{
 					ASSERT(0);
-					CloseWithReason("Deflate Error " + NumtoStr(stat));
+					CloseWithReason("Deflate Error " + NumtoStr(stat), false, false);
 					return;
 				}
 			}
@@ -1450,7 +1457,7 @@ void CG2Node::FlushSendQueue(bool FullFlush)
 				{
 					int lastError = GetLastError();
 					if(lastError != WSAEWOULDBLOCK)
-						CloseWithReason("Send Error " + NumtoStr(lastError), true);
+						CloseWithReason("Send Error " + NumtoStr(lastError), true, false);
 				}
 				else
 				{

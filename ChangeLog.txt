@@ -1,3 +1,6 @@
+GnucDNA 1.1.0.5
+	swabby: Fixed rare meta parsing mem leak
+
 GnucDNA 1.1.0.4
 	swabby: Revised download re-search system
 	swabby: Fixed Gnutella re-searching
