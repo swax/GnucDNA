@@ -6,6 +6,10 @@ NAT detection, map of 10000 ips, once 10000 hit turn off detection
   add ips from udp send and sock connects
 If PI/RELAY recved with UDP address of directly connected host (but not from directly connected host), disconnect youngest link
 
+Gnutella-->Networks::IncomingSource-->IncomingResult
+      G2-/                         \->AddHost
+
+15 minute upgrade only if setconnected never called
 
 Now	
 	IPrefs::SetSpeedUp

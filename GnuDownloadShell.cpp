@@ -1192,7 +1192,7 @@ void CGnuDownloadShell::RunFile()
 
 void CGnuDownloadShell::ReSearch()
 {
-	if(m_FileLength && m_FileLength >= GetBytesCompleted())
+	if(m_FileLength && GetBytesCompleted() >= m_FileLength )
 		return;
 
 	SendGnuQuery(NULL);
