@@ -25,7 +25,8 @@ class CGnuProtocol;
 #define GNU_ULTRAPEER 1
 #define GNU_LEAF	  2
 
-#define MAX_TTL 3
+#define MAX_TTL     3
+#define MAX_LEAVES 32
 
 class CGnuControl
 {
@@ -82,9 +83,9 @@ public:
 
 	std::map<uint32, bool> m_TriedConnects;
 
-
 	// Local Client Data
 	CTime   m_ClientUptime;
+	uint32  m_LastSearchTime;
 
 	DWORD   m_dwFiles;
 	DWORD   m_dwFilesSize;

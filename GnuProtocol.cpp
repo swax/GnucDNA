@@ -2011,7 +2011,7 @@ void CGnuProtocol::Send_StatsMsg(CGnuNode* pTCP)
 {
 	packet_StatsMsg Stats;
 
-	Stats.LeafMax	= m_pPrefs->m_MaxLeaves;
+	Stats.LeafMax	= MAX_LEAVES;
 	Stats.LeafCount = m_pComm->CountLeafConnects();
 	Stats.Uptime	= time(NULL) - m_pComm->m_ClientUptime.GetTime();
 	Stats.Cpu		= m_pCore->m_SysSpeed;

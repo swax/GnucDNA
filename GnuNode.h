@@ -64,6 +64,7 @@ public:
 	
 	void Send_ConnectOK(bool);
 	void Send_ConnectError(CString Reason);
+	void Send_CrawlerResponse();
 
 	void SetConnected();
 
@@ -175,7 +176,6 @@ public:
 	CString m_RemoteChallenge;
 	CString m_RemoteChallengeAnswer;
 
-
 	// Ultrapeers
 	CTime     m_ConnectTime;
 	UINT	  m_NodeFileCount;
@@ -218,6 +218,9 @@ public:
 
 	bool  m_SupportInterQRP;
 	byte* m_LocalHitTable; // Dynamic, sent leaf->ultrapeer and ultrapeer->ultrapeer, not ultrapeer->leaf
+
+	// Crawler
+	bool m_CrawlRequest;
 
 	// Host Browsing
 	int   m_BrowseID;

@@ -70,7 +70,7 @@ void CGnuPrefs::LoadDefaults()
 	m_BehindFirewall	= false;
 
 	// Connect
-	m_LeafModeConnects	= 2;
+	m_LeafModeConnects	= 3;
 	m_MinConnects		= 24;
 	m_MaxConnects		= 32;
 

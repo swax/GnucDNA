@@ -1,6 +1,9 @@
 GnucDNA 1.1.1.1
 	swabby: NoReload Shared option added for clients with thousands of dynamic files
 	swabby: Re-searching limited to 1 per hour across all downloads, gnutella compliance standard
+	swabby: Decreased gnutella leaf max to conform with lime/bear standards and increase dna ultrapeer base
+	swabby: If leaf node idle, ultrapeers dropped to conserve network resources
+	swabby: Gnutella crawler support added
 	
 GnucDNA 1.1.1.0
 	swabby: WebCache system revised so it works in all cases

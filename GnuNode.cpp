@@ -117,7 +117,6 @@ CGnuNode::CGnuNode(CGnuControl* pComm, CString Host, UINT Port)
 	DeflateStream.opaque   = Z_NULL;
 	DeflateStream.state    = Z_NULL;
 
-
 	// Ultrapeers
 	m_NodeFileCount	= 0;
 	m_TriedUpgrade  = false;
@@ -154,6 +153,9 @@ CGnuNode::CGnuNode(CGnuControl* pComm, CString Host, UINT Port)
 	m_PatchWait         = 60;
 	m_SupportInterQRP   = false;
 	m_LocalHitTable     = NULL;
+
+	// Crawler
+	m_CrawlRequest = false;
 
 	// Host Browsing
 	m_BrowseID	 = 0;
@@ -517,6 +519,8 @@ void CGnuNode::ParseIncomingHandshake06(CString Data, byte* Stream, int StreamLe
 	if( m_RemoteAgent.IsEmpty() )
 		m_RemoteAgent = FindHeader("User-Agent");
 		
+
+	// opennext is baaaaned
 	if( !ValidAgent(m_RemoteAgent) || !FindHeader("OPnext-uid").IsEmpty() ) // dont connect to openext client
 	{
 		CloseWithReason("Client Not Valid");
@@ -542,6 +546,17 @@ void CGnuNode::ParseIncomingHandshake06(CString Data, byte* Stream, int StreamLe
 	// Connect string, GNUTELLA CONNECT/0.6\r\n
 	if(m_Handshake.Find(m_NetworkName + " CONNECT/") != -1)
 	{
+		// Handle crawler request
+		CString CrawlerReq = FindHeader("Crawler");
+		if( !CrawlerReq.IsEmpty() )
+		{
+			if(m_pComm->m_GnuClientMode == GNU_ULTRAPEER)
+				Send_CrawlerResponse();
+			else
+				Send_ConnectError("503 Crawling a Leaf");
+
+			return;
+		}
 
 		// Parse LAN header
 		if(m_pPrefs->m_LanMode)
@@ -640,7 +655,7 @@ void CGnuNode::ParseIncomingHandshake06(CString Data, byte* Stream, int StreamLe
 			{
 				
 
-				if(m_pComm->CountLeafConnects() > m_pPrefs->m_MaxLeaves && !LetConnect())
+				if(m_pComm->CountLeafConnects() >= MAX_LEAVES && !LetConnect())
 				{
 					Send_ConnectError("503 Leaf Capacity Maxed");
 					return;
@@ -691,6 +706,12 @@ void CGnuNode::ParseIncomingHandshake06(CString Data, byte* Stream, int StreamLe
 	// Ok string, GNUTELLA/0.6 200 OK\r\n
 	else if(m_Handshake.Find(" 200 OK\r\n") != -1)
 	{
+		// If connect ok to our crawl response
+		if(m_CrawlRequest)
+		{
+			CloseWithReason("Crawl Success");
+			return;
+		}
 
 		// Parse Content-Encoding Response
 		CString EncodingHeader = FindHeader("Content-Encoding");
@@ -1218,6 +1239,48 @@ void CGnuNode::Send_ConnectError(CString Reason)
 
 	CloseWithReason(Reason);
 }
+
+void CGnuNode::Send_CrawlerResponse()
+{
+	m_CrawlRequest = true;
+
+	CString Handshake, PeerList, LeafList;
+
+	Handshake =  m_NetworkName + "/0.6 200 OK\r\n";
+	Handshake += "User-Agent: " + m_pCore->GetUserAgent() + "\r\n";
+
+	// get list of peers and leaves
+	for(int i = 0; i < m_pComm->m_NodeList.size(); i++)
+		if(m_pComm->m_NodeList[i]->m_Status == SOCK_CONNECTED)
+		{
+			if( m_pComm->m_NodeList[i]->m_GnuNodeMode == GNU_ULTRAPEER)
+				PeerList += IPv4toStr(m_pComm->m_NodeList[i]->m_Address) + ",";	
+
+			if( m_pComm->m_NodeList[i]->m_GnuNodeMode == GNU_LEAF)
+				LeafList += IPv4toStr(m_pComm->m_NodeList[i]->m_Address) + ",";	
+		}
+
+	// add peers to handshake
+	if( !PeerList.IsEmpty() )
+	{
+		PeerList = PeerList.Left( PeerList.ReverseFind(',') );
+		Handshake += "Peers: " + PeerList + "\r\n";	
+	}
+
+	// add leaves to handshake
+	if( !LeafList.IsEmpty() )
+	{
+		LeafList = LeafList.Left( LeafList.ReverseFind(',') );
+		Handshake += "Leaves: " + LeafList + "\r\n";
+	}
+
+	// end and send, wait for ok response
+	Handshake += "\r\n";
+
+	Send(Handshake, Handshake.GetLength());
+	
+	m_WholeHandshake += Handshake;
+}	
 
 void CGnuNode::ParseBrowseHandshakeRequest(CString Data)
 {

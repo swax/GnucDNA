@@ -64,6 +64,7 @@ CGnuControl::CGnuControl(CGnuNetworks* pNet)
 	m_pShare	= m_pCore->m_pShare;
 
 	m_ClientUptime	 = CTime::GetCurrentTime();
+	m_LastSearchTime = time(NULL);
 
 	m_LanSock = new CGnuLocal(this);
 	m_LanSock->Init();
@@ -508,6 +509,9 @@ void CGnuControl::ManageNodes()
 
 	if(m_GnuClientMode == GNU_LEAF)
 	{
+		// if search not done for 30 mins, connect to 1 ultrapeer, else 3
+		m_pPrefs->m_LeafModeConnects = (m_LastSearchTime + (30*60) < time(NULL)) ? 1 : 3;
+
 		if(UltraConnects < m_pPrefs->m_LeafModeConnects)
 			AddConnect();
 		
@@ -532,7 +536,7 @@ void CGnuControl::ManageNodes()
 			DropNode(GNU_ULTRAPEER, NeedDnaUltras);
 
 
-		while(LeafConnects > m_pPrefs->m_MaxLeaves)
+		while(LeafConnects > MAX_LEAVES)
 		{
 			bool NeedDnaLeaves = false;
 			if(LeafConnects && LeafDnaConnects * 100 / LeafConnects < 50)
@@ -726,11 +730,8 @@ void CGnuControl::UltrapeerBalancing()
 
 
 	// Get local load
-	int LocalLoad = 0;
-	if(m_pPrefs->m_MaxLeaves)
-		LocalLoad = CountLeafConnects() * 100 / m_pPrefs->m_MaxLeaves;
+	int LocalLoad = CountLeafConnects() * 100 / MAX_LEAVES;
 	
-
 
 
 	// Upgrade node if running above 90%, every 40 mins

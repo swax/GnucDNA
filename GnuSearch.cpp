@@ -132,7 +132,10 @@ void CGnuSearch::SendQuery(CString Query)
 		memcpy(&m_GnuPacket, &m_QueryID, 16);
 
 		if(m_pNet->m_pGnu)
+		{
 			m_pNet->m_pGnu->m_pProtocol->Send_Query(m_GnuPacket, m_GnuPacketLength);
+			m_pNet->m_pGnu->m_LastSearchTime = time(NULL);
+		}
 	}
 
 	if( m_pNet->m_pG2 )
@@ -219,7 +222,10 @@ void CGnuSearch::SendMetaQuery(CString Query, int MetaID, std::vector<CString> M
 		memcpy(&m_GnuPacket, &m_QueryID, 16);
 		
 		if(m_pNet->m_pGnu)
+		{
 			m_pNet->m_pGnu->m_pProtocol->Send_Query(m_GnuPacket, m_GnuPacketLength);
+			m_pNet->m_pGnu->m_LastSearchTime = time(NULL);
+		}
 	}
 
 	if( m_pNet->m_pG2 )
@@ -273,6 +279,7 @@ void CGnuSearch::SendHashQuery(CString Query, int HashID, CString Hash)
 		
 		if( m_pNet->m_pGnu )
 			m_pNet->m_pGnu->m_pProtocol->Send_Query(m_GnuPacket, m_GnuPacketLength);
+			// no search time recorded here because this is used for researching transfers, dont want to increase connection count every hour
 	}
 
 	if( m_pNet->m_pG2 )
