@@ -72,6 +72,7 @@ CGnuControl::CGnuControl(CGnuNetworks* pNet)
 	m_NetworkName		= "GNUTELLA";
 
 	m_LastConnect = 0;
+	m_TryingConnect = false;
 
 	// Ultrapeers
 	m_GnuClientMode   = GNU_LEAF;
@@ -151,6 +152,18 @@ CGnuControl::~CGnuControl()
 
 	delete m_pProtocol;
 	m_pProtocol = NULL;
+}
+
+void CGnuControl::SendUdpConnectRequest(CString Host, UINT Port)
+{
+	if(FindNode(Host, Port, false) != NULL)
+		return;
+
+	IPv4 address;
+	address.Host = StrtoIP(Host);
+	address.Port = Port;
+
+	m_pProtocol->Send_Ping(NULL, 1, true, NULL, address);
 }
 
 void CGnuControl::AddNode(CString Host, UINT Port)
@@ -249,6 +262,18 @@ int CGnuControl::CountLeafConnects()
 
 	return LeafConnects;
 }
+
+int CGnuControl::CountConnecting()
+{
+	int Connecting = 0;
+
+	for(int i = 0; i < m_NodeList.size(); i++)	
+		if(m_NodeList[i]->m_Status == SOCK_CONNECTING)			
+			Connecting++;
+
+	return Connecting;
+}
+
 
 /////////////////////////////////////////////////////////////////////////////
 // This is where the Network side of Gnucleus talks with the Interface side
@@ -362,7 +387,7 @@ void CGnuControl::MinuteTimer()
 
 	int TotalBW = 0;
 	for(int i = 0; i < m_NodeList.size(); i++)
-		if(m_NodeList[i]->m_Status == SOCK_CONNECTED && m_NodeList[i]->m_GnuNodeMode == GNU_ULTRAPEER)
+		if(m_NodeList[i]->m_Status == SOCK_CONNECTED)
 		{
 			int BitsNotSet = 0;
 
@@ -376,7 +401,9 @@ void CGnuControl::MinuteTimer()
 			int bwout       = m_NodeList[i]->m_AvgBytes[1].GetAverage();
 			TotalBW += bwout;
 
-			TRACE0( IPtoStr(m_NodeList[i]->m_Address.Host) + ": " + PrcFull + " Full, out " + CommaIze(NumtoStr(bwout)) + " B/s\n");
+			CString mode = (m_NodeList[i]->m_GnuNodeMode == GNU_ULTRAPEER) ? "Ultrapeer" : "Leaf";
+
+			TRACE0( mode + " " + IPtoStr(m_NodeList[i]->m_Address.Host) + ": " + PrcFull + " Full, out " + CommaIze(NumtoStr(bwout)) + " B/s\n");
 		}
 	
 	TRACE0("\nTotal Bandwidth out " + CommaIze(NumtoStr(TotalBW)) + "B/s\n");
@@ -493,6 +520,7 @@ void CGnuControl::ManageNodes()
 			m_NoConnections = 0;
 	}
 
+	m_TryingConnect = false;
 
 	int MaxHalfConnects = m_pNet->GetMaxHalfConnects();
 
@@ -505,10 +533,9 @@ void CGnuControl::ManageNodes()
 	if(Connecting >= MaxHalfConnects)
 		return;
 
-
-	bool NeedDnaUltras = false;
+	NeedDnaUltras = false;
 	
-
+	int OpenSlots = MaxHalfConnects - Connecting;
 
 	if(m_GnuClientMode == GNU_LEAF)
 	{
@@ -521,11 +548,15 @@ void CGnuControl::ManageNodes()
 		m_pPrefs->m_LeafModeConnects = (LeafConnects <= 0) ? 1 : LeafConnects;
 
 		if(UltraConnects < m_pPrefs->m_LeafModeConnects)
-			AddConnect(NeedDnaUltras);
-		
-		else if(UltraConnects && NeedDnaUltras && Connecting <= MaxHalfConnects / 2)
-			AddConnect(NeedDnaUltras); // if all thats needed are more dna, dont tax half connects
-
+		{
+			for(int i = 0; i < OpenSlots; i++)
+				AddConnect(NeedDnaUltras);
+		}
+		else if(UltraConnects && NeedDnaUltras)
+		{
+			for(int i = 0; i <= OpenSlots / 2; i++)
+				AddConnect(NeedDnaUltras); // if all thats needed are more dna, dont tax half connects
+		}
 		if(m_pPrefs->m_LeafModeConnects && UltraConnects > m_pPrefs->m_LeafModeConnects)
 			DropNode(GNU_ULTRAPEER, NeedDnaUltras); 
 	}
@@ -537,12 +568,15 @@ void CGnuControl::ManageNodes()
 			NeedDnaUltras = true;
 
 		if(m_pPrefs->m_MinConnects && UltraConnects < m_pPrefs->m_MinConnects)
-			AddConnect(NeedDnaUltras);
-		
-		else if(UltraConnects && NeedDnaUltras && Connecting <= MaxHalfConnects / 2)
-			AddConnect(NeedDnaUltras); // if all thats needed are more dna, dont tax half connects
-
-
+		{
+			for(int i = 0; i < OpenSlots; i++)
+				AddConnect(NeedDnaUltras);
+		}
+		else if(UltraConnects && NeedDnaUltras)
+		{
+			for(int i = 0; i <= OpenSlots / 2; i++)
+				AddConnect(NeedDnaUltras); // if all thats needed are more dna, dont tax half connects
+		}
 		if(m_pPrefs->m_MaxConnects && UltraConnects > m_pPrefs->m_MaxConnects)
 			DropNode(GNU_ULTRAPEER, NeedDnaUltras);
 
@@ -561,6 +595,8 @@ void CGnuControl::ManageNodes()
 
 void CGnuControl::AddConnect(bool PrefDna)
 {
+	m_TryingConnect = true;
+
 	if( PrefDna && ConnectFromCache(m_pCache->m_GnuDna, false) )
 		return;
 
@@ -597,7 +633,12 @@ bool CGnuControl::ConnectFromCache(std::list<Node> &Cache, bool Perm)
 
 				m_TriedConnects[ StrtoIP(TryNode.Host).S_addr ] = true;
 
-				AddNode( TryNode.Host, TryNode.Port);
+				// send udp request (do if blocked anyways for quick detect)
+				///SendUdpConnectRequest(TryNode.Host, TryNode.Port);
+
+				// if blocked send tcp
+				//if(m_pNet->m_UdpFirewall == UDP_BLOCK)
+					AddNode( TryNode.Host, TryNode.Port);
 
 				return true;
 			}
@@ -652,32 +693,50 @@ void CGnuControl::CleanDeadSocks()
 
 	itNode = m_NodeList.begin();
 	while( itNode != m_NodeList.end())
-		if((*itNode)->m_Status == SOCK_CLOSED && (*itNode)->m_CloseWait > 3)
+	{
+		CGnuNode* pNode = *itNode;
+
+		if( pNode->m_Status == SOCK_CLOSED && pNode->m_CloseWait > 3)
 		{
+			if(pNode->m_LastState != NONEXISTENT && pNode->m_LastState != TIME_WAIT)
+			{
+				itNode++;
+				continue;
+			}
+
 			m_NodeAccess.Lock();
 
-			delete *itNode;
-
-			itNode = m_NodeList.erase(itNode);
+				delete pNode;
+				itNode = m_NodeList.erase(itNode);
 			
 			m_NodeAccess.Unlock();
 		}
 		else
 			itNode++;
+	}
 
 	// Browse Sockets
 	std::vector<CGnuNode*>::iterator itBrowse;
 
 	itBrowse = m_NodesBrowsing.begin();
 	while(itBrowse != m_NodesBrowsing.end())
-		if((*itBrowse)->m_Status == SOCK_CLOSED)
+	{
+		CGnuNode* pNode = *itBrowse;
+
+		if( pNode->m_Status == SOCK_CLOSED && pNode->m_CloseWait > 3)
 		{
-			delete *itBrowse;
-			
-			itBrowse = m_NodesBrowsing.erase(itBrowse);
+			if(pNode->m_LastState != NONEXISTENT && pNode->m_LastState != TIME_WAIT)
+			{
+				itNode++;
+				continue;
+			}
+
+			delete pNode;
+			itNode = m_NodeList.erase(itNode);
 		}
 		else
-			itBrowse++;
+			itNode++;
+	}
 }
 
 bool CGnuControl::UltrapeerAble()

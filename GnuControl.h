@@ -54,6 +54,7 @@ public:
 
 	CGnuLocal* m_LanSock;
 
+	void SendUdpConnectRequest(CString, UINT);
 	void AddNode(CString, UINT);
 	void RemoveNode(CGnuNode*);
 	CGnuNode* FindNode(CString Host, UINT Port, bool Connected=true);
@@ -66,7 +67,8 @@ public:
 
 	int	 CountUltraConnects();
 	int  CountLeafConnects();
-	
+	int  CountConnecting();
+
 	void NodeUpdate(CGnuNode* pNode);
 
 
@@ -85,6 +87,7 @@ public:
 	std::map<uint32, bool> m_TriedConnects;
 
 	time_t m_LastConnect;
+	bool   m_TryingConnect;
 
 	// Local Client Data
 	CTime   m_ClientUptime;
@@ -101,6 +104,7 @@ public:
 
 	int     m_GnuClientMode;
 	bool	m_ForcedUltrapeer;
+	bool    NeedDnaUltras;
 
 	uint32 m_NextUpgrade;
 	uint32 m_ModeChangeTimeout;

@@ -195,7 +195,7 @@ void CGnuNetworks::Timer()
 	{
 		CGnuSock* pSock = *itSock;
 
-		if(pSock->m_SecsAlive > CONNECT_TIMEOUT || pSock->m_bDestroy)
+		if(pSock->m_SecsAlive > ACCEPT_TIMEOUT || pSock->m_bDestroy)
 		{
 			delete *itSock;
 			itSock = m_SockList.erase(itSock);
@@ -260,7 +260,7 @@ void CGnuNetworks::HourlyTimer()
 int CGnuNetworks::GetMaxHalfConnects()
 {
 	if(m_pCore->m_IsSp2 && !m_pCore->m_pPrefs->m_Sp2Override)
-		return 6;
+		return 8;
 
 	return 18;
 }

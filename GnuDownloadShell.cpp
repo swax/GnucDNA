@@ -238,7 +238,8 @@ void CGnuDownloadShell::AddHost(FileSource HostInfo)
 	// Check for duplicate hosts
 	for(int i = 0; i < m_Queue.size(); i++)
 	{
-		if(memcmp(&HostInfo.Address.Host.S_addr, &m_Queue[i].Address.Host.S_addr, 3) == 0)
+		if(memcmp(&HostInfo.Address.Host.S_addr, &m_Queue[i].Address.Host.S_addr, 3) == 0 &&
+		   !IsPrivateIP(m_Queue[i].Address.Host))
 			SubnetLimit++;
 
 		if( HostInfo.Address.Host.S_addr == m_Queue[i].Address.Host.S_addr && HostInfo.Address.Port == m_Queue[i].Address.Port )

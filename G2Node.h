@@ -22,6 +22,7 @@ Comp   332k
 Total  740k
 */
 
+#define G2_CONNECT_TIMEOUT  99
 
 #define G2_PACKET_BUFF  (65536+1024)
 #define G2_ZSTREAM_BUFF 16384
@@ -102,6 +103,7 @@ public:
 	bool m_TriedUpgrade;
 
 	int m_Status;
+	int m_LastState;
 	CString m_StatusText;
 
 	int m_NodeMode;

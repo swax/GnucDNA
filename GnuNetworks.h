@@ -1,9 +1,12 @@
 #pragma once
 
+#define ACCEPT_TIMEOUT 4
 
 #define UDP_FULL  1
 #define UDP_NAT   2
 #define UDP_BLOCK 3
+
+#define SUBNET_LIMIT 3
 
 
 class CGnuCore;
@@ -45,6 +48,8 @@ public:
 
 	int	m_NextNodeID;
 	int GetNextNodeID();
+
+	TcpStatus NetStat;
 
 	// Runtime Variables
 	IP		m_CurrentIP;

@@ -7,7 +7,7 @@
 
 #define GND_PACKET_BUFF 65536
 
-#define GND_MTU 500
+#define GND_MTU 700
 #define GND_SEND_RETRY   10
 #define GND_SEND_TIMEOUT 26
 #define GND_RECV_TIMEOUT 30
@@ -23,6 +23,8 @@ struct GND_Header;
 struct GND_Packet;
 struct GND_Fragment;
 struct GND_Ack;
+struct ThreadPacket;
+
 
 class CG2Datagram
 {
@@ -54,7 +56,7 @@ public:
 	
 
 	CCriticalSection m_TransferPacketAccess;
-	std::vector<GND_Packet*> m_TransferPackets;
+	std::vector<ThreadPacket*> m_TransferPackets;
 
 	std::map<uint16, GND_Packet*> m_SequenceMap;
 	uint16 m_NextSequence;
@@ -178,5 +180,32 @@ struct GND_Ack
 		Address.Host = address.Host;
 		Address.Port = address.Port;
 	};
+};
+
+struct ThreadPacket
+{
+	IPv4  Address;
+	byte* Packet;
+	int   Length;
+
+	ThreadPacket(IPv4 address, byte* packet, int length)
+	{
+		Address = address;
+
+		Packet  = packet;
+		Packet = new byte[length];
+		memcpy(Packet, packet, length);
+
+		Length  = length;
+	};
+
+	~ThreadPacket()
+	{
+		if(Packet)
+		{
+			delete [] Packet;
+			Packet = NULL;
+		}
+	};	
 };
 

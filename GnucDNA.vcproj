@@ -181,6 +181,9 @@
 							UsePrecompiledHeader="1"/>
 					</FileConfiguration>
 				</File>
+				<File
+					RelativePath=".\TcpStatus.cpp">
+				</File>
 			</Filter>
 			<Filter
 				Name="Network"
@@ -725,6 +728,9 @@
 				</File>
 				<File
 					RelativePath="stdafx.h">
+				</File>
+				<File
+					RelativePath=".\TcpStatus.h">
 				</File>
 			</Filter>
 			<Filter

@@ -76,6 +76,8 @@ CG2Control::CG2Control(CGnuNetworks* pNet)
 
 	m_GlobalUnique = rand() * rand();
 
+	m_TryingConnect = false;
+
 	// Stagger cleanup every 5 mins
 	m_CleanRoutesNext = time(NULL) + 2*60;
 	m_CleanKeysNext   = time(NULL) + 1*60;
@@ -141,6 +143,7 @@ CG2Control::CG2Control(CGnuNetworks* pNet)
 
 	//	TestEncodeDecode();
 
+	// TestQueryHitTable();
 }
 
 CG2Control::~CG2Control()
@@ -461,6 +464,7 @@ void CG2Control::ManageNodes()
 			m_NoConnections = 0;
 	}
 
+	m_TryingConnect = false;
 
 	int MaxHalfConnects = m_pNet->GetMaxHalfConnects();
 
@@ -478,18 +482,23 @@ void CG2Control::ManageNodes()
 	if(HubConnects && HubDnaConnects * 100 / HubConnects < 50)
 		NeedDnaHubs = true;
 
+	int OpenSlots = MaxHalfConnects - Connecting;
+
 	if( m_ClientMode == G2_CHILD )
 	{
 		// More hub connects only means people will find your files faster
 		// Searching on G2 does not require a hub connection
 
 		if(HubConnects < m_pPrefs->m_G2ChildConnects)
-			TryConnect(NeedDnaHubs);
-
+		{
+			for(int i = 0; i < OpenSlots; i++)
+				TryConnect(NeedDnaHubs);
+		}
 		else if(HubConnects && NeedDnaHubs)
-			TryConnect(NeedDnaHubs); // Half connects dna
-
-
+		{
+			for(int i = 0; i <= OpenSlots / 2; i++)
+				TryConnect(NeedDnaHubs); // Half connects dna
+		}
 		if(m_pPrefs->m_G2ChildConnects && HubConnects > m_pPrefs->m_G2ChildConnects)
 			DropNode(G2_HUB, NeedDnaHubs);
 	}
@@ -500,11 +509,15 @@ void CG2Control::ManageNodes()
 		// Sending queries to 10% of network should hit whole network
 
 		if(m_pPrefs->m_G2MinConnects && HubConnects < m_pPrefs->m_G2MinConnects)
-			TryConnect(NeedDnaHubs);
-
+		{
+			for(int i = 0; i < OpenSlots; i++)
+				TryConnect(NeedDnaHubs);
+		}
 		else if(HubConnects && NeedDnaHubs)
-			TryConnect(NeedDnaHubs); 
-
+		{
+			for(int i = 0; i <= OpenSlots / 2; i++)
+				TryConnect(NeedDnaHubs); 
+		}
 		if(m_pPrefs->m_G2MaxConnects && HubConnects > m_pPrefs->m_G2MaxConnects)
 			DropNode(G2_HUB, NeedDnaHubs);
 
@@ -528,11 +541,20 @@ void CG2Control::CleanDeadSocks()
 
 	itNode = m_G2NodeList.begin();
 	while( itNode != m_G2NodeList.end())
-		if((*itNode)->m_Status == SOCK_CLOSED && (*itNode)->m_CloseWait > 3)
+	{
+		CG2Node* pNode = *itNode;
+
+		if( pNode->m_Status == SOCK_CLOSED && pNode->m_CloseWait > 3)
 		{
+			if(pNode->m_LastState != NONEXISTENT && pNode->m_LastState != TIME_WAIT)
+			{
+				itNode++;
+				continue;
+			}
+
 			m_G2NodeAccess.Lock();
 
-			delete *itNode;
+			delete pNode;
 
 			itNode = m_G2NodeList.erase(itNode);
 			
@@ -540,10 +562,13 @@ void CG2Control::CleanDeadSocks()
 		}
 		else
 			itNode++;
+	}
 }
 
 void CG2Control::TryConnect(bool PrefDna)
 {
+	m_TryingConnect = true;
+	
 	if( PrefDna && ConnectFromCache(m_pCache->m_G2Dna, false) )
 		return;
 
@@ -592,13 +617,31 @@ bool CG2Control::ConnectFromCache(std::list<Node> &Cache, bool Perm)
 
 				m_TriedConnects[ StrtoIP(TryNode.Host).S_addr ] = true;
 
-				CreateNode( TryNode );
+				SendUdpConnect( TryNode );
 
-				return true;
+				if(m_pNet->m_UdpFirewall == UDP_BLOCK)
+					CreateNode(TryNode);
+
+				return true;	
 			}
 	}
 
 	return false;
+}
+
+void CG2Control::SendUdpConnect(Node HostInfo)
+{
+	if( FindNode( HostInfo.Host, 0, false ) != NULL)
+		return;
+
+	IPv4 address;
+	address.Host = StrtoIP(HostInfo.Host);
+	address.Port = HostInfo.Port;
+
+	G2_PI Ping;
+	Ping.ConnectRequest = true;
+	Ping.HubMode = (m_ClientMode == G2_HUB);
+	Send_PI(address, Ping, NULL);
 }
 
 void CG2Control::CreateNode(Node HostInfo)
@@ -1475,6 +1518,22 @@ void CG2Control::Receive_PO(G2_RecvdPacket &PacketPO)
 		// If this turned on and NAT really doesnt work, net spam and dead acks ensue
 		else if(m_pNet->m_UdpFirewall == UDP_BLOCK)
 			m_pNet->m_UdpFirewall = UDP_NAT;
+
+		if(m_TryingConnect)
+		{
+			if(Pong.ConnectAck)
+			{
+				if(Pong.SpaceAvailable)
+					CreateNode( Node(IPtoStr(PacketPO.Source.Host), PacketPO.Source.Port, NETWORK_G2) );
+
+				for(int i = 0; i < Pong.Cached.size(); i++)
+					m_pCache->AddKnown( Node(IPtoStr(Pong.Cached[i].Host), Pong.Cached[i].Port, NETWORK_G2) );
+			}
+			else
+				CreateNode( Node(IPtoStr(PacketPO.Source.Host), PacketPO.Source.Port, NETWORK_G2) );
+		}
+		else
+			m_pCache->AddKnown( Node(IPtoStr(PacketPO.Source.Host), PacketPO.Source.Port, NETWORK_G2) );
 	}
 }
 
@@ -1670,6 +1729,40 @@ void CG2Control::Receive_QHT(G2_RecvdPacket &PacketQHT)
 		}
 	}
 }
+
+void CG2Control::TestQueryHitTable()
+{
+	// delclare remote table
+	byte RemoteHitTable[G2_TABLE_SIZE];
+	memset(RemoteHitTable, 0xFF, G2_TABLE_SIZE);
+		
+
+	// loop 100 time
+	for(int i = 0; i < 100; i++)
+	{
+		// create new local table
+		byte LocalHitTable[G2_TABLE_SIZE];
+		for(int x = 0; x < G2_TABLE_SIZE; x++)
+			LocalHitTable[x] = rand() % 256;
+
+		// patch is xor of local with remote table
+		byte Patch[G2_TABLE_SIZE];
+		for(int x = 0; x < G2_TABLE_SIZE; x++)
+			Patch[x] = LocalHitTable[x];
+
+		for(x = 0; x < G2_TABLE_SIZE; x++)
+			Patch[x] ^= RemoteHitTable[x];
+
+		// apply patch to remote table
+		for(x = 0; x < G2_TABLE_SIZE; x++)
+			RemoteHitTable[x] ^= Patch[x];
+
+		// verify remote table equals local table
+		for(x = 0; x < G2_TABLE_SIZE; x++)
+			ASSERT(RemoteHitTable[x] == LocalHitTable[x]);
+	}
+}
+	
 
 void CG2Control::ApplyPatchTable(CG2Node* pNode)
 {
@@ -1880,8 +1973,9 @@ void CG2Control::Receive_QKA(G2_RecvdPacket &PacketQKA)
 
 void CG2Control::Receive_Q1(G2_RecvdPacket &PacketQ1)
 {
-	if(PacketQ1.pTCP)
-		PacketQ1.pTCP->CloseWithReason("G1 Queries not supported");
+	// just ignore, dont destabilize network
+	//if(PacketQ1.pTCP)
+	//	PacketQ1.pTCP->CloseWithReason("G1 Queries not supported");
 }
 
 void CG2Control::Receive_Q2(G2_RecvdPacket &PacketQ2)
@@ -1914,7 +2008,7 @@ void CG2Control::Receive_Q2(G2_RecvdPacket &PacketQ2)
 			m_PacketsQ2[AVG_DNA]++;
 
 		ResponseAddress = Query.ReturnAddress;
-		if(ResponseAddress.Host.S_addr == 0)
+		if(ResponseAddress.Host.S_addr == 0 || Query.NAT)
 			ResponseAddress = PacketQ2.Source;
 
 		uint32 GenKey = GenerateQueryKey(PacketQ2.Source.Host.S_addr);
@@ -2445,7 +2539,7 @@ void CG2Control::Receive_CRAWLR(G2_RecvdPacket &PacketCRAWLR)
 	G2_CRAWLA GnuCrawlAck(NETWORK_GNUTELLA);
 
 	// Self Info
-	m_pNet->m_pGnu->GetLocalNodeInfo(G2CrawlAck.GnuSelf);
+	m_pNet->m_pGnu->GetLocalNodeInfo(GnuCrawlAck.GnuSelf);
 	
 	for(int i = 0; i < m_pNet->m_pGnu->m_NodeList.size(); i++)
 		if(m_pNet->m_pGnu->m_NodeList[i]->m_Status == SOCK_CONNECTED)
@@ -2568,6 +2662,26 @@ void CG2Control::Send_PO(G2_PI &Ping, CG2Node* pTCP)
 {
 	G2_PO Pong;
 	Pong.Relay = Ping.Relay;
+
+	if(Ping.ConnectRequest)
+	{
+		Pong.ConnectAck = true;
+
+		if(Ping.HubMode)
+			if( CountHubConnects() < m_pPrefs->m_G2MaxConnects)
+				Pong.SpaceAvailable = true;
+		
+		if( !Ping.HubMode )
+			if( CountChildConnects() < m_pPrefs->m_MaxLeaves)
+				Pong.SpaceAvailable = true;
+
+		if( !Pong.SpaceAvailable )
+			for(int i = 0; i < m_G2NodeList.size() && i < 5; i++)
+			{
+				CG2Node* pNode = GetRandHub();
+				Pong.Cached.push_back( pNode->m_Address );
+			}
+	}
 
 	m_pProtocol->Encode_PO(Pong);
 
@@ -2815,10 +2929,6 @@ void CG2Control::Send_Q2(G2HubInfo* pHub, G2_Q2 &Query, CG2Node* pTCP)
 		Query.ReturnAddress.Host = m_pNet->m_CurrentIP;
 		Query.ReturnAddress.Port = m_pNet->m_CurrentPort;
 	}
-	/*else if( m_pNet->m_UdpFirewall == UDP_NAT)
-	{
-		Query.ReturnAddress = IPv4();
-	}*/
 	else
 	{
 		CG2Node* pRandHub = GetRandHub();
@@ -2827,6 +2937,9 @@ void CG2Control::Send_Q2(G2HubInfo* pHub, G2_Q2 &Query, CG2Node* pTCP)
 			Query.ReturnAddress = pRandHub->m_Address;
 		else
 			return;
+
+		if( m_pNet->m_UdpFirewall == UDP_NAT)
+			Query.NAT = true;
 	}
 
 
@@ -2957,7 +3070,7 @@ void CG2Control::Send_QH2(GnuQuery &FileQuery, std::list<UINT> &MatchingIndexes)
 
 	
 		// Send hits
-		if( HitsinPacket >= 10 )
+		if( HitsinPacket >= 5 )
 		{
 			Send_QH2(FileQuery, QueryHit);
 			

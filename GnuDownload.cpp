@@ -1359,20 +1359,20 @@ bool CGnuDownload::StartDownload()
 			m_LocalProxy = m_pPrefs->GetRandProxy();
 	}
 
-	CString TargetHost = m_pShell->m_UseProxy ? m_LocalProxy.host : IPtoStr(HostInfo()->Address.Host);
-	uint16	TargetPort = m_pShell->m_UseProxy ? m_LocalProxy.port : HostInfo()->Address.Port;
+	m_ConnectAddress.Host = m_pShell->m_UseProxy ? StrtoIP(m_LocalProxy.host) : HostInfo()->Address.Host;
+	m_ConnectAddress.Port = m_pShell->m_UseProxy ? m_LocalProxy.port : HostInfo()->Address.Port;
 
 	if(m_PushProxy)
 	{
-		TargetHost = IPtoStr( m_ProxyAddress.Host );
-		TargetPort = m_ProxyAddress.Port;
+		m_ConnectAddress.Host = m_ProxyAddress.Host;
+		m_ConnectAddress.Port = m_ProxyAddress.Port;
 
-		SetError("Push Proxy " + TargetHost + ":" + NumtoStr(TargetPort) + "...");
+		SetError("Push Proxy " + IPtoStr(m_ConnectAddress.Host) + ":" + NumtoStr(m_ConnectAddress.Port) + "...");
 		StatusUpdate(TRANSFER_CONNECTING);
 	}
 
 	// Attempt connect
-	if( !Connect(TargetHost, TargetPort) )
+	if( !Connect(IPtoStr(m_ConnectAddress.Host), m_ConnectAddress.Port) )
 	{
 		int ErrorCode = GetLastError();
 
@@ -1670,7 +1670,8 @@ void CGnuDownload::Timer()
 	// Time out downloads
 	if(m_Status == TRANSFER_CONNECTING)
 	{
-		m_nSecsDead++;
+		if( m_pNet->NetStat.GetStatus(m_ConnectAddress) != -1 || !m_pNet->NetStat.IsLoaded())
+			m_nSecsDead++;
 
 		if(m_nSecsDead > TRANSFER_TIMEOUT)
 		{

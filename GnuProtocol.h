@@ -62,7 +62,7 @@ public:
 	void Receive_RouteTablePatch(Gnu_RecvdPacket &Packet);
 
 	// Sending
-	void Send_Ping(CGnuNode* pTCP, int TTL, GUID* pGuid=NULL, IPv4 Target=IPv4());
+	void Send_Ping(CGnuNode* pTCP, int TTL, bool NeedHosts, GUID* pGuid=NULL, IPv4 Target=IPv4());
 	void Send_Pong(CGnuNode* pTCP, packet_Pong &Pong);
 	void Send_PatchReset(CGnuNode* pTCP);
 	void Send_PatchTable(CGnuNode* pTCP);
@@ -83,6 +83,8 @@ public:
 	
 	int	ParsePayload(byte* &pPayload, int &BytesLeft, byte Break, byte* pBuffer, int BufferSize);
 	byte m_QueryBuffer[1024];
+
+	byte m_PacketBuffer[1024];
 
 	CGnuControl*   m_pComm;
 	CGnuCore*      m_pCore;

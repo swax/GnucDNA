@@ -20,6 +20,8 @@
 #include "GnuShare.h"
 #include "GnuControl.h"
 
+#define GNU_CONNECT_TIMEOUT 4
+
 #define REQUERY_WAIT 30
 
 #define PACKET_BUFF	 32768
@@ -123,7 +125,8 @@ public:
 	// Node vars
 	int m_NodeID;
 	int	m_Status;
-	
+	int m_LastState;
+
 	int	m_SecsTrying;
 	int m_SecsAlive;
 	int	m_SecsDead;

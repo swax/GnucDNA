@@ -124,8 +124,153 @@ void CGnuProtocol::PacketError(CString Type, CString Error, byte* packet, int le
 void CGnuProtocol::Receive_Ping(Gnu_RecvdPacket &Packet)
 {
 	packet_Ping* Ping = (packet_Ping*) Packet.Header;
-	
+
 	CGnuNode* pNode = Packet.pTCP;
+
+	// Build a pong
+	packet_Pong* pPong      = (packet_Pong*) m_PacketBuffer;
+	pPong->Header.Guid		= Ping->Header.Guid;
+	pPong->Header.Function	= 0x01;
+	pPong->Header.TTL		= 1;
+	pPong->Header.Hops		= 0;
+	pPong->Port				= m_pNet->m_CurrentPort;
+	pPong->Host				= m_pNet->m_CurrentIP;
+	pPong->FileCount			= m_pShare->m_TotalLocalFiles;
+
+	if(m_pPrefs->m_ForcedHost.S_addr)
+		pPong->Host = m_pPrefs->m_ForcedHost;
+
+	// If we are an ultrapeer, the size field is used as a marker send that info
+	if(m_pComm->m_GnuClientMode == GNU_ULTRAPEER)
+		pPong->FileSize = m_pShare->m_UltrapeerSizeMarker;
+	else
+		pPong->FileSize = m_pShare->m_TotalLocalSize;
+
+
+	int packetLength = 37;
+
+	bool isBig = false;
+	bool scp   = false;
+	bool isDna = false;
+
+	// if ggep ping
+	if(Ping->Header.Payload > 0)
+	{
+		byte*  PingBuffer = ((byte*) Ping) + 23;
+		uint32 BytesRead  = Ping->Header.Payload;
+
+		// check if ggep
+		if(PingBuffer[0] == 0xC3 && BytesRead > 0)
+		{
+			byte* ggepBuff = PingBuffer;
+			ggepBuff  += 1;
+			BytesRead -= 1;
+
+			GGEPReadResult Status = BLOCK_GOOD;
+			
+			while(Status == BLOCK_GOOD)
+			{
+				packet_GGEPBlock Block;
+				Status = Decode_GGEPBlock(Block, ggepBuff, BytesRead);
+
+				if( strcmp(Block.Name, "DNA") == 0)
+					isDna = true;
+
+				if( strcmp(Block.Name, "SCP") == 0)
+					scp = true;
+
+				if(Block.Last)
+					break;
+			}
+		}
+	}
+
+	// create big pong
+	if(isBig)
+	{
+		// create big pong
+		byte* pGGEPStart = m_PacketBuffer + packetLength;
+
+		*pGGEPStart   = 0xC3; // ggep magic
+		packetLength += 1;
+
+		// add ultrapeer status
+		packet_GGEPBlock UpBlock;
+		memcpy(UpBlock.Name, "UP", 2);
+
+		byte upStatus[3];
+		upStatus[0] = (m_pComm->m_GnuClientMode == GNU_ULTRAPEER);
+		upStatus[1] = MAX_LEAVES - m_pComm->CountLeafConnects();
+		upStatus[2] = m_pPrefs->m_MaxConnects = m_pComm->CountUltraConnects();
+		UpBlock.Last = (scp == false && isDna == false);
+
+		packetLength += Encode_GGEPBlock(UpBlock, m_PacketBuffer + packetLength, upStatus, 3);
+
+
+		if(scp)
+		{
+			// add cache ips
+			packet_GGEPBlock IppBlock;
+			memcpy(IppBlock.Name, "IPP", 3);
+			IppBlock.Last = (isDna == false);
+			
+			int size = (m_pCache->m_GnuReal.size() > 10) ? 10 : m_pCache->m_GnuReal.size();
+
+			if(size)
+			{
+				byte* pIPs = new byte[size];
+
+				std::list<Node>::iterator itNode = m_pCache->m_GnuReal.begin();
+				for(int i = 0; itNode != m_pCache->m_GnuReal.end(); itNode++, i++)
+				{
+					IPv4 address;
+					address.Host = StrtoIP((*itNode).Host);
+					address.Port = (*itNode).Port;
+					memcpy(pIPs + (i * 6), &address, 6);
+				}
+
+				packetLength += Encode_GGEPBlock(IppBlock, m_PacketBuffer + packetLength, pIPs, size);
+				delete [] pIPs;
+			}
+		}
+
+		if(isDna)
+		{
+			int size   = (m_pCache->m_GnuDna.size() > 10) ? 10 : m_pCache->m_GnuDna.size();
+			
+			packet_GGEPBlock DnaBlock;
+			memcpy(DnaBlock.Name, "DNA", 3);
+			DnaBlock.Last = (size == 0);
+			packetLength += Encode_GGEPBlock(DnaBlock, m_PacketBuffer + packetLength, NULL, 0);
+
+			if(size)
+			{
+				// add dna ips
+				packet_GGEPBlock DIppBlock;
+				memcpy(DIppBlock.Name, "DIPP", 3);
+				DIppBlock.Last = true;
+
+				byte* pIPs = new byte[size];
+
+				std::list<Node>::iterator itNode = m_pCache->m_GnuDna.begin();
+				for(int i = 0; itNode != m_pCache->m_GnuDna.end(); itNode++, i++)
+				{
+					IPv4 address;
+					address.Host = StrtoIP((*itNode).Host);
+					address.Port = (*itNode).Port;
+					memcpy(pIPs + (i * 6), &address, 6);
+				}
+
+				packetLength += Encode_GGEPBlock(DIppBlock, m_PacketBuffer + packetLength, pIPs, size);
+				delete [] pIPs;
+			}
+		}
+	}
+
+
+	pPong->Header.Payload = packetLength - 23;
+	
+	
 	if(pNode == NULL)
 	{
 		// If received udp from not-local connection, full udp support
@@ -142,6 +287,8 @@ void CGnuProtocol::Receive_Ping(Gnu_RecvdPacket &Packet)
 				m_pNet->m_UdpFirewall = UDP_FULL;	
 		}
 
+		m_pDatagram->SendPacket(Packet.Source, m_PacketBuffer, packetLength);
+
 		return;
 	}
 
@@ -155,23 +302,7 @@ void CGnuProtocol::Receive_Ping(Gnu_RecvdPacket &Packet)
 		return;
 	}
 
-	// Build a pong
-	packet_Pong Pong;
-	Pong.Header.Guid		= Ping->Header.Guid;
-	Pong.Port				= m_pNet->m_CurrentPort;
-	Pong.Host				= m_pNet->m_CurrentIP;
-	Pong.FileCount			= m_pShare->m_TotalLocalFiles;
-
-	if(m_pPrefs->m_ForcedHost.S_addr)
-		Pong.Host = m_pPrefs->m_ForcedHost;
-
-	// If we are an ultrapeer, the size field is used as a marker send that info
-	if(m_pComm->m_GnuClientMode == GNU_ULTRAPEER)
-		Pong.FileSize = m_pShare->m_UltrapeerSizeMarker;
-	else
-		Pong.FileSize = m_pShare->m_TotalLocalSize;
-
-	Send_Pong(pNode, Pong);
+	pNode->SendPacket(m_PacketBuffer, packetLength, PACKET_PONG, pPong->Header.TTL - 1);
 }
 
 
@@ -180,12 +311,99 @@ void CGnuProtocol::Receive_Pong(Gnu_RecvdPacket &Packet)
 	packet_Pong* Pong = (packet_Pong*) Packet.Header;
 	
 	CGnuNode* pNode = Packet.pTCP;
-	if(pNode == NULL)
-		return;
 
 	if(Pong->Header.Payload < 14)		   		 
 	{
 		m_pCore->DebugLog("Gnutella", "Bad Pong, Length " + NumtoStr(Pong->Header.Payload));
+		return;
+	}
+
+	bool isDna = false;
+	bool connectSource = false;
+	
+	// if ggep pong
+	if(Pong->Header.Payload > 14)
+	{
+		byte*  PongBuffer = ((byte*) Pong) + 23 + 14;
+		uint32 BytesRead  = Pong->Header.Payload - 14;	
+		
+		// check if ggep
+		if(*PongBuffer == 0xC3 && BytesRead > 0)
+		{
+			byte* ggepBuff = PongBuffer;
+			ggepBuff  += 1;
+			BytesRead -= 1;
+
+			GGEPReadResult Status = BLOCK_GOOD;
+			
+			while(Status == BLOCK_GOOD)
+			{
+				packet_GGEPBlock Block;
+				Status = Decode_GGEPBlock(Block, ggepBuff, BytesRead);
+
+				if( strcmp(Block.Name, "DNA") == 0)
+					isDna = true;
+
+
+				// dna ips
+				if( strcmp(Block.Name, "DIPP") == 0 && Block.PayloadSize % 6 == 0)
+				{
+					for(int i = 0; i < Block.PayloadSize; i += 6)
+					{
+						IPv4 cacheIP;
+						memcpy(&cacheIP, Block.Payload + i, 6);
+						m_pCache->AddKnown( Node(IPtoStr(cacheIP.Host), cacheIP.Port, NETWORK_GNUTELLA, CTime::GetCurrentTime(), true));
+					}
+				}
+
+				// real ips
+				if(	strcmp(Block.Name, "IPP") == 0 && Block.PayloadSize % 6 == 0) 
+				{
+					for(int i = 0; i < Block.PayloadSize; i += 6)
+					{
+						IPv4 cacheIP;
+						memcpy(&cacheIP, Block.Payload + i, 6);
+						m_pCache->AddKnown( Node(IPtoStr(cacheIP.Host), cacheIP.Port, NETWORK_GNUTELLA, CTime::GetCurrentTime(), false));
+					}
+				}
+
+				// utlrapeer status
+				if(	strcmp(Block.Name, "UP") == 0 && Block.PayloadSize == 3) 
+				{
+					if(Block.Payload[0])
+					{
+						// if we are leaf and remote node has space
+						if(m_pComm->m_GnuClientMode == GNU_LEAF && Block.Payload[1])
+							if(m_pPrefs->m_LeafModeConnects - m_pComm->CountUltraConnects() > 0 || (isDna && m_pComm->NeedDnaUltras))
+								connectSource = true;
+
+						// if we are ultra and remote node has space
+						if(m_pComm->m_GnuClientMode == GNU_ULTRAPEER && Block.Payload[2])
+							if(m_pPrefs->m_MaxConnects - m_pComm->CountUltraConnects() > 0 || (isDna && m_pComm->NeedDnaUltras))
+								connectSource = true;
+					}
+				}
+
+				if(Block.Last)
+					break;
+			}
+		}
+	}
+
+	// if received udp
+	if(pNode == NULL)
+	{
+		if(connectSource && m_pComm->m_TryingConnect)
+			m_pComm->AddNode(IPtoStr(Packet.Source.Host), Packet.Source.Port);
+		else if(isDna)
+			m_pCache->AddKnown( Node(IPtoStr(Packet.Source.Host), Packet.Source.Port, NETWORK_GNUTELLA, CTime::GetCurrentTime(), true));
+		else
+			m_pCache->AddKnown( Node(IPtoStr(Packet.Source.Host), Packet.Source.Port, NETWORK_GNUTELLA, CTime::GetCurrentTime(), false));
+
+
+		if(m_pNet->m_UdpFirewall == UDP_BLOCK)
+			m_pNet->m_UdpFirewall = UDP_NAT;
+
 		return;
 	}
 
@@ -1005,7 +1223,7 @@ void CGnuProtocol::Receive_Bye(Gnu_RecvdPacket &Packet)
 	if( Packet.Length > 25)
 		Reason = CString( (char*) &ByeData[25], Packet.Length - 25);
 
-	pNode->CloseWithReason( Reason, true );
+	pNode->CloseWithReason( Reason, 0, true );
 }
 
 void CGnuProtocol::Receive_Unknown(Gnu_RecvdPacket &Packet)
@@ -1234,7 +1452,7 @@ void CGnuProtocol::ReceiveVM_UDPConnectBack(Gnu_RecvdPacket &Packet)
 	IPv4 Target;
 	Target.Host = pNode->m_Address.Host;
 	Target.Port = ConnectPort;
-	Send_Ping(NULL, 1, &VendMsg->Header.Guid, Target);		
+	Send_Ping(NULL, 1, false, &VendMsg->Header.Guid, Target);		
 }
 
 void CGnuProtocol::ReceiveVM_UDPRelayConnect(Gnu_RecvdPacket &Packet)
@@ -1266,7 +1484,7 @@ void CGnuProtocol::ReceiveVM_UDPRelayConnect(Gnu_RecvdPacket &Packet)
 		IPv4 Target;
 		memcpy(&Target, ((byte*) VendMsg) + 31, 6);
 
-		Send_Ping(NULL, 1, &VendMsg->Header.Guid, Target);
+		Send_Ping(NULL, 1, false, &VendMsg->Header.Guid, Target);
 	}
 }
 
@@ -1706,7 +1924,7 @@ void CGnuProtocol::WriteCrawlResult(byte* buffer, CGnuNode* pNode, byte Flags)
 
 ////////////////////////////////////////////////////////////////////////
 
-void CGnuProtocol::Send_Ping(CGnuNode* pTCP, int TTL, GUID* pGuid, IPv4 Target)
+void CGnuProtocol::Send_Ping(CGnuNode* pTCP, int TTL, bool NeedHosts, GUID* pGuid, IPv4 Target)
 {
 	GUID Guid;
 
@@ -1715,20 +1933,44 @@ void CGnuProtocol::Send_Ping(CGnuNode* pTCP, int TTL, GUID* pGuid, IPv4 Target)
 	else
 		GnuCreateGuid(&Guid);
 
-	packet_Ping Ping;
+	packet_Ping* pPing = (packet_Ping*) m_PacketBuffer; 
 	
-	Ping.Header.Guid	 = Guid;
-	Ping.Header.Function = 0;
-	Ping.Header.Hops	 = 0;
-	Ping.Header.TTL		 = TTL;
-	Ping.Header.Payload  = 0;
+	pPing->Header.Guid	   = Guid;
+	pPing->Header.Function = 0;
+	pPing->Header.Hops	   = 0;
+	pPing->Header.TTL	   = TTL;
+	pPing->Header.Payload  = 0;
 
+	int packetLength = 23;
+
+	// if udp or tcp support ggep, add dna marker
+	if(NeedHosts && (pTCP == NULL || pTCP->m_SupportsVendorMsg))
+	{
+		byte* pGGEPStart = m_PacketBuffer + packetLength;
 	
+		*pGGEPStart   = 0xC3; // ggep magic
+		packetLength += 1;
+	
+		packet_GGEPBlock ScpBlock;
+		memcpy(ScpBlock.Name, "SCP", 3);
+
+		packetLength += Encode_GGEPBlock(ScpBlock, m_PacketBuffer + packetLength, NULL, 0);
+
+
+		packet_GGEPBlock DnaBlock;
+		memcpy(DnaBlock.Name, "DNA", 3);
+		DnaBlock.Last = true;
+
+		packetLength += Encode_GGEPBlock(DnaBlock, m_PacketBuffer + packetLength, NULL, 0);
+	}
+	
+	pPing->Header.Payload = packetLength - 23;
+
 	m_pComm->m_TableLocal.Insert(Guid, 0);
 	if(pTCP)
-		pTCP->SendPacket(&Ping, 23, PACKET_PING, Ping.Header.Hops);
+		pTCP->SendPacket(m_PacketBuffer, packetLength, PACKET_PING, pPing->Header.Hops);
 	else
-		m_pDatagram->SendPacket(Target, (byte*) &Ping, 23);
+		m_pDatagram->SendPacket(Target, m_PacketBuffer, packetLength);
 
 }
 

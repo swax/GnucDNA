@@ -538,6 +538,16 @@ void CG2Protocol::Decode_PI(G2_Header PacketPI, G2_PI &Ping)
 		{
 			Ping.TestFirewall = true;
 		}
+
+		// connect request
+		else if( strcmp(childPacket.Name, "/PI/CR") == 0 )
+		{
+			if( ReadPayload(childPacket) && childPacket.PayloadSize >= 1)
+			{
+				Ping.ConnectRequest = true;
+				Ping.HubMode = (*childPacket.Payload | 1);
+			}
+		}
 	}
 }
 
@@ -557,6 +567,31 @@ void CG2Protocol::Decode_PO(G2_Header PacketPO, G2_PO &Pong)
 		//  Relay
 		if( strcmp(childPacket.Name, "/PO/RELAY") == 0 )
 			Pong.Relay = true;
+
+		// connect ack
+		else if( strcmp(childPacket.Name, "/PO/CA") == 0 )
+		{
+			if( ReadPayload(childPacket) && childPacket.PayloadSize >= 1)
+			{
+				Pong.ConnectAck = true;
+				Pong.SpaceAvailable = (*childPacket.Payload | 1);
+			}
+		}
+
+		// cached hubs
+		else if( strcmp(childPacket.Name, "/PO/CH") == 0 )
+		{
+			if( ReadPayload(childPacket) && childPacket.PayloadSize % 6 == 0)
+			{
+				for(int i = 0; i < childPacket.PayloadSize; i += 6)
+				{
+					IPv4 address;
+					memcpy(&address.Host, childPacket.Payload, 4);
+					memcpy(&address.Port, childPacket.Payload + 4, 2);
+					Pong.Cached.push_back(address);
+				}
+			}
+		}
 	}
 }
 
@@ -797,6 +832,9 @@ void CG2Protocol::Decode_Q2(G2_Header PacketQ2, G2_Q2 &Query)
 					iPos += iNull + 1;
 				}
 			}
+
+		if( strcmp(childPacket.Name, "/Q2/NAT") == 0 )
+			Query.NAT = true;
 
 		if( strcmp(childPacket.Name, "/Q2/dna") == 0 )
 			Query.dna = true;
@@ -1293,6 +1331,11 @@ void CG2Protocol::Encode_PI(G2_PI &Ping)
 	if(Ping.TestFirewall)
 		WritePacket(pPI, "TFW");
 	
+	if(Ping.ConnectRequest)
+	{
+		byte hubMode = (Ping.HubMode) ? 1 : 0;
+		WritePacket(pPI, "CR", &hubMode, 1);
+	}
 
 	WriteFinish();
 }
@@ -1303,6 +1346,27 @@ void CG2Protocol::Encode_PO(G2_PO &Pong)
 
 	if(Pong.Relay)
 		WritePacket(pPO, "RELAY");
+
+	if(Pong.ConnectAck)
+	{
+		byte space = (Pong.SpaceAvailable) ? 1 : 0;
+		WritePacket(pPO, "CA", &space, 1);
+	}
+
+	
+	if(Pong.Cached.size())
+	{
+		byte assm[6 * 5];
+		int offset = 0;
+		for(int i = 0; i < Pong.Cached.size() && i < 5; i++)
+		{
+			memcpy(assm + offset, &Pong.Cached[i].Host, 4);
+			memcpy(assm + offset + 4, &Pong.Cached[i].Port, 2);
+			offset += 6;
+		}
+
+		WritePacket(pPO, "CH", assm, offset);
+	}
 
 	WriteFinish();
 }
@@ -1556,6 +1620,9 @@ void CG2Protocol::Encode_Q2(G2_Q2 &Query)
 
 	if( ilength)
 		WritePacket(pQ2, "I", assm, ilength);
+
+	if(Query.NAT)
+		WritePacket(pQ2, "NAT");
 
 	WritePacket(pQ2, "dna");
  

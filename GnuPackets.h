@@ -39,7 +39,7 @@ struct packet_Pong			// Size 37
 	packet_Header Header;		// 0  - 22							
 	WORD Port;					// 23 - 24
 	IP Host;					// 25 - 28
-	UINT FileCount;			// 29 - 32
+	UINT FileCount;				// 29 - 32
 	UINT FileSize;				// 33 - 36
 };
 

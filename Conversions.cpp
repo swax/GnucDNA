@@ -663,6 +663,8 @@ CString SockErrortoString(int ErrorCode)
 	{
 	case 10053:
 		return "Aborted";
+	case 10060:
+		return "Timed Out";
 	case 10061:
 		return "Refused";
 	}

@@ -14,9 +14,6 @@ class CGnuPrefs;
 #define GWC_VERSION1	1 
 #define	GWC_VERSION2	2
 
-#define RECENT_SIZE 60
-
-
 struct AltWebCache
 {
 	CString URL;
@@ -53,7 +50,7 @@ public:
 	void AddKnown(Node ActiveNode);
 	void AddWorking(Node WorkingNode);
 
-	bool IsRecent(IP);
+	bool IsTimeout(IP);
 	void RemoveIP(CString, int);
 
 	// Web Cache funtions
@@ -90,7 +87,7 @@ public:
 	std::list<Node> m_G2Real;
 	std::list<Node> m_G2Dna;
 
-	std::list<IP>   m_RecentIPs;
+	std::map<uint32, int> m_TimeoutIPs;
 
 
 	bool m_AllowPrivateIPs;

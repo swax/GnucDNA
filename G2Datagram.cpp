@@ -137,7 +137,11 @@ void CG2Datagram::Timer()
 	m_TransferPacketAccess.Lock();
 	
 		for( int i = 0; i < m_TransferPackets.size(); i++ )
-			SendPacket( m_TransferPackets[i] );
+		{
+			ThreadPacket* transfer = m_TransferPackets[i];
+			SendPacket(transfer->Address, transfer->Packet, transfer->Length);
+			delete transfer;
+		}
 		
 		m_TransferPackets.clear();
 
@@ -289,7 +293,7 @@ void CG2Datagram::Decode_GND(IPv4 Address, GND_Header* RecvPacket, int length)
 
 			if( streamStatus == PACKET_GOOD )
 			{
-				ASSERT(PacketSize == 0);
+				//ASSERT(PacketSize == 0);
 				if(PacketSize != 0)
 					m_pG2Comm->m_pCore->DebugLog("G2 Network", "UDP Recvd Error: " + HexDump(FinBuffer, FinSize));
 
@@ -354,11 +358,22 @@ void CG2Datagram::SendPacket(IPv4 Address, byte* packet, uint32 length, bool Thr
 	if(length == 0 || length > 65536 || packet == NULL)
 		return;
 	
+	if( Thread )
+	{
+		ThreadPacket* transfer = new ThreadPacket(Address, packet, length);
+		m_TransferPacketAccess.Lock();
+			m_TransferPackets.push_back( transfer );
+		m_TransferPacketAccess.Unlock();
+
+		return;
+	}
+		
+
 	// Force ack off if cant receive them
 	if(m_pG2Comm->m_pNet->m_UdpFirewall == UDP_BLOCK)
 		ReqAck = false;
 
-	if(!Thread && m_pG2Comm->m_pCore->m_dnaCore->m_dnaEvents)
+	if(m_pG2Comm->m_pCore->m_dnaCore->m_dnaEvents)
 		m_pG2Comm->m_pCore->m_dnaCore->m_dnaEvents->NetworkPacketOutgoing(NETWORK_G2, false , Address.Host.S_addr, Address.Port, packet, length, false);
 	
 
@@ -430,15 +445,7 @@ void CG2Datagram::SendPacket(IPv4 Address, byte* packet, uint32 length, bool Thr
 		Offset += FragSize;
 	}
 
-	if( Thread )
-	{
-		m_TransferPacketAccess.Lock();
-			m_TransferPackets.push_back( outPacket );
-		m_TransferPacketAccess.Unlock();
-	}
-	else
-		SendPacket( outPacket );
-	
+	SendPacket( outPacket );
 }
 
 void CG2Datagram::SendPacket(GND_Packet* OutPacket)

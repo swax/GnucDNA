@@ -134,6 +134,14 @@ UINT HashWorker(LPVOID pVoidHash)
 		if(pHash->m_StopThread)
 			return 0;
 
+		if(pHash->m_SaveHashFile && pHash->m_SaveInterval > HASH_SAVE_INTERVAL)
+		{
+			pHash->SaveShareHashes(pHash->m_pCore->m_RunPath + "GnuHashes.ini");
+
+			pHash->m_SaveInterval = 0;
+			pHash->m_SaveHashFile = false;
+		}
+
 		if(pHash->m_EverythingHashed || pHash->m_StopHashing)
 			continue;
 
@@ -155,6 +163,9 @@ UINT HashWorker(LPVOID pVoidHash)
 				for(int j = 0; j < HASH_TYPES; j++ ) 
 					if( pShare->m_SharedFiles[i].HashValues[j] == "" ) 
 						needHash = true; 
+
+				if(pShare->m_SharedFiles[i].TreeSize == 0 || pShare->m_SharedFiles[i].TigerTree == NULL)
+					needHash = true;
 
 				if(needHash && !pShare->m_SharedFiles[i].HashError && !pShare->m_SharedFiles[i].Dir.empty()) 
 				{
@@ -624,7 +635,6 @@ void CGnuFileHash::LoadShareHashes(CString HashFileName)
 
 				if(hf.TreeSize % 24 != 0)
 				{
-					ASSERT(0);
 					hf.TreeSize = 0;
 					continue;
 				}
@@ -691,7 +701,9 @@ void CGnuFileHash::SaveShareHashes(CString HashFileName)
 		for(int j = 0; j < HASH_TYPES; j++)
 			HashFile.WriteString("urn:" + HashIDtoTag(j) + CString(m_pShare->m_SharedFiles[i].HashValues[j].c_str()) + "\n");
 
-		
+		if(m_pShare->m_SharedFiles[i].TreeSize % 24 != 0)
+			ASSERT(0);
+
 		HashFile.WriteString("TreeSize:"  + NumtoStr(m_pShare->m_SharedFiles[i].TreeSize)  + "\n");
 		HashFile.WriteString("TreeDepth:" + NumtoStr(m_pShare->m_SharedFiles[i].TreeDepth) + "\n");
 		HashFile.WriteString("TigerTree:");
@@ -746,12 +758,7 @@ void CGnuFileHash::Timer()
 	if(m_SaveHashFile)
 	{
 		if(m_SaveInterval > HASH_SAVE_INTERVAL)
-		{
-			SaveShareHashes(m_pCore->m_RunPath + "GnuHashes.ini");
-
-			m_SaveInterval = 0;
-			m_SaveHashFile = false;
-		}
+			m_HashEvent.SetEvent();
 		else
 			m_SaveInterval++;
 	}

@@ -1,3 +1,16 @@
+
+use current udp connect system
+
+use extended timeout
+PI/CR
+	0x01 hub
+	0x02 leaf
+
+PO/CA
+	0x01 space available
+PO/CH
+	Cached hubs
+		
 x-ultrapeer-needed not used
 
 UDP bandwidth control

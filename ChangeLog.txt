@@ -1,6 +1,19 @@
 GnucDNA 1.1.1.4
 	swabby: Startup and shutdown time improved by moving loading hashes to thread, and saving to intervals
-
+	swabby: NAT tag for G2 queries, providing direct bandwidth saving response path
+	swabby: TCP timeouts moved to infinite
+	swabby: G2 queryhit packets built in main thread to prevent corruption
+	swabby: TigerTree hashes rebuilt if corruption detected
+	swabby: Save hashes moved to hash thread to prevent any problems
+	swabby: G2 packet MTU increased, and results per packet decreased to prevent fragmenting
+	swabby: Udp connect system implemented in g2
+	swabby: Foundations for udp connect put into gnutella
+	walt: Added class that allows getting true socket status from the system
+	ben: Optimized making new tcp connections using Walt's class
+	swabby: Fixed g2 based gnutella crawl bug, wasnt reporting self stats
+	doggie: Fixed getting length of ID3v2 headers larger than 16kb
+	swabby: Limited number of network connections for a single subnet
+	
 GnucDNA 1.1.1.3
 	swabby: G2 Crawler packet split, one for Gnutella, one for G2
 	swabby: X-Locale-Pref header added to G1
@@ -409,8 +422,10 @@ GnucDNA 0.9.0
 	
 People: 
 	bbill1: William Britton [williambritton@comcast.net]
-    californiakidd: Jonathan Ballard 
-    cchan: Charles Chan [charlestg@yahoo.com]
+	ben: Ben Wilken [ben_mznet@yahoo.com]
+	californiakidd: Jonathan Ballard 
+	cchan: Charles Chan [charlestg@yahoo.com]
+	doggie: Unknown [doggieliu@gmail.com]
 	henrik: Henrik Backe [backe@swipnet.se]
 	egor: Egor Shokurov [egors@dev.netreflector.com]
 	fred: Fred Decker [fred.decker@sbcglobal.net]

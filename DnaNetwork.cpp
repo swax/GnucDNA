@@ -751,8 +751,6 @@ LONG CDnaNetwork::GetChildConnectedCount(void)
 
 CString CDnaNetwork::GetNodeStatus(LONG NodeID)
 {
-	
-
 	CString strStatus;
 
 	if( m_gnuNetwork->m_pGnu )
@@ -760,7 +758,16 @@ CString CDnaNetwork::GetNodeStatus(LONG NodeID)
 		std::map<int, CGnuNode*>::iterator itNode = m_gnuNetwork->m_pGnu->m_NodeIDMap.find(NodeID);
 
 		if(itNode != m_gnuNetwork->m_pGnu->m_NodeIDMap.end())
-			strStatus = itNode->second->m_StatusText;
+		{
+			CGnuNode* pNode = itNode->second;
+
+			strStatus += pNode->m_StatusText;
+
+			CString State = m_gnuNetwork->NetStat.StatetoStr(pNode->m_LastState);
+
+			if( !State.IsEmpty())
+				strStatus += " - " + State;
+		}
 	}
 
 	if( m_gnuNetwork->m_pG2 )
@@ -768,7 +775,16 @@ CString CDnaNetwork::GetNodeStatus(LONG NodeID)
 		std::map<int, CG2Node*>::iterator itNode = m_gnuNetwork->m_pG2->m_G2NodeIDMap.find(NodeID);
 
 		if(itNode != m_gnuNetwork->m_pG2->m_G2NodeIDMap.end())
-			strStatus = itNode->second->m_StatusText;
+		{
+			CG2Node* pNode = itNode->second;
+			
+			strStatus += pNode->m_StatusText;
+
+			CString State = m_gnuNetwork->NetStat.StatetoStr(pNode->m_LastState);
+
+			if( !State.IsEmpty())
+				strStatus += " - " + State;
+		}
 	}
 
 	return strStatus;

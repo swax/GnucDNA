@@ -246,7 +246,7 @@ void CGnuSock::ParseBrowseRequest()
 	// Check if from gnutella client wanting to browse files
 	if(m_pNet->m_pGnu && m_Handshake.Find("application/x-gnutella-packets") != -1)
 	{
-		CGnuNode* BrowseSock  = new CGnuNode(m_pNet->m_pGnu, m_RemoteHost, m_RemotePort);
+		/*CGnuNode* BrowseSock  = new CGnuNode(m_pNet->m_pGnu, m_RemoteHost, m_RemotePort);
 		BrowseSock->m_Inbound = true;
 
 		SOCKET FreeSock = Detach();
@@ -255,6 +255,14 @@ void CGnuSock::ParseBrowseRequest()
 
 		m_pNet->m_pGnu->m_NodesBrowsing.push_back(BrowseSock);
 		BrowseSock->ParseBrowseHandshakeRequest(m_Handshake);
+
+		// browse not fully working
+
+		// bug caused infinite loop in browse socket cleanup function
+		*/
+
+		Close();
+		return;
 	}
 
 	// Else its a web browser

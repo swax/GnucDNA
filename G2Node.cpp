@@ -71,6 +71,7 @@ CG2Node::CG2Node(CG2Control* pG2Comm, CString Host, uint32 Port)
 	m_RemoteIdent = 0;
 
 	m_Status     = SOCK_CONNECTING;	
+	m_LastState  = 0;
 	m_StatusText = "Connecting";
 	m_NodeMode   = G2_UNKNOWN;
 
@@ -191,12 +192,18 @@ CG2Node::~CG2Node()
 // CG2Node member functions
 void CG2Node::Timer()
 {
+	int CurrentState = m_pNet->NetStat.GetStatus(m_Address);
+	if(m_LastState != CurrentState)
+	{
+		m_LastState = CurrentState;
+		m_pG2Comm->G2NodeUpdate(this);
+	}
 
-	if(SOCK_CONNECTING == m_Status)
+	if(SOCK_CONNECTING == m_Status && (CurrentState != -1 || !m_pNet->NetStat.IsLoaded()))
 	{
 		m_SecsTrying++;
 		
-		if(m_SecsTrying > CONNECT_TIMEOUT)
+		if(m_SecsTrying > G2_CONNECT_TIMEOUT)
 		{
 			CloseWithReason("Timed Out");
 			return;
@@ -262,7 +269,7 @@ void CG2Node::Timer()
 		{
 			m_SecsDead++;
 
-			if(m_SecsDead == 30)
+			if(m_SecsDead >= 30 && m_SecsDead % 5 == 0)
 			{
 				G2_PI Ping;
 				m_pG2Comm->Send_PI(m_Address, Ping, this );
@@ -306,7 +313,7 @@ void CG2Node::Timer()
 		
 			for( int i = 0; i < m_TransferPackets.size(); i++ )
 				SendPacket( m_TransferPackets[i] );
-			
+
 			m_TransferPackets.clear();
 
 		m_TransferPacketAccess.Unlock();
@@ -754,6 +761,20 @@ void CG2Node::ParseIncomingHandshake(CString Data, byte* Stream, int StreamLengt
 		return;
 	}
 
+	// check if too many connections from their subnet
+	int SubnetLimit = 0;
+	for(int i = 0; i < m_pG2Comm->m_G2NodeList.size(); i++)
+		if(m_pG2Comm->m_G2NodeList[i] != this && 
+		   memcmp(&m_Address.Host.S_addr, &m_pG2Comm->m_G2NodeList[i]->m_Address.Host.S_addr, 3) == 0 &&
+		   !IsPrivateIP(m_pG2Comm->m_G2NodeList[i]->m_Address.Host))
+		{
+			SubnetLimit++;
+			if(SubnetLimit > SUBNET_LIMIT)
+			{
+				CloseWithReason("Too many connections");
+				return;
+			}
+		}
 
 	// Parse X-Try-Hubs header
 	CString HubsToTry = FindHeader("X-Try-Hubs");
@@ -770,7 +791,6 @@ void CG2Node::ParseIncomingHandshake(CString Data, byte* Stream, int StreamLengt
 		ParseTryHeader( FindHeader("X-Try-Ultrapeers") );
 	else
 		ParseG1TryHeader( FindHeader("X-Try-Ultrapeers") );
-
 
 	// Connect string, GNUTELLA CONNECT/0.6\r\n
 	if(m_Handshake.Find("GNUTELLA CONNECT/") != -1)

@@ -10,7 +10,41 @@ Pong Receive
 Timer
    Send UltraPong to random child
 
+preferencing
+	only try to connect dna if dna cache not empty
 
+webcache
+	add hosts to real cache gnu/g2
+	
+second gnu/g2
+	if need dna or connection
+		if hosts in dna cache send udp
+		(and tcp until block off)
+	if need connection
+		if hosts in real/perm cache try semd udp 
+		(and tcp until block off)
+	
+gnutella ping tcp/udp
+	if udp, or tcp supports ggep
+	add dna ggep flag if hosts needed
+	
+gnutella pong tcp/udp
+	if dna flag
+		add dnaipp flag
+			add node from dna cache max 10
+		add ipp flag
+			nodes from real cache max 10
+	
+receive pong
+	add hosts to appropriate cache
+	if udp and has slots for leaf/ultrapeer
+		if need connections  try
+		else if need dna and is dna try
+	if not used, (if it is it will be added back on connect)
+		add back to real / dna cache (dnaipp flag)
+
+	check transfers for same host
+	
 Hops setup as gathered from LW
 
 	Leaf Query T:3, H:0 -> Ultrapeer
@@ -107,3 +141,11 @@ Preferencing
 			Drop youngest non-dna
 		Else
 			Drop youngest
+			
+			
+Pong GGEP
+	UP  (size 3) [0] ultrapeer minor/major version, [1] num leaf slots, [2] num ultra slots 
+	VC  (size 5) vendor code, [4] minor/major version
+	GUE (size 1) unicast support
+	LOC (size 3) null terminated local (en)
+	DU  (size 2) daily average uptime

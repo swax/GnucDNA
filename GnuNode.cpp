@@ -69,6 +69,7 @@ CGnuNode::CGnuNode(CGnuControl* pComm, CString Host, UINT Port)
 		m_pComm->m_GnuNodeAddrMap[StrtoIP(Host).S_addr] = this;
 
 	m_Status = SOCK_CONNECTING;	
+	m_LastState = 0;
 	m_StatusText = "Connecting";
 	
 	m_SecsTrying		= 0;
@@ -531,6 +532,21 @@ void CGnuNode::ParseIncomingHandshake06(CString Data, byte* Stream, int StreamLe
 		CloseWithReason("Client Not Valid");
 		return;
 	}
+
+	// check if too many connections from their subnet
+	int SubnetLimit = 0;
+	for(int i = 0; i < m_pComm->m_NodeList.size(); i++)
+		if(m_pComm->m_NodeList[i] != this && 
+		   memcmp(&m_Address.Host.S_addr, &m_pComm->m_NodeList[i]->m_Address.Host.S_addr, 3) == 0 &&
+		   !IsPrivateIP(m_pComm->m_NodeList[i]->m_Address.Host))
+		{
+			SubnetLimit++;
+			if(SubnetLimit > SUBNET_LIMIT)
+			{
+				CloseWithReason("Too many connections");
+				return;
+			}
+		}
 
 	// Parse X-Try header
 	CString TryHeader = FindHeader("X-Try");
@@ -1020,6 +1036,10 @@ void CGnuNode::ParseOutboundHandshake06(CString Data, byte* Stream, int StreamLe
 
 void CGnuNode::ParseTryHeader(CString TryHeader, bool DnaOnly)
 {
+	// if in leaf mode only try dna hosts because others dont allow connections
+	if(m_pComm->m_GnuClientMode == GNU_LEAF && !DnaOnly && m_pCache->m_GnuReal.size() > 0)
+		return;
+
 	// This host responds with more hosts, put on Perm list
 	if( !m_Inbound)
 		m_pCache->AddWorking( Node( IPtoStr(m_Address.Host), m_Address.Port, NETWORK_GNUTELLA, CTime::GetCurrentTime() ) );
@@ -1589,7 +1609,7 @@ void CGnuNode::SetConnected()
 	}
 
 
-	m_pProtocol->Send_Ping(this, 1);	
+	m_pProtocol->Send_Ping(this, 1, true);	
 
 
 	if(m_SupportsVendorMsg)
@@ -2078,7 +2098,7 @@ void CGnuNode::SplitBundle(byte* bundle, DWORD length)
 				*/
 				//////////////////////////////////////////////////////////
 
-				CloseWithReason("Packet Size Greater than 32k", 400);
+				CloseWithReason("Packet Size Greater than 32k from " + this->m_RemoteAgent, 400);
 				return;
 			}
 		}
@@ -2147,8 +2167,6 @@ void CGnuNode::ApplyPatchTable()
 	{
 		if(m_PatchBits == 4)
 		{
-			
-
 			// high bit
 			remotePos = i * 2;
 			SetPatchBit(remotePos, Factor, PatchTable[i] >> 4);
@@ -2291,11 +2309,18 @@ void CGnuNode::Timer()
 
 void CGnuNode::NodeManagement()
 {
-	if(SOCK_CONNECTING == m_Status)
+	int CurrentState = m_pNet->NetStat.GetStatus(m_Address);
+	if(m_LastState != CurrentState)
+	{
+		m_LastState = CurrentState;
+		m_pComm->NodeUpdate(this);
+	}
+
+	if(SOCK_CONNECTING == m_Status && (CurrentState != -1 || !m_pNet->NetStat.IsLoaded()))
 	{
 		m_SecsTrying++;
 		
-		if(m_SecsTrying > CONNECT_TIMEOUT)
+		if(m_SecsTrying > GNU_CONNECT_TIMEOUT)
 		{
 			CloseWithReason("Timed Out");
 			return;
@@ -2350,13 +2375,13 @@ void CGnuNode::NodeManagement()
 		{
 			m_SecsDead++;
 
-			if(m_SecsDead == 30)
-				m_pProtocol->Send_Ping(this, 1);
+			if(m_SecsDead >= 30 && m_SecsDead % 5 == 0)
+				m_pProtocol->Send_Ping(this, 1, true);
 
 			if(m_SecsDead > 60)
 			{		
 				CloseWithReason("Minute Dead", BYE_TIMEOUT);
-				return;
+			    return;
 			}
 		}
 		else

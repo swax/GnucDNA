@@ -69,6 +69,7 @@ public:
 	void DropNode(int G2Mode, bool NeedDna);
 	bool ConnectFromCache(std::list<Node> &Cache, bool Perm);
 
+	void SendUdpConnect(Node HostInfo);
 	void CreateNode(Node HostInfo);
 	void RemoveNode(CG2Node*);
 
@@ -76,6 +77,7 @@ public:
 
 	time_t m_LastConnect;
 
+	bool m_TryingConnect;
 
 	// Hub Balancing
 	void HubBalancing();
@@ -108,6 +110,7 @@ public:
 	void SwitchG2ClientMode(int G2Mode, bool DownG1=false);
 
 	void TestEncodeDecode();
+	void TestQueryHitTable();
 
 	void ApplyPatchTable(CG2Node* pNode);
 	void SetQHTBit(int &remotePos, double &Factor, CG2Node* pNode);

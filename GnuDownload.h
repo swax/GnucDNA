@@ -1,6 +1,6 @@
 #pragma once
 
-
+#define TRANSFER_TIMEOUT  6
 #define RECEIVE_BUFF	32768
 
 
@@ -75,6 +75,8 @@ public:
 	int m_RetryMax;
 
 	// Download Properties
+	IPv4      m_ConnectAddress;
+
 	CString   m_Request;
 	CString   m_Header;
 	CString   m_ServerName;

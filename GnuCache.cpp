@@ -179,7 +179,7 @@ void CGnuCache::AddKnown(Node KnownNode)
 			// put hosts tried in last minute at back of list, probably will be popped anyways
 			// fresh hosts at top of list
 
-			if( IsRecent(StrtoIP(KnownNode.Host)) )
+			if( IsTimeout(StrtoIP(KnownNode.Host)) )
 				ActiveCache->push_back(KnownNode);
 			else
 				ActiveCache->push_front(KnownNode);
@@ -225,21 +225,13 @@ void CGnuCache::AddWorking(Node WorkingNode)
 	}
 }
 
-bool CGnuCache::IsRecent(IP Host)
+bool CGnuCache::IsTimeout(IP Host)
 {
-	std::list<IP>::iterator itIP;
-	for(itIP = m_RecentIPs.begin(); itIP != m_RecentIPs.end(); itIP++)
-		if( (*itIP).S_addr == Host.S_addr)
-		{
-			m_RecentIPs.erase(itIP);
-			m_RecentIPs.push_back(Host);
-			return true;
-		}
+	std::map<uint32, int>::iterator itIP = m_TimeoutIPs.find(Host.S_addr);
+	if( itIP != m_TimeoutIPs.end())
+		return true;
 
-	m_RecentIPs.push_back(Host);
-
-	if(m_RecentIPs.size() > RECENT_SIZE)
-		m_RecentIPs.pop_front();
+	m_TimeoutIPs[Host.S_addr] = 0;
 
 	return false;		
 }
@@ -292,6 +284,16 @@ void CGnuCache::RemoveIP(CString strIP, int Network)
 
 void CGnuCache::Timer()
 {
+	std::map<uint32, int>::iterator itIP;
+	
+	for(itIP = m_TimeoutIPs.begin(); itIP != m_TimeoutIPs.end(); itIP++)
+	{
+		itIP->second++;
+
+		if(itIP->second > 60)
+			itIP = m_TimeoutIPs.erase(itIP);
+	}
+
 	// Transfer new nodes from thread to cache
 	m_TransferAccess.Lock();
 	

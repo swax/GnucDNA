@@ -180,22 +180,31 @@ struct G2_PI // Ping
 	IPv4   UdpAddress;
 	uint32 Ident;
 	bool   TestFirewall;
+	bool   ConnectRequest;
+	bool   HubMode;
 
 	G2_PI()
 	{
 		Relay = false;
 		Ident = 0;
 		TestFirewall = false;
+		ConnectRequest = false;
+		HubMode = false;
 	};
 };
 
 struct G2_PO // Pong
 {
 	bool Relay;
+	bool ConnectAck;
+	bool SpaceAvailable;
+	std::vector<IPv4> Cached;
 
 	G2_PO()
 	{
 		Relay = false;
+		ConnectAck = false;
+		SpaceAvailable = false;
 	};
 };
 
@@ -290,6 +299,8 @@ struct G2_Q2
 
 	std::vector<CString> Interests;
 
+	bool NAT;
+
 	bool dna;
 
 	G2_Q2()
@@ -298,6 +309,8 @@ struct G2_Q2
 
 		MinSize  = 0;
 		MaxSize  = 0;
+
+		NAT = false;
 
 		dna = false;
 	};

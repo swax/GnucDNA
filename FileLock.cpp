@@ -138,7 +138,7 @@ BOOL CFileLock::Open(LPCTSTR lpszFileName, UINT nOpenFlags, bool IgnoreID3, CFil
 
 			if( memcmp(v2header.tag, "ID3", 3) == 0 && v2header.version[0] <= 3)
 			{
-				m_IgnoreBegin  = 10 + (v2header.size[0] << 7 | v2header.size[1] << 7 | v2header.size[2] << 7 | v2header.size[3]);
+				m_IgnoreBegin  = 10 + (v2header.size[0] << 21 | v2header.size[1] << 14 | v2header.size[2] << 7 | v2header.size[3]);
 				m_IgnoreLength -= m_IgnoreBegin;
 				m_IgnoreID3 = true;
 			}

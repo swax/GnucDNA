@@ -74,7 +74,7 @@
 
 
 // DNA Build Options, only define one
-#define DNA_VERSION "1.1.1.3"
+#define DNA_VERSION "1.1.1.4"
 
 #define BUILD_STATIC           // Compiling or using DNA as library
 //#define BUILD_DYNAMIC_DNA    // Compiling DNA as DLL
@@ -109,10 +109,6 @@
 #define CPU_2	0x0004 
 #define CPU_3	0x0008
 
-
-// Prog defines
-#define CONNECT_TIMEOUT		4
-#define TRANSFER_TIMEOUT    4
 
 // Hardcoded Enums
 #define NETWORK_GNUTELLA	1
@@ -212,4 +208,5 @@ using namespace gdna;
 #include "./Common.h"
 #include "./FileLock.h"
 #include "./Headers.h"
+#include "./TcpStatus.h"
 
