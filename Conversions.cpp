@@ -641,4 +641,24 @@ IPv4 AltLoctoAddress(CString AltLoc)
 	return Address;
 }
 
+CString SockErrortoString(int ErrorCode)
+{
+	switch(ErrorCode)
+	{
+	case 10053:
+		return "Aborted";
+	case 10061:
+		return "Refused";
+	}
+
+	return "Unknown";
+}
+
+int VersiontoInt(CString Version)
+{
+	Version.Remove('.');
+
+	return atoi(Version);
+}
+
 } // end gdna namespace

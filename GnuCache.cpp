@@ -297,7 +297,11 @@ void CGnuCache::Timer()
 	
 	while(m_WebTransferList.size())
 	{
+		// add to both g1/g2 caches
 		Node NewNode(m_WebTransferList.back());
+		AddKnown( NewNode );
+
+		NewNode.Network = NETWORK_G2;
 		AddKnown( NewNode );
 
 		m_WebTransferList.pop_back();

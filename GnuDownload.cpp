@@ -330,6 +330,10 @@ void CGnuDownload::OnReceive(int nErrorCode)
 				
 				if (httpVersion.Left(4) == "HTTP")
 				{
+					// clients dont send connection header, but still stay alive
+					if( httpVersion.Left(8) == "HTTP/1.1" )   
+						m_KeepAlive = true; 
+
 					//Read the Status-Code
 					Code = atoi(StatusLine.Left(3));
 					if (StatusLine.Mid(3, 1) == ' ')

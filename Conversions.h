@@ -43,5 +43,9 @@ CString IncrementName(CString);
 
 IPv4 AltLoctoAddress(CString AltLoc);
 
+CString SockErrortoString(int ErrorCode);
+
+int VersiontoInt(CString Version);
+
 } // end gdna namespace
 

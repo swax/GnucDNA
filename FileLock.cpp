@@ -334,9 +334,13 @@ void CFileLock::Unlock()
 int CFileLock::ScanFileSize(CString FilePath)
 {
 	CFileLock scanFile;
-	scanFile.Open(FilePath, CFile::modeRead, true);
-	int FileSize = scanFile.GetLength();
-	scanFile.Close();
+	
+	int FileSize = 0;
+	if( scanFile.Open(FilePath, CFile::modeRead, true) )
+	{
+		FileSize = scanFile.GetLength();
+		scanFile.Close();
+	}
 
 	return FileSize;
 }

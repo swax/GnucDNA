@@ -339,6 +339,7 @@ void CG2Node::OnConnect(int nErrorCode)
 	if(nErrorCode)
 	{
 		m_pCore->LogError("G2Node OnConnect Error " + NumtoStr(nErrorCode));
+		CloseWithReason("Connect " + SockErrortoString(nErrorCode), true, false);
 		return;
 	}
 
@@ -503,9 +504,9 @@ void CG2Node::OnClose(int nErrorCode)
 {
 	m_Status = SOCK_CLOSED;
 
-	CString Reason = "Closed";
+	CString Reason = "Closed ";
 	if(nErrorCode)
-		Reason += " #" + NumtoStr(nErrorCode);
+		Reason += SockErrortoString(nErrorCode);
 
 	CloseWithReason(Reason, true);
 

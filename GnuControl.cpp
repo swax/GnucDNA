@@ -77,6 +77,7 @@ CGnuControl::CGnuControl(CGnuNetworks* pNet)
 
 	m_NextUpgrade	= time(NULL);
 	m_ModeChangeTimeout = 0;
+	m_AutoUpgrade   = time(NULL);
 	
 	m_MinsBelow10   = 0;
 	m_MinsBelow70   = 0;
@@ -309,6 +310,9 @@ void CGnuControl::Timer()
 
 		m_Minute = 0; 
 	}
+
+	if( m_TriedConnects.size() > 100 )
+		m_TriedConnects.clear();
 }
 
 void CGnuControl::MinuteTimer()
@@ -382,8 +386,41 @@ void CGnuControl::HourlyTimer()
 {
 	// Web Cache check in
 	if(m_GnuClientMode == GNU_ULTRAPEER)
-		if(CountUltraConnects() == 0 ||  !m_pNet->m_TcpFirewall)
+		if(CountUltraConnects() == 0 || !m_pNet->m_TcpFirewall) // make sure if no connects to update, because firewall cant be tested without peers
 			m_pCache->WebCacheUpdate();
+
+	m_TriedConnects.clear();
+
+
+	// Helps promote new versions as ultrapeers
+	
+	if(m_GnuClientMode == GNU_LEAF && UltrapeerAble() &&		 // in child mode and ultrapeer able
+	   time(NULL) - m_AutoUpgrade > 6 * 60 * 60 &&				 // up for at least 6 hours
+	   m_pCore->m_SysSpeed > 1500 && m_pCore->m_SysMemory > 500) // processor higher than 2gz and mem higher than 512
+	{
+		// Only auto upgrade if connected to lesser versionsf
+		bool DoUpgrade = true;
+
+		for(int i = 0; i < m_NodeList.size(); i++)
+			if( m_NodeList[i]->m_Status == SOCK_CONNECTED )
+			{
+				if(m_NodeList[i]->m_RemoteAgent.Find("GnucDNA ") == -1)
+					continue;
+
+				int dnapos = m_NodeList[i]->m_RemoteAgent.Find("GnucDNA ");
+
+				// if remote version greater or equal to current, dont upgrade
+				if( VersiontoInt(m_NodeList[i]->m_RemoteAgent.Mid(dnapos + 8, 7)) >= VersiontoInt(m_pCore->m_DnaVersion) )
+					DoUpgrade = false;
+			}
+
+		// Upgrade to ultrapeer
+		if( DoUpgrade )
+		{
+			SwitchGnuClientMode(GNU_ULTRAPEER);
+			m_AutoUpgrade = time(NULL);
+		}
+	}
 }
 
 void CGnuControl::ManageNodes()
@@ -519,16 +556,17 @@ void CGnuControl::AddConnect()
 		for(int i = 0; itNode != m_pCache->m_GnuReal.end(); itNode++, i++)
 			if(i == randIndex)
 			{
+				std::map<uint32, bool>::iterator itAddr = m_TriedConnects.find( StrtoIP((*itNode).Host).S_addr );
+				if(itAddr != m_TriedConnects.end())
+					break;
+
+				m_TriedConnects[ StrtoIP((*itNode).Host).S_addr ] = true;
+
 				AddNode( (*itNode).Host, (*itNode).Port);
 				m_pCache->m_GnuReal.erase(itNode);
 				return;
 			}
 	}
-
-
-	// No nodes in cache, if not connected to anyone either, web cache update
-	if(CountUltraConnects() == 0)
-		m_pCache->WebCacheRequest(true);
 
 
 	// If permanent list has values
@@ -540,10 +578,20 @@ void CGnuControl::AddConnect()
 		for(int i = 0; itNode != m_pCache->m_GnuPerm.end(); itNode++, i++)
 			if(i == randIndex)
 			{
+				std::map<uint32, bool>::iterator itAddr = m_TriedConnects.find( StrtoIP((*itNode).Host).S_addr );
+				if(itAddr != m_TriedConnects.end())
+					break;
+
+				m_TriedConnects[ StrtoIP((*itNode).Host).S_addr ] = true;
+
 				AddNode( (*itNode).Host, (*itNode).Port);
 				return;
 			}
 	}	
+
+	// No nodes in cache, if not connected to anyone either, web cache update
+	if(CountUltraConnects() == 0)
+		m_pCache->WebCacheRequest(true);
 }
 
 void CGnuControl::DropNode(int GnuMode, bool NeedDna)
@@ -776,17 +824,12 @@ int CGnuControl::ScoreNode(CGnuNode* pNode)
 	Score += leafmax * 100 / OPT_LEAFMAX;
 
 	// Upgrade nodes of equal or greater versions only, dont use for downgrade 
-	if(pNode->m_RemoteAgent.Find("GnucDNA") > 0)
+	if(pNode->m_RemoteAgent.Find("GnucDNA ") > 0)
 	{
-		int dnapos = pNode->m_RemoteAgent.Find("GnucDNA");
+		int dnapos = pNode->m_RemoteAgent.Find("GnucDNA ");
 
-		CString CurrentVersion = m_pCore->m_DnaVersion;
-		CString RemoteVersion  = pNode->m_RemoteAgent.Mid(dnapos + 8, 7);
-
-		CurrentVersion.Remove('.');
-		RemoteVersion.Remove('.');
-
-		if( atoi(RemoteVersion) < atoi(CurrentVersion) )
+		// if remote version less than current, dont upgrade
+		if( VersiontoInt(pNode->m_RemoteAgent.Mid(dnapos + 8, 7)) < VersiontoInt(m_pCore->m_DnaVersion) )
 			return 0;
 	}
 	

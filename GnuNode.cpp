@@ -298,6 +298,7 @@ void CGnuNode::OnConnect(int nErrorCode)
 	if(nErrorCode)
 	{
 		m_pCore->LogError("GnuNode OnConnect Error " + NumtoStr(nErrorCode));
+		CloseWithReason("Connect " + SockErrortoString(nErrorCode), true, false);
 		return;
 	}
 	
@@ -1778,9 +1779,9 @@ void CGnuNode::OnClose(int nErrorCode)
 {
 	m_Status = SOCK_CLOSED;
 
-	CString Reason = "Closed";
+	CString Reason = "Closed ";
 	if(nErrorCode)
-		Reason += " #" + NumtoStr(nErrorCode);
+		Reason += SockErrortoString(nErrorCode);
 
 	CloseWithReason(Reason, true);
 

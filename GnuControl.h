@@ -80,6 +80,8 @@ public:
 	
 	int m_UdpPort;
 
+	std::map<uint32, bool> m_TriedConnects;
+
 
 	// Local Client Data
 	CTime   m_ClientUptime;
@@ -98,6 +100,7 @@ public:
 
 	uint32 m_NextUpgrade;
 	uint32 m_ModeChangeTimeout;
+	uint32 m_AutoUpgrade;
 	
 	int m_MinsBelow10;
 	int m_MinsBelow70;

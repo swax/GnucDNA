@@ -346,8 +346,10 @@ void CG2Control::HourlyTimer()
 {
 	// Web Cache check in
 	if(m_ClientMode == G2_HUB)
-		if(CountHubConnects() == 0 ||  !m_pNet->m_TcpFirewall)
+		if(CountHubConnects() == 0 || !m_pNet->m_TcpFirewall) // make sure if no connects to update, because firewall cant be tested without peers
 			m_pCache->WebCacheUpdate();
+
+	m_TriedConnects.clear(); // in case total cache less than 100 and stalled
 }
 
 void CG2Control::TrimMaps()
@@ -541,80 +543,79 @@ void CG2Control::CleanDeadSocks()
 
 void CG2Control::TryConnect()
 {
-	int attempts = 10;
 
-	while( attempts > 0 )
+	// If Real list has values
+	if(m_pCache->m_G2Real.size())
 	{
-		attempts--;
+		// try a random host from top 15, x-try adds max 5, reduces one nodes chance of messing with cache
+		int randIndex = ( m_pCache->m_G2Real.size() > 15) ? rand() % 15 : rand() % m_pCache->m_G2Real.size();
 
-		// If Real list has values
-		if(m_pCache->m_G2Real.size())
-		{
-			// try a random host from top 15, x-try adds max 5, reduces one nodes chance of messing with cache
-			int randIndex = ( m_pCache->m_G2Real.size() > 15) ? rand() % 15 : rand() % m_pCache->m_G2Real.size();
+		std::list<Node>::iterator itNode = m_pCache->m_G2Real.begin();
+		for(int i = 0; itNode != m_pCache->m_G2Real.end(); itNode++, i++)
+			if(i == randIndex)
+			{
+				std::map<uint32, bool>::iterator itAddr = m_TriedConnects.find( StrtoIP((*itNode).Host).S_addr );
+				if(itAddr != m_TriedConnects.end())
+					break;
 
-			std::list<Node>::iterator itNode = m_pCache->m_G2Real.begin();
-			for(int i = 0; itNode != m_pCache->m_G2Real.end(); itNode++, i++)
-				if(i == randIndex)
-				{
-					std::map<uint32, bool>::iterator itAddr = m_TriedConnects.find( StrtoIP((*itNode).Host).S_addr );
+				m_TriedConnects[ StrtoIP((*itNode).Host).S_addr ] = true;
 
-					if(attempts && itAddr != m_TriedConnects.end())
-						continue;
+				CreateNode( *itNode );
+				m_pCache->m_G2Real.erase(itNode);
 
-					m_TriedConnects[ StrtoIP((*itNode).Host).S_addr ] = true;
-
-
-					CreateNode( *itNode );
-					m_pCache->m_G2Real.erase(itNode);
-
-					return;
-				}
-		}
-
-		// If permanent list has values
-		if(m_pCache->m_G2Perm.size())
-		{
-			int randIndex = rand() % m_pCache->m_G2Perm.size();
-
-			std::list<Node>::iterator itNode = m_pCache->m_G2Perm.begin();
-			for(int i = 0; itNode != m_pCache->m_G2Perm.end(); itNode++, i++)
-				if(i == randIndex)
-				{
-					std::map<uint32, bool>::iterator itAddr = m_TriedConnects.find( StrtoIP((*itNode).Host).S_addr );
-
-					if(attempts && itAddr != m_TriedConnects.end())
-						continue;
-
-					m_TriedConnects[ StrtoIP((*itNode).Host).S_addr ] = true;
-					
-
-					CreateNode( *itNode );
-
-					return;
-				}
-		}
-
-		// Nothing in G2 caches, try G1 nodes for entry to G2
-		if(m_pCache->m_GnuReal.size())
-		{
-			// try a random host from top 15, x-try adds max 5, reduces one nodes chance of messing with cache
-			int randIndex = ( m_pCache->m_GnuReal.size() > 15) ? rand() % rand() % 15 : m_pCache->m_GnuReal.size();
-
-			std::list<Node>::iterator itNode = m_pCache->m_GnuReal.begin();
-			for(int i = 0; itNode != m_pCache->m_GnuReal.end(); itNode++, i++)
-				if(i == randIndex)
-				{
-					CreateNode( *itNode );
-					return;
-				}
-		}
+				return;
+			}
 	}
+
+
+	// If permanent list has values
+	if(m_pCache->m_G2Perm.size())
+	{
+		int randIndex = rand() % m_pCache->m_G2Perm.size();
+
+		std::list<Node>::iterator itNode = m_pCache->m_G2Perm.begin();
+		for(int i = 0; itNode != m_pCache->m_G2Perm.end(); itNode++, i++)
+			if(i == randIndex)
+			{
+				std::map<uint32, bool>::iterator itAddr = m_TriedConnects.find( StrtoIP((*itNode).Host).S_addr );
+				if(itAddr != m_TriedConnects.end())
+					break;
+
+				m_TriedConnects[ StrtoIP((*itNode).Host).S_addr ] = true;
+				
+
+				CreateNode( *itNode );
+
+				return;
+			}
+	}
+
 
 	// Do web cache request only if not connected to g1 because g2 hosts can be found through there
 	if( CountHubConnects() == 0 && m_pNet->m_pGnu == NULL)
 		m_pCache->WebCacheGetRequest("gnutella2");
 
+
+	// Nothing in G2 caches, try G1 nodes for entry to G2
+	if(m_pCache->m_GnuReal.size())
+	{
+		// try a random host from top 15, x-try adds max 5, reduces one nodes chance of messing with cache
+		int randIndex = ( m_pCache->m_GnuReal.size() > 15) ? rand() % rand() % 15 : m_pCache->m_GnuReal.size();
+
+		std::list<Node>::iterator itNode = m_pCache->m_GnuReal.begin();
+		for(int i = 0; itNode != m_pCache->m_GnuReal.end(); itNode++, i++)
+			if(i == randIndex)
+			{
+				std::map<uint32, bool>::iterator itAddr = m_TriedConnects.find( StrtoIP((*itNode).Host).S_addr );
+				if(itAddr != m_TriedConnects.end())
+					break;
+
+				m_TriedConnects[ StrtoIP((*itNode).Host).S_addr ] = true;
+
+				CreateNode( *itNode );
+				return;
+			}
+	}
 }
 
 void CG2Control::CreateNode(Node HostInfo)

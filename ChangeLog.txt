@@ -3,6 +3,11 @@ GnucDNA 1.1.1.0
 	swabby: Loading prefs multiple times does not reset all prefs
 	swabby: SeedWebCache added, code revised so web cache system is used when needed
 	swabby: Fixed case sensitive upload n2x header
+	cchan:  Fixed ScanFileSize bug
+	swabby: Made sure keep-alive is always on during 1.1 connections
+	swabby: Improved how G2 connections are tried from cache
+	swabby: Improved gnutella connection process by making sure failed hosts arent re-tried
+	swabby: Added auto-upgrade to gnutella side to promote 1.1 version ultrapeers
 	
 GnucDNA 1.1.0.9
 	swabby: Query Ack packet now sent to leaves who do direct tcp query
@@ -373,6 +378,7 @@ GnucDNA 0.9.0
 People: 
 	bbill1: William Britton [williambritton@comcast.net]
     californiakidd: Jonathan Ballard 
+    cchan: Charles Chan [charlestg@yahoo.com]
 	henrik: Henrik Backe [backe@swipnet.se]
 	egor: Egor Shokurov [egors@dev.netreflector.com]
 	fred: Fred Decker [fred.decker@sbcglobal.net]
