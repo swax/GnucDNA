@@ -1,0 +1,41 @@
+
+Network
+	Decentralized
+	Supernodes
+	Compression
+	Web Cache
+
+Share
+	Metadata
+	Scanning
+		App
+		Audio
+		Contact
+		Image
+		Video
+	
+Search
+	By Keyword
+	By Metadata
+	By Hash
+	
+Downloading
+	Pieces hash verified with tiger
+	File verified with Sha1
+	
+Uploading
+	Active Remote Queue Support
+
+Hashing
+	Sha1
+	MD5
+	MD4/ED2K
+	TigerTree
+	Bitprint
+		
+Auto-Update
+	Check update xml file
+	Searches network for new files
+	Distributed auto-update
+	Low load on webserver
+

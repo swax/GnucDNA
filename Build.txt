@@ -1,0 +1,7 @@
+
+DLL
+The easiest way to inlucde DLL functionality in a project. 
+
+Static Lib
+Both the Lib and the app need to be set to use MFC as a DLL.
+Make sure STATIC is defined.

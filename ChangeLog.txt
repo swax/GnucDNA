@@ -1,0 +1,303 @@
+GnucDNA 1.0.2.7
+	swabby: Support for authentication over transfers
+	
+GnucDNA 1.0.2.6
+	swabby: Update server re-direction works
+	swabby: Fixed bug in FindNode()
+	swabby: Search auto-pause after 5 mins
+	swabby: Hubs searching done less repetitively
+	swabby: Added priority option to UDP send
+	swabby: Clients behind routers not upgraded to hub mode
+	swabby: LNI/RTR tag added to signal host behing router
+	swabby: PI/TFW, child to child firewall self test
+
+GnucDNA 1.0.2.5
+	swabby: Fixed sending browse files
+	swabby: Fixed bug in QKR/SNA, firewall searches will work better
+	swabby: QKR/Q2 tagged with dna and tracked with crawler
+	swabby: Revised uptime calcs
+	swabby: Ruduced memory consumption in g2 hub mode by more than 50%
+	swabby: Turned off compressing traffic from hub to child ~250kb saving per node
+	swabby: Local hit table not created hub to child, not needed, saves 128kb per node
+	swabby: Upload queue waitlist disabled, hosts moved to back of queue anyways
+	swabby: QKA/QA sent without requesting ack
+
+GnucDNA 1.0.2.4
+	swabby: QA alternate hosts sent reduced to save bandwidth
+	swabby: Added network bandwidth stat to LNI
+	swabby: Extended crawler data
+	swabby: Added methods to get and set geo location information
+	
+	Added Methods:
+		IPrefs::GetLatitude
+		IPrefs::SetLatitude
+		IPrefs::GetLongitude
+		IPrefs::SetLongitude
+	
+GnucDNA 1.0.2.3
+	swabby: Sending udp acks uses less cpu
+	swabby: Added crawler support
+	swabby: DownloadFile looks through all searches for sourcess
+	swabby: Support for using meta info with download object
+	swabby: Fixed downloading from new hosts when all parts were active
+	swabby: Single class created for doing rolling averages
+	swabby: When all download parts active, slower hosts replaced with faster ones
+
+	Added Methods
+		IDownload::GetMetaID
+		IDownload::SetMetaID
+		IDownload::GetAttributeValue
+		IDownload::SetAttributeValue
+		IShare::SetMetaID
+
+GnucDNA 1.0.2.2
+	swabby: Hashing of > 2gb files
+	swabby: Skip loading > 2gb files for now until search, share, download code updated
+	swabby: Added CLOSE packet to G2
+	swabby: Search to download system streamlined
+	swabby: Search results that are already in shared folder are marked as so
+	swabby: MP3 data only is hashed, ID3 tags ignored
+	swabby: MD5 hashed in base16, fixed hash matching for ed2k and md5
+	swabby: Version tag added to hash file
+	swabby: Hash progress saved after regular intervals
+
+	Defined RESULT_SHARED as 6
+
+GnucDNA 1.0.2.1
+	swabby: Upped UDP out bandwidth limit
+	swabby: Doesnt upgrade children of lesser version
+	swabby: PI/RELAY now working on network with DNA out there
+	swabby: Fixed relaying QA packet to children
+
+GnucDNA 1.0.2.0
+	swabby: Fixed bug reading 1 byte packets, in effect fixing LNI
+	swabby: Fixed G2_Hubs from being created uninitialized
+	swabby: Balanced outgoing search packets with incoming search packets
+	swabby: Hub balancing scheme uses avg cluster load
+
+GnucDNA 1.0.1.9
+	swabby: PI/IDENT added to prevent loopback and duplicate connections
+	swabby: Prevented updating global hub list from over-writing wait data	
+	swabby: Fixed case where hub and ultrapeer mode would enable at once
+
+GnucDNA 1.0.1.8
+	swabby: Nodes in global cache expire for faster searches
+	swabby: Add nodes form LNI and KHL packets to connect cache
+	swabby: Added authentication support to G2 network
+	swabby: Fixed no disconnect when remote node has compression error
+	swabby: Routing QH2s through hub turned off to save b/w
+	swabby: NAT queries not forwarded to prevent inter-hub QH2 packets
+	swabby: Disconnect on Q1 packets (not supported) waste b/w
+
+GnucDNA 1.0.1.7
+	jthomps: Update copyright statements for 2004
+	swabby: Fixed buffer overrun in g2 queries
+	swabby: Improved g2 results with less strict query keys
+	
+GnucDNA 1.0.1.6
+	swabby: IChat::SendDirectMessage
+	        _IChat::OnRecvDirectMessage
+	swabby: Fixed G2 protocol bug when reading packet tags
+
+GnucDNA 1.0.1.5
+	jthomps: Minor webcache fixes and improve valid url checking
+	jthomps: Remove GNUC_DNA_VERSION define, now using VersionInfo
+	jthomps: Add void to CComNetwork::LanModeOn to match IDL definition
+	jthomps: Create Mutex when GnucDNA is loaded and add check to setup
+
+GnucDNA 1.0.1.4
+	swabby: Fixed conflict of preferences with G2 connecting
+	swabby: QHT packet bundle
+	swabby: Fixed assert in writing packet
+	swabby: Fixed routing of Q2s back to source
+
+GnucDNA 1.0.1.3
+	swabby: NAT query support
+	swabby: Added support for searching with size criteria
+	swabby: Fixed hub upgrade protocol
+	swabby: Udp pings replied directly to source
+	jthomps: Strip whitespace from URL in LoadWebCaches
+	jthomps: Pass /SILENT arg to setup program in GnuUpate::LaunchUpdate()
+
+GnucDNA 1.0.1.2
+	swabby: Fixed wrong size QHT from being sent
+	swabby: Fixed link compression bug
+
+GnucDNA 1.0.1.1
+	jthomps: GWebCache2 support added
+	jthomps: Fixed null KHLs from being sent out
+	swabby: QHT bundle mem leak fixed
+	swabby: Fixed small tiger tree mem leak
+	swabby: Fixed QKRs from not being logged
+	
+GnucDNA 1.0.1.0
+	swabby: QHT packets sent in bundle so order is ensured
+
+GnucDNA 1.0.0.9
+	swabby: Fixed malformed queryhit bug
+	swabby: Less strict metadata matching, schema put in table
+	swabby: Fixed bug when building large packets
+	jthomps: Fixed IsConnecting2 bug returning true all the time
+	
+GnucDNA 1.0.0.7
+	swabby: Hub upgrade/downgrade system in place
+	swabby: Made sure re-searching works when networks turned on/off
+	swabby: Reduced many memory allocations when sending G2 packets
+	swabby: New query key system, uses md5 to verify the source of a host
+	swabby: Download hosts no longer sorted by speed
+	swabby: Amount of search packets the same as searches increase
+
+GnucDNA 1.0.0.6
+	swabby: Metadata sent over network trimmed
+	swabby: G2 Packet fixes
+	swabby: Global hub table randomized per client
+	_INetworkEvent::OnPacketIncoming2
+	_INetworkEvent::OnPacketOutgoing2
+
+GnucDNA 1.0.0.5
+	swabby: Researching network for sources re-done for G1 and G2
+	swabby: G2 Push implemented
+
+GnucDNA 1.0.0.4
+	swabby: Searches to 100 results then ContinueSearch needs to be triggered
+	        Prevents common searches from flooding network and gives user more control
+	        
+	Added Methods
+		ISearch::CountHostsSearched
+		ISearch::ContinueSearch
+		_ISearchEvent::OnProgress
+		_ISearchEvent::OnPaused
+
+GnucDNA 1.0.0.2
+	egor: Download through proxy support added
+	egor: Options for scanning files with antivirus software
+	swabby: Query Key, Route Map, and Global Cache management
+	swabby: Handling packets correctly in hub mode
+	swabby: Used profiler, created tolowerex, faster packet processing, sendto
+	swabby: Acks and QKRs sent at end of second
+	swabby: QHT tables not applied until child connected a minute
+
+	Defined NETWORK_WEB as 3
+
+	Updated Methods
+		IDownload::DownloadFile
+		IDownload::AddSource
+		IDownload::Proxy
+		IMeta::GetMetaExtensions
+		IPrefs::LoadProxies
+		IPrefs::SaveProxies
+		IPrefs::GetProxyList
+		IPrefs::SetProxyList
+		IPrefs::Get/SetAntivirusEnabled
+		IPrefs::Get/SetAntivirusPath
+		
+
+GnucDNA 1.0.0.0
+	swabby: Preliminary G2 Support added
+	swabby: Common structures (network independent) created for file sources and search results
+		
+	New Constants
+		Defined NETWORK_GNUTELLA as 1
+		Defined NETWORK_G2 as 2
+
+		Defined CLIENT_G2_HUB as 4
+		Defined CLIENT_G2_CHILD as 5
+
+	Updated Methods
+		ICore::Connect2
+		ICore::Disconnect2
+		ICore::IsConnecting2
+		ICore::GetUptime2
+
+		INetwork::ClientMode2
+		INetwork::ConnectNode2
+		INetwork::GetNormalConnectedCount2
+		INetwork::ForceUltrapeer2
+		INetwork::GetChildConnectedCount2
+	
+	Depreciated Methods
+		ICache::LoadUltraCache
+		ICache::SaveUltraCache
+		ICache::GetUltraNodeCacheSize
+		ICache::GetUltraNodeCacheMaxSize
+
+GnucDNA 0.9.2.7
+	swabby: Nodes linger for a couple seconds after closed
+	swabby: GetNodeStatus added to get extra info about node state
+	swabby: Bye packet working and activated
+	jthomps: Fix in meta screening
+	jthomps: Make sure files without certian hashes are hashed
+	swabby: Turned off AvoidTriangles until network is stable
+	egor: Fixed crash on video meta load
+	swabby: Compression only initialized when needed to save memory
+	swabby: Removed unused allocated memory from GnuNode class
+
+GnucDNA 0.9.2.6
+	fv: Support for scanning Image and Video types for meta info
+	swabby: bye packet support (not activated)
+
+GnucDNA 0.9.2.5
+	swabby: Network Traffic Compression
+	swabby: DownloadFile creates .info file when called
+	riot138: PARQ compatibility
+	killaw: Bandwidth pref fixes
+
+GnucDNA 0.9.2.4
+	swabby: Full TigerTree support added
+	swabby: Packets now prioritized by hops value, and then packet type
+
+GnucDNA 0.9.2.2
+	swabby: Increased download / upload buffers
+	swabby: Fixed HEAD request bug
+	swabby: Fixed bug where data stopped being sent to a connection
+	swabby: Implemented cpu detection fix
+	swabby: Implemented default port fix
+
+GnucDNA 0.9.1.8
+	swabby: Added spam prevention to upload queue, working good
+	swabby: Fixed webcache caused deadlock when host unable to resolve
+	swabby: Fixed upload keep-alive bug and upload header bug
+	swabby: Fixed download keep-alive / connection bug with limewire
+	swabby: Increased priority of query packets from local children
+	swabby: Packets of lower hop have higher priority
+	swabby: Fixed bug that caused query hits to be dropped
+	swabby: Download system rewritten
+			Code 10x smaller, simpler
+			Single partial file, no multiple chunk files
+			Ready for sub-hash verification
+
+GnucDNA 0.9.1
+	henrik: Audio schema divide by zero prevention
+	californiakidd: Program termination fixes
+	swabby: DNA clustering
+	swabby: Memory leak fix, DNA now solid
+	swabby: Build successfully in visual studio 2003
+	swabby: Direct download by hash, IDownload::DownloadFile
+	bbill1: Added INetwork::GetChildConnectedCount()
+	swabby: Ability to get file paths for uploads and downloads, GetFilePath()
+	
+GnucDNA 0.9.0
+	swabby: Ulrapeers
+	tor: Queuing
+	tor: Partial file sharing
+	swabby: Metadata
+	icehenge: HUGE support
+	swabby: Host file brosing
+	swabby: Extended Hashing, md4, md5, tiger
+	swabby: Created common code for thread creation and destruction
+	
+	
+People: 
+	bbill1: William Britton [williambritton@comcast.net]
+    californiakidd: Jonathan Ballard 
+	henrik: Henrik Backe [backe@swipnet.se]
+	egor: Egor Shokurov [egors@dev.netreflector.com]
+	fv: Florian [napalm@arnet.com.ar]
+	icehenge: Nigel Heath [nigel@icehenge.freeserve.co.uk]
+	jthomps: Jeff Thompson [jefft@threeputt.org]
+	killaw: [killaw@hotmail.com]
+	riot138: Clayton Rollins [crollins666@hotmail.com]
+	swabby: John Marshall [swabby@c0re.net]
+	tor: Tor Klingberg [tor.klingberg@gmx.net]
+
+

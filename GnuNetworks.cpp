@@ -1,0 +1,365 @@
+/********************************************************************************
+
+	GnucDNA - The Gnucleus Library
+    Copyright (C) 2000-2004 John Marshall Group
+
+    This library is free software; you can redistribute it and/or
+    modify it under the terms of the GNU Lesser General Public
+    License as published by the Free Software Foundation; either
+    version 2.1 of the License, or (at your option) any later version.
+
+    This library is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+    Lesser General Public License for more details.
+
+    You should have received a copy of the GNU Lesser General Public
+    License along with this library; if not, write to the Free Software
+    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+
+
+	For support, questions, comments, etc...
+	E-Mail: swabby@c0re.net
+
+********************************************************************************/
+
+
+#include "StdAfx.h"
+
+#include "GnuCore.h"
+#include "GnuControl.h"
+#include "GnuCache.h"
+#include "GnuNode.h"
+#include "GnuSock.h"
+#include "GnuSearch.h"
+#include "G2Control.h"
+#include "G2Datagram.h"
+#include "GnuPrefs.h"
+
+#include "GnuTransfers.h"
+#include "GnuDownloadShell.h"
+#include "GnuDownload.h"
+#include "GnuNetworks.h"
+
+
+CGnuNetworks::CGnuNetworks(CGnuCore* pCore)
+{
+	m_pCore = pCore;
+
+	m_pGnu = NULL;
+	m_pG2  = NULL;
+
+	m_NextNodeID   = 1;
+
+	// Vars
+	m_CurrentIP     = GuessLocalHost();
+	m_CurrentPort   = rand() % 22500 + 2500;
+	m_TcpFirewall	= true;
+	m_UdpFirewall	= UDP_BLOCK;
+	m_RealSpeedUp	= 0;
+	m_RealSpeedDown	= 0;
+	m_HaveUploaded	= false;
+
+	// Searching
+	m_NextSearchID = 1;
+	
+	// Cache
+	m_pCache = new CGnuCache(this);
+	m_pCache->WebCacheRequest();
+}
+
+CGnuNetworks::~CGnuNetworks(void)
+{
+	// Socket cleanup
+	if(m_hSocket != INVALID_SOCKET)
+		AsyncSelect(0);
+
+	while( m_SockList.size() )
+	{
+		delete m_SockList.back();
+		m_SockList.pop_back();
+	}
+
+	// Network cleanup
+	if( m_pGnu )
+	{
+		delete m_pGnu;
+		m_pGnu = NULL;
+	}
+
+	if( m_pG2 )
+	{
+		delete m_pG2;
+		m_pG2 = NULL;
+	}
+
+	// Cache cleanup
+	if( m_pCache )
+	{
+		m_pCache->endThreads();
+		delete m_pCache;
+		m_pCache = NULL;
+	}
+}
+
+//// Do not edit the following lines, which are needed by ClassWizard.
+//#if 0
+//BEGIN_MESSAGE_MAP(CGnuNetworks, CAsyncSocket)
+//	//{{AFX_MSG_MAP(CGnuNetworks)
+//	//}}AFX_MSG_MAP
+//END_MESSAGE_MAP()
+//#endif	// 0
+
+void CGnuNetworks::Connect_Gnu()
+{
+	if( m_pGnu == NULL )
+	{
+		m_pGnu = new CGnuControl(this);
+		StartListening();
+	}
+}
+
+void CGnuNetworks::Disconnect_Gnu()
+{	
+	if( m_pGnu )
+	{
+		delete m_pGnu;
+		m_pGnu = NULL;
+	}
+
+	if( m_pGnu == NULL && m_pG2 == NULL)
+		StopListening();
+}
+
+void CGnuNetworks::Connect_G2()
+{
+	if( m_pG2 == NULL )
+	{
+		m_pG2 = new CG2Control(this);
+		StartListening();
+	}
+}
+
+void CGnuNetworks::Disconnect_G2()
+{
+	if( m_pG2 )
+	{
+		delete m_pG2;
+		m_pG2 = NULL;
+	}
+
+	if( m_pGnu == NULL && m_pG2 == NULL)
+		StopListening();
+}
+
+int CGnuNetworks::GetNextNodeID()
+{
+	if(m_NextNodeID < 1)
+		m_NextNodeID = 1;
+
+	m_NextNodeID++;
+	return m_NextNodeID;
+}
+
+void CGnuNetworks::Timer()
+{
+	// Node Timers
+	if(m_pGnu)
+		m_pGnu->Timer();
+
+	if(m_pG2)
+		m_pG2->Timer();
+		
+
+	// Search Timer
+	for(int i = 0; i < m_SearchList.size(); i++)
+		m_SearchList[i]->Timer();
+
+
+	// Cache Timer
+	m_pCache->Timer();
+
+
+	// Sock Cleanup
+	std::vector<CGnuSock*>::iterator itSock;
+
+	itSock = m_SockList.begin();
+	while( itSock != m_SockList.end())
+	{
+		CGnuSock* pSock = *itSock;
+
+		if(pSock->m_SecsAlive > CONNECT_TIMEOUT || pSock->m_bDestroy)
+		{
+			delete *itSock;
+			itSock = m_SockList.erase(itSock);
+		}
+		else
+		{
+			pSock->Timer();
+			itSock++;
+		}
+	}
+}
+
+void CGnuNetworks::HourlyTimer()
+{
+	if(m_pGnu)
+		m_pGnu->HourlyTimer();
+
+	if(m_pG2)
+		m_pG2->HourlyTimer();
+}
+bool CGnuNetworks::ConnectingSlotsOpen()
+{
+	int OccupiedSlots = 0;
+
+	// Node Sockets
+	if( m_pGnu )
+		for(int i = 0; i < m_pGnu->m_NodeList.size(); i++)
+			if(m_pGnu->m_NodeList[i]->m_Status == SOCK_CONNECTING)
+				OccupiedSlots++;
+
+	// Download Sockets
+	for(int i = 0; i < m_pCore->m_pTrans->m_DownloadList.size(); i++)
+		for(int j = 0; j < m_pCore->m_pTrans->m_DownloadList[i]->m_Sockets.size(); j++)
+			if(m_pCore->m_pTrans->m_DownloadList[i]->m_Sockets[j]->m_Status == TRANSFER_CONNECTING)
+				OccupiedSlots++;
+
+
+	return OccupiedSlots < 20 ? true : false;
+}
+
+IP CGnuNetworks::GuessLocalHost()
+{
+	m_BehindRouter = false;
+
+	IP ReturnIP = StrtoIP("127.0.0.1");
+	
+	char ac[80];
+	if (gethostname(ac, sizeof(ac)) == SOCKET_ERROR)
+		return ReturnIP;
+
+	struct hostent* phe = gethostbyname(ac);
+	if(phe == 0)
+		return ReturnIP;
+
+	for(int i = 0; phe->h_addr_list[i] != 0; i++) 
+	{
+		struct in_addr addr;
+		memcpy(&addr, phe->h_addr_list[i], sizeof(struct in_addr));
+
+		IP Address = StrtoIP( inet_ntoa(addr) );
+
+		if( IsPrivateIP(Address) )
+		{
+			if(ReturnIP.S_addr == 0)
+				ReturnIP = Address;
+
+			m_BehindRouter = true;
+		}
+		else
+			ReturnIP = Address;
+	}
+    
+    return ReturnIP;
+}
+bool CGnuNetworks::StartListening()
+{
+	UINT AttemptPort = m_CurrentPort;
+
+	if(m_pCore->m_pPrefs->m_ForcedPort)
+		AttemptPort = m_pCore->m_pPrefs->m_ForcedPort;
+	
+
+	int	 Attempts = 0;
+	bool Success  = false;
+	int  Error    = 0;
+
+	while(!Success && Attempts < 3)
+	{
+		StopListening();
+
+		if( Create(AttemptPort) && Listen() )
+		{	
+			Success = true;
+			m_CurrentPort = AttemptPort;
+
+			// Set G2 to listen on same UDP port
+			if( m_pG2 )
+				m_pG2->m_pDispatch->Init();
+
+			return true;	
+		}
+		else
+		{
+			Error = GetLastError();
+			ASSERT(0);
+			//m_pCore->LogError("Create Error: " + NumtoStr(GetLastError()));
+		}
+
+		AttemptPort += rand() % 99 + 0;
+		Attempts++;
+	}
+
+	return false;
+}
+
+void CGnuNetworks::StopListening()
+{
+	Close();
+}
+
+
+void CGnuNetworks::OnAccept(int nErrorCode) 
+{
+	if(nErrorCode)
+		return;
+
+	CGnuSock* Incoming = new CGnuSock(this);
+	int Safe = Accept(*Incoming);
+
+	if(Safe)
+		m_SockList.push_back(Incoming);
+	else
+		delete Incoming;
+}
+
+void CGnuNetworks::EndSearch(int SearchID)
+{
+	std::vector<CGnuSearch*>::iterator itSearch;
+
+	itSearch = m_SearchList.begin();
+	while( itSearch != m_SearchList.end())
+		if((*itSearch)->m_SearchID == SearchID)
+		{
+			delete *itSearch;
+			itSearch = m_SearchList.erase(itSearch);
+		}
+		else
+			itSearch++;
+}
+
+bool CGnuNetworks::NotLocal(Node TestNode)
+{
+	IP RemoteIP = StrtoIP(TestNode.Host);
+	IP LocalIP = StrtoIP("127.0.0.1");
+	
+	UINT LocalPort  = m_CurrentPort;
+	UINT RemotePort = TestNode.Port; 
+
+	if(LocalPort == RemotePort)
+	{
+		if(RemoteIP.S_addr == LocalIP.S_addr)
+			return false;
+
+		LocalIP = m_CurrentIP;
+
+		if(m_pCore->m_pPrefs->m_ForcedHost.S_addr)
+			LocalIP = m_pCore->m_pPrefs->m_ForcedHost;
+
+		if(RemoteIP.S_addr == LocalIP.S_addr)
+			return false;
+	}
+
+	return true;
+}

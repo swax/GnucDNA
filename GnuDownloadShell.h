@@ -1,0 +1,177 @@
+#pragma once
+
+#include "GnuPackets.h"
+
+class CGnuTransfers;
+class CGnuNetworks;
+class CGnuDownload;
+class CGnuNode;
+class CGnuPrefs;
+class CGnuSearch;
+class CGnuCore;
+
+#define DOWNLOAD_CHUNK_SIZE (512 * 1024) // 512 KB
+#define G2_RESEARCH_INT (10 * 60) //10 minutes
+
+
+struct FilePart
+{
+	int  StartByte;
+	int  EndByte;
+	int  BytesCompleted;
+
+	int  SourceHostID;
+	bool Verified;
+};
+
+class CGnuDownloadShell  
+{
+public:
+	CGnuDownloadShell(CGnuTransfers*);
+	virtual ~CGnuDownloadShell();
+	
+	void Init(CString Name, int FileSize, int HashID, CString Hash);
+	void CreatePartList();
+
+	void AddHost(FileSource);
+	void TryNextHost();
+
+	bool CheckCompletion();
+
+	void AddAltLocation(CString);
+	void AddAltLocation(AltLocation);
+	CString GetAltLocationHeader(CString ToIP, int HostCount=5);
+
+	void Start();
+	void Stop();
+
+	void SendGnuQuery(CGnuNode*);
+	void IncomingGnuNode(CGnuNode*);
+
+	bool IsDownloading();
+	bool IsRemotelyQueued();
+
+	CGnuDownload* GetCurrent();
+	DWORD   GetStatus();
+	int     GetBytesCompleted();
+	CString GetMetaXML(bool file);
+	
+	CString GetFilePath();
+	void RunFile();
+	void ReSearch();
+
+	
+	void Erase();
+
+	void BackupHosts();
+	void BackupParts();
+
+	int  m_BackupBytes;
+	int  m_BackupHosts;
+	int  m_BackupInterval;
+
+	CString AvailableRangesCommaSeparated();
+	int GetRange(int pos, unsigned char *buf, int len);
+
+	void Timer();
+
+	bool ReadyFile();
+	
+	bool URLtoSource(FileSource &WebSource, CString URL);
+
+	enum Status 
+	{
+		ePending,  // Download waiting to be actived
+		eActive,   // Trying sources, downloading chunks
+		eCooling,  // Cooling down before retrying sources
+		eWaiting,  // All sources tried and failed, waiting for more
+		eDone  // Download stopped or completed
+	} m_ShellStatus;
+
+
+	// Download Properties
+	int     m_DownloadID;
+	
+	int     m_Cooling;
+	int     m_Searching;
+	int		m_HostTryPos;
+	int     m_G2ResearchInt;
+
+	bool    m_HashComputed;
+	bool    m_HashVerified;
+	bool	m_FileMoved;
+
+	int		m_TotalSecCount;
+
+	int		m_Retry;
+	CString m_ReasonDead;
+	bool    m_UpdatedInSecond;
+
+	CString m_Name;
+	CString m_FilePath;
+	CString m_PartialPath;
+	CString m_BackupPath;
+
+	CString m_Sha1Hash;
+	CString m_TigerHash;
+
+	byte*   m_TigerTree;
+	int		m_TreeSize;
+	int		m_TreeRes;
+	//CString m_BitprintHash;
+
+	CString     m_Search;
+	GUID        m_SearchGuid;
+
+	CString m_MetaXml; // used because meta loaded after transfers loaded
+	int m_MetaID;
+	std::map<int, CString> m_AttributeMap;
+
+	std::vector<CGnuDownload*> m_Sockets;
+
+	std::list<int> m_RequeryList;
+
+	// File info
+	CFileLock m_File;
+	int   m_FileLength;
+
+	//CFile m_CheckFile;
+
+	int m_NextHostID;
+	std::map<int, int>  m_HostMap;
+	std::vector<FileSource> m_Queue;
+	byte m_Packet[255];
+
+	std::deque<AltLocation> m_AltHosts;
+
+	// Proxy
+	bool    m_UseProxy;
+	CString m_DefaultProxy;
+
+	// Bandwidth stuff
+	DWORD   m_AvgSpeed; 
+
+	int m_AllocBytes;
+	int m_AllocBytesTotal;
+
+	
+	CGnuPrefs*     m_pPrefs;
+	CGnuNetworks*  m_pNet;
+	CGnuTransfers* m_pTrans;
+	CGnuCore*	   m_pCore;
+
+	CCriticalSection m_ShellAccess;
+
+	/////////////////////////////////////////////////////////////////////
+
+	
+	bool PartDone(int PartNumber);
+	CGnuDownload* PartActive(int PartNumber);
+
+	bool PartVerified(int PartNumber);
+	bool AllPartsActive();
+	
+	int m_PartSize;
+	std::vector<FilePart> m_PartList;
+};
+

@@ -1,0 +1,6 @@
+; GnucDNA.def : Declares the module parameters for the DLL.
+
+LIBRARY      "GnucDNA"
+
+EXPORTS
+    ; Explicit exports can go here

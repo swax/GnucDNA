@@ -1,0 +1,252 @@
+
+UDP bandwidth control
+	Receiving QKRs at rate unable to limit
+	Send QKA  limited by not sending key back
+	Receiving Q2 limited by QKA wait and Q2 retry
+	Send QH2 limited by not sending back
+	
+	Need intelligent limit for Q2 retry
+	Dont delete entries in hub list with keys
+	
+/////////////////////////////////////////////////////////////////////
+
+Firewall
+	Can a node receive tcp connections? good
+	Can a node receive data via udp directly? udp data (nat)
+	Can a node receive data via udp indirectly? udp relay pong (no firewall)
+
+/////////////////////////////////////////////////////////////////////
+Design and Psuedo code - Delete after testing
+
+*Send QKR -> *Recv
+*Recv QKA <- *Send
+*Send Q2  -> *Recv
+*Recv QA  <- *Send
+*Recv QH2 <- *Send 
+
+Dont expire zeros
+Prune RouteMap at 5 min, max size 10,000
+Prune QueryKeys at 10 min, max size 100,000, Clear bans
+Prune GlobalCache at 15 min, max size 20,000
+
+QKR Receive
+	If in Hub Mode
+		Check for dupes
+		struct QueryKey {uint32 Key, IPv4 Host, uint32 ExpireTime}
+		m_QueryKeys[QueryKey] = Key, QKR/RNA, Time + 15min
+		Send QKA to QKR/RNA
+			Set SNA to UDP source
+	If in Child Mode
+		Send QKA to QKR/RNA
+			Set SNA to UDP Source
+
+QKA Receive
+	If in Hub mode
+		If SNA does not match local address
+			Set QNA to UDP source
+			Forward to matching child address
+
+Q2 Receive
+	If Hub Mode
+		If received UDP
+			If Query Key invalid
+				Send QKA to Q2/UDP
+				Set SNA to UDP source and return
+			Check Retry time
+			Send QA
+			Forward to matching hubs
+			Forward to matching leaves
+		If received TCP
+			From Hub
+				Forward to matching leaves
+			From Leaf
+				Forward to hubs
+		Process locally		
+		Insert SearchID into RouteMap
+			G2Route { IPv4 Address, uint32 ExpireTime}
+			If from Hub set expire 1 min
+			If from Leaf set expire 15
+		
+
+QA Receive
+	If in hub mode
+		Lookup SearchID in RouteMap, if Child
+			keep route alive
+			Add FR to packet with UDP source
+			Forward packet
+			
+QH2 Receive
+	If in hub mode	
+		keep route alive
+		Lookup SearchID 
+		Forward packet UDP/TCP
+		
+////////////////////////////////////////////////////////////////////
+
+PI Extensions
+	IDENT - Unique ID to prevent loop back connections
+	TFW   - Test firewall, child to child only
+
+
+////////////////////////////////////////////////////////////////////
+
+LNI Extensions
+	HA  - Hub Able flag
+	FW  - Firewall flag
+	RTR - Router flag
+	CM  - Cpu/Mem, 4b (2b speed in Mhz, 2b mem in MBs)
+	UP  - Uptime, 4b (seconds node has been up for)
+	NBW - Network Bandwidth In/Out (8)
+	GPS - Packed GPS location
+	
+////////////////////////////////////////////////////////////////////
+
+MCR - Mode Change Request
+	HUB -  Hub upgrade req
+	LEAF - Leaf downgrade req
+
+MCA - Mode Change Ack
+	HUB  - Hub upgrade ack
+	LEAF - Leaf downgrade ack
+	DENY - Denied mode change
+
+
+////////////////////////////////////////////////////////////////////
+
+PM - Private Message
+	ID - Unique Identifyer
+	DA  - Destination Address
+	SNA - Node address (attached only when forwarded
+	NH  - Neighboring hubs
+	FW  - Firewall Tag
+	Payload - Message
+  
+
+Psuedo PM handling
+	Receive PM
+	If Target local good
+	If Target not local and hub mode and received udp
+		if Target connected tcp
+		Set SNA
+		send tcp
+	else
+		drop
+	      
+	Send PM
+	set pTcp to send tcp
+	  
+	Can only forward tcp if received udp
+ 
+////////////////////////////////////////////////////////////////////
+
+CLOSE - Send on connection close
+	Payload Reason
+	/CH - Cached Hub (6 bytes)
+	
+////////////////////////////////////////////////////////////////////
+
+CRAWLR - Crawl Request
+	RLEAF - Request leaves
+	RNAME - Request names
+	RGPS  - Request gps coords
+	
+	Extensions:
+	  RG1  - G1 data request
+	  REXT - Extended info request
+	  RID  - Random ID used for timing response
+	
+	
+CRAWLA - Crawl Ack
+	SELF - G2 Self Info
+	NH   - G2 Neighbor Hub Info
+	NL   - G2 Neighbor Leaf Info (Node Info), if RLEAF
+	
+	G1SELF - G1 Self Info (Node Info), if RG1
+	G1NH   - G1 Neighbor Hub Info (Node Info), if RG1
+	G1NL   - G1 Neighbor Leaf Info (Node Info), if RG1 and RLEAF
+	
+	ID - Unique ID, if RID
+
+
+	SELF Extensions:
+		G2HUB  - G2 Hub Mode
+		G2LEAF - G2 Leaf Mode
+		qkrs - qkr sec (dna/total)
+		q2s  - q2  sec (dna/total)
+	  
+	G1SELF Extensions:
+		G1UP   - Gnu Ultrapeer Mode
+		G1LEAF - Gnu Leaf Mode
+	  
+	
+	(Node Info)
+		NA - Net address
+		HS - Leaf Count/Max
+		
+		RNAME Specified
+			NAME - username, if RNAME
+		
+		RGPS Specified
+			GPS - coords
+		
+		REXT Specified
+			CM   - CPU/Mem
+			CV   - Client Version
+			FW   - Firewall
+			HA   - Hub able
+			RTR  - Behind Router
+			LS   - Library Statistics
+			BWN  - Total Bandwidth In/Out
+			BWU  - UDP Bandwidth In/Out
+			UP   - Uptime
+			CUP  - Connection Uptime
+		  
+		
+////////////////////////////////////////////////////////////////////
+
+
+G2 Hub Balancing
+	Start in Child Mode
+	If Hub Cluster is above 75% capactiy
+		Upgrade child node with best child capacity
+	If Hub Cluster is below 50% 
+		Downgrade self if self has the lowest child count in cluster
+	Only upgrade a node once per hour
+
+
+G1 Clustering
+	Start in supernode mode
+	At least half leaf/normal connects to dna
+	If connections at zero, re-alalyze ultrapeer able
+	Set default child connects to 1
+	Factor only dna child nodes when calcing if node is full
+
+
+////////////////////////////////////////////////////////////////////
+
+
+Welcome to GnucDNA.
+
+This is a Gnutella COM component for use in a variety of applications
+and services.  Any changes made please add them to the ChangeLog file 
+with your name and contact information
+
+
+Version changing notes:
+	.idl file
+	version res file
+	stdafx.h file
+	gnucdna.cpp file
+	
+	
+Before Release
+	Make sure version set in resource file
+	Make sure debug log off
+
+	
+C++ Implementation notes:
+	#include "afxctl.h" needed for AfxConnectionAdvise (events)
+	#include <comdef.h> needed for _variant_t and helper classes
+	
+Lesson
+	Use most popular of data set to prevent fakes
