@@ -57,7 +57,8 @@ struct packet_Push			// Size 49
 struct packet_Query			// Size 26+
 {		
 	packet_Header Header;		// 0  - 22						
-	WORD Speed;					// 23 - 24
+	byte Flags;					// 23	
+	byte Reserved;				// 24 
 	// Search					// 25+
 };
 

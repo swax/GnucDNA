@@ -1,7 +1,11 @@
 #pragma once
 
 
+#define GNU_RECV_BUFF    2048
+
+
 class CGnuControl;
+class CGnuProtocol;
 
 
 class CGnuDatagram : public CAsyncSocket
@@ -17,5 +21,11 @@ public:
 	// Receiving
 	virtual void OnReceive(int nErrorCode);
 
-	CGnuControl* m_pComm;
+	// Sending
+	void SendPacket(IPv4 Address, byte* packet, uint32 length);
+
+	byte m_pRecvBuff[GNU_RECV_BUFF];
+
+	CGnuControl*  m_pComm;
+	CGnuProtocol* m_pProtocol;
 };

@@ -6,8 +6,9 @@
 #include "GnuShare.h"
 
 struct key_Value;
-struct DynQuery;
 struct Gnu_RecvdPacket;
+struct DynQuery;
+struct OobHit;
 
 class CGnuNetworks;
 class CGnuLocal;
@@ -74,15 +75,6 @@ public:
 	DWORD GetSpeed();
 
 
-	// Dynamic Queries
-	void AddDynQuery(DynQuery* pQuery);
-	void DynQueryTimer();
-
-	std::map<uint32, DynQuery*> m_DynamicQueries;
-
-	void StopSearch(GUID SearchGuid);
-	
-	
 	// Network
 	CString  m_NetworkName;
 	
@@ -109,6 +101,22 @@ public:
 	CGnuRouting m_TableRouting;
 	CGnuRouting m_TablePush;
 	CGnuRouting m_TableLocal;
+
+
+	// Dynamic Queries
+	void AddDynQuery(DynQuery* pQuery);
+	void DynQueryTimer();
+
+	std::map<uint32, DynQuery*> m_DynamicQueries;
+
+	void StopSearch(GUID SearchGuid);
+	
+
+	// Out of Band Hits
+	void OobHitsTimer();
+
+	CCriticalSection m_OobHitsLock;
+	std::map<uint32, OobHit*> m_OobHits;
 
 
 	// Bandwidth
@@ -145,7 +153,7 @@ struct Gnu_RecvdPacket
 	};
 };
 
-
+// Dynamic Queries
 #define DQ_TARGET_HITS		50		// Number of hits to obtain for leaf
 #define DQ_QUERY_TIMEOUT	(3*60)  // Time a dyn query lives for
 #define DQ_QUERY_INTERVAL	7       // Interval to send next query out
@@ -187,4 +195,40 @@ struct DynQuery
 
 		Packet = NULL;
 	};
+};
+
+
+// Out of band Hits
+#define OOB_TIMEOUT 10
+
+struct OobHit
+{
+	IPv4 Target;
+	int  TotalHits;
+	int  OriginID;
+
+	int Secs;
+
+	bool SentReplyNum;
+
+	std::vector<byte*> QueryHits;
+	std::vector<int>   QueryHitLengths;
+
+
+	OobHit(IPv4 target, int hits, int origin)
+	{
+		Target    = target;
+		TotalHits = hits;
+		OriginID  = origin;
+
+		Secs = 0;
+
+		SentReplyNum = false;
+	};
+
+	~OobHit()
+	{
+		for(int i = 0; i < QueryHits.size(); i++)
+			delete [] QueryHits[i];
+	}
 };

@@ -9,12 +9,15 @@ class CGnuShare;
 class CGnuPrefs;
 class CGnuCache;
 class CGnuTransfers;
+class CGnuDatagram;
 
 class CGnuProtocol
 {
 public:
 	CGnuProtocol(CGnuControl* pComm);
 	~CGnuProtocol();
+
+	void Init();
 
 	// Receiving
 	void ReceivePacket(Gnu_RecvdPacket &Packet);
@@ -57,4 +60,5 @@ public:
 	CGnuPrefs*     m_pPrefs;
 	CGnuCache*	   m_pCache;
 	CGnuTransfers* m_pTrans;
+	CGnuDatagram*  m_pDatagram;
 };

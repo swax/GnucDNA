@@ -35,6 +35,7 @@
 #include "GnuMeta.h"
 #include "GnuSchema.h"
 #include "GnuTransfers.h"
+#include "GnuDatagram.h"
 
 #include "DnaCore.h"
 #include "DnaEvents.h"
@@ -44,19 +45,23 @@
 CGnuProtocol::CGnuProtocol(CGnuControl* pComm)
 {
 	m_pComm  = pComm;
-	m_pCore  = pComm->m_pCore;
-	m_pNet   = pComm->m_pNet;
-	m_pShare = pComm->m_pShare;
-	m_pPrefs = pComm->m_pPrefs;
-	m_pCache = pComm->m_pCache;
-	m_pTrans = pComm->m_pTrans;
 }
 
 CGnuProtocol::~CGnuProtocol()
 {
-
+	
 }
 
+void CGnuProtocol::Init()
+{
+	m_pCore		= m_pComm->m_pCore;
+	m_pNet		= m_pComm->m_pNet;
+	m_pShare	= m_pComm->m_pShare;
+	m_pPrefs	= m_pComm->m_pPrefs;
+	m_pCache	= m_pComm->m_pCache;
+	m_pTrans	= m_pComm->m_pTrans;
+	m_pDatagram = m_pComm->m_pDatagram;
+}
 
 void CGnuProtocol::ReceivePacket(Gnu_RecvdPacket &Packet)
 {
@@ -302,19 +307,37 @@ void CGnuProtocol::Receive_Query(Gnu_RecvdPacket &Packet)
 		}
 
 		// Test too see routed last hop queries are correct
-/*#ifdef _DEBUG
-		if(Query->Header.TTL == 0 && m_SupportInterQRP)
+#ifdef _DEBUG
+		if(Query->Header.TTL == 0 && pNode->m_SupportInterQRP)
 		{
 			CString Text((char*) Query + 25);
 			TRACE0("INTER-QRP:" + Text + "\n");
 		}
-#endif*/
+#endif
+
+
+		bool OOB = false;
+		if(Query->Flags & (1 << 7))
+		{
+			OOB = (Query->Flags & (1 << 2));
+			//bool SupH		= (Query->Flags & (1 << 3));
+			//bool LGuide	= (Query->Flags & (1 << 4));
+			//bool XML		= (Query->Flags & (1 << 5));
+			//bool Firewall = (Query->Flags & (1 << 6));
+		}
 
 		// Queue to be compared with local files
 		GnuQuery G1Query;
 		G1Query.Network    = NETWORK_GNUTELLA;
 		G1Query.OriginID   = SourceNodeID;
 		G1Query.SearchGuid = Query->Header.Guid;
+
+		if(OOB && Query->Header.Hops > 1)
+		{
+			// Host requests UDP response, get address from Guid
+			memcpy(&G1Query.DirectAddress.Host, &Query->Header.Guid, 4);
+			memcpy(&G1Query.DirectAddress.Port, ((byte*) &Query->Header.Guid) + 13, 2);
+		}
 
 		if(m_pComm->m_GnuClientMode == GNU_ULTRAPEER)
 		{
@@ -396,10 +419,10 @@ void CGnuProtocol::Receive_QueryHit(Gnu_RecvdPacket &Packet)
 	packet_QueryHit* QueryHit = (packet_QueryHit*) Packet.Header;
 	
 	CGnuNode* pNode = Packet.pTCP;
-	if(pNode == NULL)
-		return;
-
-	int SourceNodeID = pNode->m_NodeID;
+	
+	int SourceNodeID = 0;
+	if(pNode)
+		SourceNodeID = pNode->m_NodeID;
 
 
 	if(QueryHit->Header.Payload < 27)		   		 
@@ -409,7 +432,8 @@ void CGnuProtocol::Receive_QueryHit(Gnu_RecvdPacket &Packet)
 	}
 
 	// Packet stats
-	pNode->UpdateStats(QueryHit->Header.Function);
+	if(pNode)
+		pNode->UpdateStats(QueryHit->Header.Function);
 
 	// Host Cache
 	m_pCache->AddKnown( Node(IPtoStr(QueryHit->Host), QueryHit->Port) );
@@ -418,7 +442,7 @@ void CGnuProtocol::Receive_QueryHit(Gnu_RecvdPacket &Packet)
 	int RouteID		 = m_pComm->m_TableRouting.FindValue(QueryHit->Header.Guid);
 	int LocalRouteID = m_pComm->m_TableLocal.FindValue(QueryHit->Header.Guid);
 
-	if(pNode->m_BrowseID)
+	if(pNode && pNode->m_BrowseID)
 		LocalRouteID = 0;
 
 
@@ -426,7 +450,7 @@ void CGnuProtocol::Receive_QueryHit(Gnu_RecvdPacket &Packet)
 	if(LocalRouteID == 0 || LocalRouteID == SourceNodeID)
 	{
 		// Check for query hits we sent out
-		if(LocalRouteID == SourceNodeID)
+		if(Packet.pTCP && LocalRouteID == SourceNodeID)
 		{
 			PacketError("QueryHit", "Loopback", (byte*) QueryHit, Packet.Length);
 			return;
@@ -434,13 +458,14 @@ void CGnuProtocol::Receive_QueryHit(Gnu_RecvdPacket &Packet)
 
 		else
 		{	
-			pNode->AddGoodStat(QueryHit->Header.Function);
+			if(pNode)
+				pNode->AddGoodStat(QueryHit->Header.Function);
 
 			CGnuSearch* pSearch = NULL;
 
 			// Check for query hit meant for client
 			for(int i = 0; i < m_pNet->m_SearchList.size(); i++)
-				if(QueryHit->Header.Guid == m_pNet->m_SearchList[i]->m_QueryID || pNode->m_BrowseID == m_pNet->m_SearchList[i]->m_SearchID)
+				if(QueryHit->Header.Guid == m_pNet->m_SearchList[i]->m_QueryID || (pNode && pNode->m_BrowseID == m_pNet->m_SearchList[i]->m_SearchID))
 				{
 					pSearch = m_pNet->m_SearchList[i];
 					break;
@@ -501,7 +526,8 @@ void CGnuProtocol::Receive_QueryHit(Gnu_RecvdPacket &Packet)
 					itDyn->second->Hits += QueryHit->TotalHits;
 			}
 
-		pNode->AddGoodStat(QueryHit->Header.Function);
+		if(pNode)
+			pNode->AddGoodStat(QueryHit->Header.Function);
 
 		return;
 	}
@@ -519,10 +545,10 @@ void CGnuProtocol::Decode_QueryHit( std::vector<FileSource> &Sources, Gnu_RecvdP
 	packet_QueryHit* QueryHit = (packet_QueryHit*) QHPacket.Header;
 	
 	CGnuNode* pNode = QHPacket.pTCP;
-	if(pNode == NULL)
-		return;
-
-	int SourceNodeID = pNode->m_NodeID;
+	
+	int SourceNodeID = 0;
+	if(pNode)
+		SourceNodeID = pNode->m_NodeID;
 
 	bool ExtendedPacket = false;
 	bool Firewall		= false;
@@ -804,8 +830,7 @@ void CGnuProtocol::Receive_VendMsg(Gnu_RecvdPacket &Packet)
 	packet_VendMsg* VendMsg = (packet_VendMsg*) Packet.Header;
 	
 	CGnuNode* pNode = Packet.pTCP;
-	if(pNode == NULL)
-		return;
+	
 
 	if(VendMsg->Header.Payload < 8)		   		 
 	{
@@ -813,94 +838,170 @@ void CGnuProtocol::Receive_VendMsg(Gnu_RecvdPacket &Packet)
 		return;
 	}
 
-	// Check if a 'Messages Supported' message
-	if( memcmp(VendMsg->Ident.VendorID, "\0\0\0\0", 4) == 0 && VendMsg->Ident.Type == 0 && VendMsg->Ident.Version == 0)
+	// Packet received TCP
+	if(Packet.pTCP)
 	{
-		byte* message   = ((byte*) VendMsg) + 31;
-		int	  sublength = Packet.Length - 31;
-
-		uint16 VectorSize = 0;
-		if(sublength >= 2)
-			memcpy(&VectorSize, message, 2);
-
-		if( sublength == 2 + VectorSize * 8)
+		// Check if a 'Messages Supported' message
+		if( memcmp(VendMsg->Ident.VendorID, "\0\0\0\0", 4) == 0 && VendMsg->Ident.Type == 0 && VendMsg->Ident.Version == 0)
 		{
-			// VMS Gnucleus 12.33.43.13: BEAR/11v1 
-			//TRACE0("VMS " + m_RemoteAgent + " " + IPtoStr(m_Address.Host) + ": ");
+			byte* message   = ((byte*) VendMsg) + 31;
+			int	  sublength = Packet.Length - 31;
 
-			for(int i = 2; i < sublength; i += 8)
+			uint16 VectorSize = 0;
+			if(sublength >= 2)
+				memcpy(&VectorSize, message, 2);
+
+			if( sublength == 2 + VectorSize * 8)
 			{
-				packet_VendIdent* MsgSupported = (packet_VendIdent*) (message + i);
+				// VMS Gnucleus 12.33.43.13: BEAR/11v1 
+				//TRACE0("VMS " + m_RemoteAgent + " " + IPtoStr(m_Address.Host) + ": ");
 
-				CString Msg =  CString(MsgSupported->VendorID, 4) + "/" + NumtoStr(MsgSupported->Type) + "v" + NumtoStr(MsgSupported->Version);
-				
-				if(Msg == "BEAR/11v1")
-					pNode->m_SupportsLeafGuidance = true;
+				for(int i = 2; i < sublength; i += 8)
+				{
+					packet_VendIdent* MsgSupported = (packet_VendIdent*) (message + i);
 
-				//TRACE0(Msg + " ");
+					CString Msg =  CString(MsgSupported->VendorID, 4) + "/" + NumtoStr(MsgSupported->Type) + "v" + NumtoStr(MsgSupported->Version);
+					
+					if(Msg == "BEAR/11v1")
+						pNode->m_SupportsLeafGuidance = true;
+
+					//TRACE0(Msg + " ");
+				}
+
+				//TRACE0("\n");
 			}
-
-			//TRACE0("\n");
-		}
-		else
-			m_pCore->DebugLog("Gnutella", "Vendor Msg, Messages Support, VS:" + NumtoStr(VectorSize) + ", SL:" + NumtoStr(sublength));
-			
-	}
-
-	// Leaf Guided Dyanic Query: Query Status Request
-	if( memcmp(VendMsg->Ident.VendorID, "BEAR", 4) == 0 && VendMsg->Ident.Type == 11 && VendMsg->Ident.Version <= 1)
-	{
-		if(m_pComm->m_GnuClientMode != GNU_LEAF)
-		{
-			m_pCore->DebugLog("Gnutella", "Query Status Request Received from " + pNode->m_RemoteAgent + " while in Ultrapeer Mode");
-			return;
+			else
+				m_pCore->DebugLog("Gnutella", "Vendor Msg, Messages Support, VS:" + NumtoStr(VectorSize) + ", SL:" + NumtoStr(sublength));
+				
 		}
 
-		// Find right search by using the GUID
-		for(int i = 0; i < m_pNet->m_SearchList.size(); i++)
-			if(VendMsg->Header.Guid == m_pNet->m_SearchList[i]->m_QueryID)
-			{
-				TRACE0("VMS " + pNode->m_RemoteAgent + " " + IPtoStr(pNode->m_Address.Host) + ": Query Status Request");
-				CGnuSearch* pSearch = m_pNet->m_SearchList[i];
-				
-				packet_VendMsg ReplyMsg;
-				ReplyMsg.Header.Guid = VendMsg->Header.Guid;
-				ReplyMsg.Ident = packet_VendIdent("BEAR", 12, 1);
-				
-				uint16 Hits = pSearch->m_WholeList.size();
-
-				Send_VendMsg(pNode, ReplyMsg, (byte*) &Hits, 2 );
-			}
-	}
-
-	// Leaf Guided Dyanic Query: Query Status Response
-	if( memcmp(VendMsg->Ident.VendorID, "BEAR", 4) == 0 && VendMsg->Ident.Type == 12 && VendMsg->Ident.Version <= 1)
-	{
-		byte* message   = ((byte*) VendMsg) + 31;
-		int	  sublength = Packet.Length - 31;
-
-		if(sublength != 2)
-			return;
-
-		uint16 HitCount = 0;
-		memcpy(&HitCount, message, 2);
-
-		std::map<uint32, DynQuery*>::iterator itDyn = m_pComm->m_DynamicQueries.find( HashGuid(VendMsg->Header.Guid) );
-		if( itDyn != m_pComm->m_DynamicQueries.end() )
+		// Leaf Guided Dyanic Query: Query Status Request
+		if( memcmp(VendMsg->Ident.VendorID, "BEAR", 4) == 0 && VendMsg->Ident.Type == 11 && VendMsg->Ident.Version == 1)
 		{
-			// End Query if 0xFFFF received
-			if(HitCount == 0xFFFF)
+			if(m_pComm->m_GnuClientMode != GNU_LEAF)
 			{
-				delete itDyn->second;
-				m_pComm->m_DynamicQueries.erase(itDyn);
+				m_pCore->DebugLog("Gnutella", "Query Status Request Received from " + pNode->m_RemoteAgent + " while in Ultrapeer Mode");
+				return;
 			}
 
-			// Otherwise update hit count if its greater than what we've seen
-			else if(HitCount > itDyn->second->Hits)
-				itDyn->second->Hits = HitCount;
+			// Find right search by using the GUID
+			for(int i = 0; i < m_pNet->m_SearchList.size(); i++)
+				if(VendMsg->Header.Guid == m_pNet->m_SearchList[i]->m_QueryID)
+				{
+					TRACE0("VMS " + pNode->m_RemoteAgent + " " + IPtoStr(pNode->m_Address.Host) + ": Query Status Request");
+					CGnuSearch* pSearch = m_pNet->m_SearchList[i];
+					
+					packet_VendMsg ReplyMsg;
+					ReplyMsg.Header.Guid = VendMsg->Header.Guid;
+					ReplyMsg.Ident = packet_VendIdent("BEAR", 12, 1);
+					
+					uint16 Hits = pSearch->m_WholeList.size();
+
+					Send_VendMsg(pNode, ReplyMsg, (byte*) &Hits, 2 );
+				}
+		}
+
+		// Leaf Guided Dyanic Query: Query Status Response
+		if( memcmp(VendMsg->Ident.VendorID, "BEAR", 4) == 0 && VendMsg->Ident.Type == 12 && VendMsg->Ident.Version == 1)
+		{
+			byte* message   = ((byte*) VendMsg) + 31;
+			int	  sublength = Packet.Length - 31;
+
+			if(sublength != 2)
+				return;
+
+			uint16 HitCount = 0;
+			memcpy(&HitCount, message, 2);
+
+			std::map<uint32, DynQuery*>::iterator itDyn = m_pComm->m_DynamicQueries.find( HashGuid(VendMsg->Header.Guid) );
+			if( itDyn != m_pComm->m_DynamicQueries.end() )
+			{
+				// End Query if 0xFFFF received
+				if(HitCount == 0xFFFF)
+				{
+					delete itDyn->second;
+					m_pComm->m_DynamicQueries.erase(itDyn);
+				}
+
+				// Otherwise update hit count if its greater than what we've seen
+				else if(HitCount > itDyn->second->Hits)
+					itDyn->second->Hits = HitCount;
+			}
 		}
 	}
 
+	// Packet received UDP
+	else
+	{
+		// Out of band - Reply Num
+		if( memcmp(VendMsg->Ident.VendorID, "LIME", 4) == 0 && VendMsg->Ident.Type == 12 && VendMsg->Ident.Version == 1)
+		{
+			CGnuSearch* pSearch = NULL;
+
+			// Check if query active
+			for(int i = 0; i < m_pNet->m_SearchList.size(); i++)
+				if(VendMsg->Header.Guid == m_pNet->m_SearchList[i]->m_QueryID)
+				{
+					pSearch = m_pNet->m_SearchList[i];
+					break;
+				}
+
+			if(pSearch)
+			{
+				packet_VendMsg Ack;
+				Ack.Header.Guid = VendMsg->Header.Guid;
+				Ack.Ident = packet_VendIdent("LIME", 11, 2);
+				
+				if(Packet.Length - 31 != 1)
+					return;
+
+				byte Results = 0;
+				memcpy(&Results, ((byte*) VendMsg) + 31, 1);
+
+				Send_VendMsg(NULL, Ack, &Results, 1, Packet.Source );
+			}
+		}
+
+		// Out of band - Reply Ack
+		if( memcmp(VendMsg->Ident.VendorID, "LIME", 4) == 0 && VendMsg->Ident.Type == 11 && VendMsg->Ident.Version == 2)
+		{
+			m_pComm->m_OobHitsLock.Lock();
+
+			// Lookup structure that has all the hits for this host
+			std::map<uint32, OobHit*>::iterator itHit = m_pComm->m_OobHits.find( HashGuid(VendMsg->Header.Guid) );
+			if(itHit != m_pComm->m_OobHits.end())
+			{
+				OobHit* pHit = itHit->second;
+
+				if(Packet.Length - 31 != 1)
+				{
+					m_pComm->m_OobHitsLock.Unlock();
+					return;
+				}
+
+				byte RequestNum = 0;
+				memcpy(&RequestNum, ((byte*) VendMsg) + 31, 1);
+
+				int HitsSent = 0;
+
+				// Send hits over UDP and only the amount the host asked for
+				for(int i = 0; i < pHit->QueryHits.size(); i++)
+					if(RequestNum == 255 || HitsSent < RequestNum)
+					{
+						m_pDatagram->SendPacket(pHit->Target, pHit->QueryHits[i], pHit->QueryHitLengths[i]);
+
+						HitsSent += ((packet_QueryHit*) pHit->QueryHits[i])->TotalHits;
+					}
+					else
+						break;
+
+				delete pHit;
+				m_pComm->m_OobHits.erase(itHit);
+			}
+
+			m_pComm->m_OobHitsLock.Unlock();
+		}
+	}
 }
 
 void CGnuProtocol::Receive_Bye(Gnu_RecvdPacket &Packet)
@@ -1250,19 +1351,20 @@ void CGnuProtocol::Send_Query(byte* Packet, int length)
 
 
 	// New MinSpeed Field
-	Query->Speed = 0;				// bit 0 to 8, Was reserved to indicate the number of max query hits expected, 0 if no maximum   
+	Query->Reserved = 0;		// bit 0 to 8, Was reserved to indicate the number of max query hits expected, 0 if no maximum   
 	
-	if(m_pNet->m_UdpFirewall == UDP_FULL)
-		Query->Speed |= 1 << 10;	// bit 10, I understand and desire Out Of Band queryhits via UDP   
+	Query->Flags = 0;
+	//if(m_pNet->m_UdpFirewall == UDP_FULL) 
+		Query->Flags |= 1 << 2;	// bit 10, I understand and desire Out Of Band queryhits via UDP   
 	
-	//Query->Speed |= 1 << 11;		// bit 11 I understand the H GGEP extension in queryhits
-	Query->Speed |= 1 << 12;		// bit 12 Leaf guided dynamic querying   
-	Query->Speed |= 1 << 13;		// bit 13, I understand and want XML metadata in query hits   
+	//Query->Flags |= 1 << 3;	// bit 11 I understand the H GGEP extension in queryhits
+	Query->Flags |= 1 << 4;		// bit 12 Leaf guided dynamic querying   
+	Query->Flags |= 1 << 5;		// bit 13, I understand and want XML metadata in query hits   
 		
-	//if(m_pNet->m_TcpFirewall)
-	//	Query->Speed |= 1 << 14;	// bit 14, I am firewalled, please reply only if not firewalled 
+	//if(m_pNet->m_TcpFirewall) 
+	Query->Flags |= 1 << 6;		// bit 14, I am firewalled, please reply only if not firewalled 
 
-	Query->Speed |= 1 << 15;		// bit 15, Special meaning of the minspeed field, has to be always set.  
+	Query->Flags |= 1 << 7;		// bit 15, Special meaning of the minspeed field, has to be always set.  
 
 
 	m_pComm->m_TableLocal.Insert(Query->Header.Guid, 0);
@@ -1276,7 +1378,7 @@ void CGnuProtocol::Send_Query(byte* Packet, int length)
 		{
 			if(p->m_RemoteMaxTTL)
 				Query->Header.TTL = p->m_RemoteMaxTTL;
-
+			
 			p->SendPacket(Packet, length, PACKET_QUERY, Query->Header.Hops);
 		}
 	}
@@ -1444,7 +1546,25 @@ void CGnuProtocol::Send_QueryHit(GnuQuery &FileQuery, byte* pQueryHit, DWORD Rep
 	// Send the packet
 	QueryHit->Header.Payload  = packetLength - 23;
 
+
+	// DirectAddress set signal node wants hits out of band
+	if(FileQuery.DirectAddress.Host.S_addr)
+	{	
+		std::map<uint32, OobHit*>::iterator itHit = m_pComm->m_OobHits.find( HashGuid(QueryHit->Header.Guid) );
 	
+		if(itHit != m_pComm->m_OobHits.end())
+		{
+			OobHit* pHit = itHit->second;
+
+			byte* HitCopy = new byte[packetLength];
+			memcpy( HitCopy, pQueryHit, packetLength);
+
+			pHit->QueryHits.push_back(HitCopy);
+			pHit->QueryHitLengths.push_back(packetLength);
+		}
+
+		return;
+	}
 
 	// FilesAccess must be unlocked before calling this
 	m_pComm->m_NodeAccess.Lock();
@@ -1541,6 +1661,8 @@ void CGnuProtocol::Send_VendMsg(CGnuNode* pTCP, packet_VendMsg VendMsg, byte* pa
 
 	if(pTCP)
 		pTCP->SendPacket(FinalPacket, FinalLength, PACKET_VENDMSG, VendMsg.Header.Hops);
+	else
+		m_pDatagram->SendPacket(Target, FinalPacket, FinalLength);
 	
 	delete [] FinalPacket;
 	FinalPacket = NULL;
@@ -1584,6 +1706,17 @@ void CGnuProtocol::Encode_QueryHit(GnuQuery &FileQuery, std::list<UINT> &Matchin
 	CString  MetaTail			= "";
 
 	m_pShare->m_FilesAccess.Lock();
+
+
+	if(FileQuery.DirectAddress.Host.S_addr)
+	{
+		m_pComm->m_OobHitsLock.Lock();
+		
+		std::map<uint32, OobHit*>::iterator itHit = m_pComm->m_OobHits.find( HashGuid(FileQuery.SearchGuid) );
+		if(itHit == m_pComm->m_OobHits.end())
+			m_pComm->m_OobHits[ HashGuid(FileQuery.SearchGuid) ] = new OobHit(FileQuery.DirectAddress, MatchingIndexes.size(), FileQuery.OriginID);
+	}
+
 
 	std::list<UINT>::iterator itIndex;
 	for(itIndex = MatchingIndexes.begin(); itIndex != MatchingIndexes.end(); itIndex++)
@@ -1654,12 +1787,12 @@ void CGnuProtocol::Encode_QueryHit(GnuQuery &FileQuery, std::list<UINT> &Matchin
 		ReplyCount++;
 		TotalReplyCount++;
 
-		if(QueryReplyLength > 2048 || ReplyCount == 255)
+		// Udp has a max size of around a kilobyte make sure packet doesnt go over
+		int EstSize = QueryReplyLength + 6 + MetaTail.GetLength() + 16; // QH, Ext, Meta, ClientID
+		if(EstSize > 512 || ReplyCount == 255)
 		{
-			//m_pShare->m_FilesAccess.Unlock();
 			Send_QueryHit(FileQuery, QueryReply, QueryReplyLength, ReplyCount, MetaTail);
-			//m_pShare->m_FilesAccess.Lock();
-
+			
 			QueryReplyNext	 = &QueryReply[34];
 			QueryReplyLength = 0;
 			ReplyCount		 = 0;
@@ -1670,10 +1803,11 @@ void CGnuProtocol::Encode_QueryHit(GnuQuery &FileQuery, std::list<UINT> &Matchin
 
 	if(ReplyCount > 0)
 	{
-		//m_pShare->m_FilesAccess.Unlock();
 		Send_QueryHit(FileQuery, QueryReply, QueryReplyLength, ReplyCount, MetaTail);
-		//m_pShare->m_FilesAccess.Lock();
 	}
+
+	if(FileQuery.DirectAddress.Host.S_addr)
+		m_pComm->m_OobHitsLock.Unlock();
 
 	m_pShare->m_FilesAccess.Unlock();
 }

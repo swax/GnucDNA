@@ -1572,6 +1572,8 @@ void CGnuNode::SetConnected()
 		std::vector<packet_VendIdent> SupportedMessages;
 		SupportedMessages.push_back( packet_VendIdent("BEAR", 11, 1) );
 		SupportedMessages.push_back( packet_VendIdent("BEAR", 12, 1) );
+		SupportedMessages.push_back( packet_VendIdent("LIME", 11, 2) );
+		SupportedMessages.push_back( packet_VendIdent("LIME", 12, 1) );
 
 		uint16 VectorSize = SupportedMessages.size();
 

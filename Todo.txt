@@ -1,13 +1,13 @@
 
-Set UDP check before oob bit set
+Record UDP bandwidth
 
-Recv/Send Out of band hits
+Proxy OOB for leaves?
+
 Push Proxy 
 
 
 Test
     Download re-search, stop and start
-	Verify 'Supported Messages' correctly formatted
 
 Gnutella
     No upgrade to ultrapeer
@@ -24,7 +24,7 @@ G2
 		G2-/                         \->AddHost
 
 	15 minute upgrade only if setconnected never called
-
+	ASSERT size of udp being sent, make sure QH does not overflow
 Now	
 	IPrefs::SetSpeedUp
 	IPrefs::SetSpeedDown

@@ -91,6 +91,8 @@ CGnuControl::CGnuControl(CGnuNetworks* pNet)
 
 	m_pDatagram = new CGnuDatagram(this);
 	m_pProtocol = new CGnuProtocol(this);
+
+	m_pProtocol->Init();
 }
 
 CGnuControl::~CGnuControl()
@@ -128,6 +130,16 @@ CGnuControl::~CGnuControl()
 		delete itDyn->second;
 		itDyn = m_DynamicQueries.erase(itDyn);
 	}
+
+	m_OobHitsLock.Lock();
+		std::map<uint32, OobHit*>::iterator itHit = m_OobHits.begin();
+		while(itHit != m_OobHits.end())
+		{
+			delete itHit->second;
+			itHit = m_OobHits.erase(itHit);
+		}
+	m_OobHitsLock.Unlock();
+
 
 	delete m_pDatagram;
 	m_pDatagram = NULL;
@@ -285,6 +297,7 @@ void CGnuControl::Timer()
 	ManageNodes();
 
 	DynQueryTimer();
+	OobHitsTimer();
 
 	m_pDatagram->Timer();
 
@@ -692,7 +705,7 @@ void CGnuControl::AddDynQuery(DynQuery* pQuery)
 		{
 			InProgress++;
 
-			if(itDyn->second->Secs > OldestAge)
+			if(itDyn->second->Secs >= OldestAge)
 			{
 				OldestAge = itDyn->second->Secs;
 				itOldest  = itDyn;
@@ -772,6 +785,49 @@ void CGnuControl::DynQueryTimer()
 	}
 }
 
+void CGnuControl::OobHitsTimer()
+{
+	m_OobHitsLock.Lock();
+
+	std::map<uint32, OobHit*>::iterator itHit = m_OobHits.begin();
+	while(itHit != m_OobHits.end())
+	{
+		OobHit* pHit = itHit->second;
+
+		if(pHit->Secs > OOB_TIMEOUT )
+		{
+			// Timed out send hits over tcp
+			std::map<int, CGnuNode*>::iterator itNode = m_NodeIDMap.find(pHit->OriginID);
+			if(itNode != m_NodeIDMap.end())
+				for(int i = 0; i < pHit->QueryHits.size(); i++)
+					itNode->second->SendPacket(pHit->QueryHits[i], pHit->QueryHitLengths[i], PACKET_QUERYHIT, ((packet_QueryHit*) pHit->QueryHits[i])->Header.TTL - 1);
+
+			delete pHit;
+			itHit = m_OobHits.erase(itHit);
+			continue;
+		}
+
+	
+		pHit->Secs++;	// Increase time query has been alive
+		
+
+		if( !pHit->SentReplyNum && pHit->QueryHits.size())
+		{
+			packet_VendMsg ReplyNum;
+			memcpy(&ReplyNum.Header.Guid, pHit->QueryHits[0], 16);
+			ReplyNum.Ident = packet_VendIdent("LIME", 12, 1);
+
+			byte Num = (pHit->TotalHits > 255) ? 255 : pHit->TotalHits;
+			m_pProtocol->Send_VendMsg( NULL, ReplyNum, &Num, 1, pHit->Target );
+
+			pHit->SentReplyNum = true;
+		}
+
+		itHit++;
+	}
+
+	m_OobHitsLock.Unlock();
+}
 
 CGnuNode* CGnuControl::GetRandNode(int Type)
 {
