@@ -216,22 +216,24 @@ void CGnuProtocol::Receive_Ping(Gnu_RecvdPacket &Packet)
 			memcpy(IppBlock.Name, "IPP", 3);
 			IppBlock.Last = (isDna == false);
 			
-			int count = (m_pCache->m_GnuReal.size() > 10) ? 10 : m_pCache->m_GnuReal.size();
-			int size  = count * 6;
+			std::vector<IPv4> UltraIPs;
 
-			if(size)
+			for(int i = 0; i < m_pComm->m_NodeList.size() && i < 5; i++)
 			{
+				CGnuNode* pNode = m_pComm->GetRandNode(GNU_ULTRAPEER);
+
+				if(pNode)
+					UltraIPs.push_back( pNode->m_Address );
+			}
+
+			if( UltraIPs.size() )
+			{
+				int size = UltraIPs.size() * 6;
 				byte* pIPs = new byte[size];
 
-				std::list<Node>::iterator itNode = m_pCache->m_GnuReal.begin();
-				for(int i = 0; itNode != m_pCache->m_GnuReal.end() && i < count; itNode++, i++)
-				{
-					IPv4 address;
-					address.Host = StrtoIP((*itNode).Host);
-					address.Port = (*itNode).Port;
-					memcpy(pIPs + (i * 6), &address, 6);
-				}
-
+				for(i = 0; i < UltraIPs.size(); i++)
+					memcpy(pIPs + (i * 6), &UltraIPs[i], 6);
+				
 				packetLength += Encode_GGEPBlock(IppBlock, m_PacketBuffer + packetLength, pIPs, size);
 				delete [] pIPs;
 			}
@@ -239,32 +241,36 @@ void CGnuProtocol::Receive_Ping(Gnu_RecvdPacket &Packet)
 
 		if(isDna)
 		{
-			int count = (m_pCache->m_GnuDna.size() > 10) ? 10 : m_pCache->m_GnuDna.size();
-			int size  = count * 6;
+			std::vector<IPv4> UltraIPs;
+
+			for(int i = 0; i < m_pComm->m_NodeList.size() && i < 5; i++)
+			{
+				CGnuNode* pNode = m_pComm->GetRandNode(GNU_ULTRAPEER, true);
+
+				if(pNode)
+					UltraIPs.push_back( pNode->m_Address );
+			}
+
+			int size  = UltraIPs.size() * 6;
 
 			packet_GGEPBlock DnaBlock;
 			memcpy(DnaBlock.Name, "DNA", 3);
 			DnaBlock.Last = (size == 0);
 			packetLength += Encode_GGEPBlock(DnaBlock, m_PacketBuffer + packetLength, NULL, 0);
 
-			if(size)
+			if( UltraIPs.size() )
 			{
 				// add dna ips
 				packet_GGEPBlock DIppBlock;
 				memcpy(DIppBlock.Name, "DIPP", 3);
 				DIppBlock.Last = true;
 
+				int size = UltraIPs.size() * 6;
 				byte* pIPs = new byte[size];
 
-				std::list<Node>::iterator itNode = m_pCache->m_GnuDna.begin();
-				for(int i = 0; itNode != m_pCache->m_GnuDna.end() && i < count; itNode++, i++)
-				{
-					IPv4 address;
-					address.Host = StrtoIP((*itNode).Host);
-					address.Port = (*itNode).Port;
-					memcpy(pIPs + (i * 6), &address, 6);
-				}
-
+				for(i = 0; i < UltraIPs.size(); i++)
+					memcpy(pIPs + (i * 6), &UltraIPs[i], 6);
+				
 				packetLength += Encode_GGEPBlock(DIppBlock, m_PacketBuffer + packetLength, pIPs, size);
 				delete [] pIPs;
 			}
@@ -1398,6 +1404,9 @@ void CGnuProtocol::ReceiveVM_Supported(Gnu_RecvdPacket &Packet)
 
 			if(*MsgSupported == packet_VendIdent("LIME", 6, 1))
 				pNode->m_SupportsUdpCrawl = true;
+
+			if(*MsgSupported == packet_VendIdent("GNUC", 6, 1))
+				pNode->m_SupportsUdpConnect = true;
 
 			//TRACE0(Msg + " ");
 		}

@@ -1130,14 +1130,20 @@ void CGnuControl::OobHitsTimer()
 	m_OobHitsLock.Unlock();
 }
 
-CGnuNode* CGnuControl::GetRandNode(int Type)
+CGnuNode* CGnuControl::GetRandNode(int Type, bool dnaOnly)
 {
 	int Nodes = 0;
 
 	for(int i = 0; i < m_NodeList.size(); i++)
 		if(m_NodeList[i]->m_Status == SOCK_CONNECTED)
 			if(m_NodeList[i]->m_GnuNodeMode == Type)
+			{
+				if(dnaOnly && m_NodeList[i]->m_SupportsUdpCrawl)
+					continue;
+
 				Nodes++;
+			}
+				
 
 	if(Nodes)
 	{
@@ -1148,6 +1154,9 @@ CGnuNode* CGnuControl::GetRandNode(int Type)
 			if(m_NodeList[i]->m_Status == SOCK_CONNECTED)
 				if(m_NodeList[i]->m_GnuNodeMode == Type)
 				{
+					if(dnaOnly && m_NodeList[i]->m_SupportsUdpCrawl)
+						continue;
+
 					if( upCurrent == upReturn)
 						return m_NodeList[i];
 					else

@@ -1,5 +1,6 @@
 GnucDNA 1.1.1.5
 	swabby: Fixed gnutella udp connect bug
+	swabby: Pong includes only nodes that support udp connect request
 
 GnucDNA 1.1.1.4
 	swabby: Startup and shutdown time improved by moving loading hashes to thread, and saving to intervals

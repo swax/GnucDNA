@@ -59,7 +59,7 @@ public:
 	void RemoveNode(CGnuNode*);
 	CGnuNode* FindNode(CString Host, UINT Port, bool Connected=true);
 
-	CGnuNode* GetRandNode(int Type);
+	CGnuNode* GetRandNode(int Type, bool dnaOnly=false);
 
 	void AddConnect(bool PrefDna=false);
 	void DropNode(int GnuMode, bool NeedDna);

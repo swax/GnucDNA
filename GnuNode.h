@@ -154,6 +154,7 @@ public:
 	bool m_SupportsStats;
 	bool m_SupportsModeChange;
 	bool m_SupportsUdpCrawl;
+	bool m_SupportsUdpConnect;
 	
 	IPv4 m_PushProxy;
 

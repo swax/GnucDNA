@@ -98,6 +98,7 @@ CGnuNode::CGnuNode(CGnuControl* pComm, CString Host, UINT Port)
 	m_SupportsStats		   = false;
 	m_SupportsModeChange   = false;
 	m_SupportsUdpCrawl	   = false;
+	m_SupportsUdpConnect   = false;
 
 	m_RemoteMaxTTL = 0;
 
@@ -1627,6 +1628,7 @@ void CGnuNode::SetConnected()
 		//SupportedMessages.push_back( packet_VendIdent("LIME", 12, 1) );	// oob query
 		SupportedMessages.push_back( packet_VendIdent("LIME", 21, 1) );	    // push proxy
 		SupportedMessages.push_back( packet_VendIdent("LIME", 6, 1) );		// udp crawler
+		SupportedMessages.push_back( packet_VendIdent("GNUC", 6, 1) );		// udp crawler
 
 		uint16 VectorSize = SupportedMessages.size();
 
