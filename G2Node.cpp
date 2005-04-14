@@ -545,16 +545,21 @@ void CG2Node::Close()
 	if(m_SocketData.hSocket != INVALID_SOCKET)
 	{
 		// Clear receive buffer
-		int RecvLength = 0;
+		// Clear receive buffer
+		int BuffLength = 0;
 
-		do 
-		{
-			RecvLength = Receive(m_pRecvBuff, G2_PACKET_BUFF); //Receive(&m_pRecvBuff[m_ExtraLength], G2_PACKET_BUFF - m_ExtraLength);
+		
+		if(m_Status == SOCK_CONNECTED)
+			do {
+				if( !m_InflateRecv )
+					BuffLength = Receive(&m_pRecvBuff[m_ExtraLength], G2_PACKET_BUFF - m_ExtraLength);
+				else	
+					BuffLength = Receive(InflateBuff, G2_ZSTREAM_BUFF);
 
-			//if(RecvLength > 0)
-			//	SplitBundle(m_pRecvBuff, RecvLength);
+				if(BuffLength > 0)
+					FinishReceive(BuffLength);
 
-		} while(RecvLength > 0);
+			} while(BuffLength > 0);
 
 
 		// Close socket

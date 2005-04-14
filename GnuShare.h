@@ -84,7 +84,7 @@ public:
 	bool	m_UpdateShared;
 
 	CCriticalSection m_QueueAccess;
-	std::list<GnuQuery> m_PendingQueries;
+	std::list<GnuQuery*> m_PendingQueries;
 
 	CCriticalSection             m_FilesAccess;
 	std::vector<SharedFile>		 m_SharedFiles;		  // Local file index

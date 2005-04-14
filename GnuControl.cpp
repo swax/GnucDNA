@@ -522,8 +522,6 @@ void CGnuControl::ManageNodes()
 			m_NoConnections = 0;
 	}
 
-	m_TryingConnect = false;
-
 	int MaxHalfConnects = m_pNet->GetMaxHalfConnects();
 
 	if( m_pNet->NetworkConnecting(NETWORK_G2) )
@@ -532,8 +530,6 @@ void CGnuControl::ManageNodes()
 	if( m_pNet->TransfersConnecting() )
 		MaxHalfConnects /= 2;
 
-	if(Connecting >= MaxHalfConnects)
-		return;
 
 	NeedDnaUltras = false;
 	
@@ -549,16 +545,22 @@ void CGnuControl::ManageNodes()
 		
 		m_pPrefs->m_LeafModeConnects = (LeafConnects <= 0) ? 1 : LeafConnects;
 
-		if(UltraConnects < m_pPrefs->m_LeafModeConnects)
+		if(Connecting < MaxHalfConnects && !m_pNet->TcpBacklog())
 		{
-			for(int i = 0; i < OpenSlots; i++)
-				AddConnect(NeedDnaUltras);
+			if(UltraConnects < m_pPrefs->m_LeafModeConnects)
+			{
+				for(int i = 0; i < OpenSlots; i++)
+					AddConnect(NeedDnaUltras);
+			}
+			else if(UltraConnects && NeedDnaUltras)
+			{
+				for(int i = 0; i <= OpenSlots / 2; i++)
+					AddConnect(NeedDnaUltras); // if all thats needed are more dna, dont tax half connects
+			}
+			else
+				m_TryingConnect = false;
 		}
-		else if(UltraConnects && NeedDnaUltras)
-		{
-			for(int i = 0; i <= OpenSlots / 2; i++)
-				AddConnect(NeedDnaUltras); // if all thats needed are more dna, dont tax half connects
-		}
+
 
 		while(m_pPrefs->m_LeafModeConnects && UltraConnects > m_pPrefs->m_LeafModeConnects)
 		{
@@ -573,16 +575,22 @@ void CGnuControl::ManageNodes()
 		if(UltraConnects && UltraDnaConnects * 100 / UltraConnects < 25)
 			NeedDnaUltras = true;
 
-		if(m_pPrefs->m_MinConnects && UltraConnects < m_pPrefs->m_MinConnects)
+		if(Connecting < MaxHalfConnects && !m_pNet->TcpBacklog())
 		{
-			for(int i = 0; i < OpenSlots; i++)
-				AddConnect(NeedDnaUltras);
+			if(m_pPrefs->m_MinConnects && UltraConnects < m_pPrefs->m_MinConnects)
+			{
+				for(int i = 0; i < OpenSlots; i++)
+					AddConnect(NeedDnaUltras);
+			}
+			else if(UltraConnects && NeedDnaUltras)
+			{
+				for(int i = 0; i <= OpenSlots / 2; i++)
+					AddConnect(NeedDnaUltras); // if all thats needed are more dna, dont tax half connects
+			}
+			else
+				m_TryingConnect = false;
 		}
-		else if(UltraConnects && NeedDnaUltras)
-		{
-			for(int i = 0; i <= OpenSlots / 2; i++)
-				AddConnect(NeedDnaUltras); // if all thats needed are more dna, dont tax half connects
-		}
+
 
 		while(m_pPrefs->m_MaxConnects && UltraConnects > m_pPrefs->m_MaxConnects)
 		{
@@ -643,10 +651,10 @@ bool CGnuControl::ConnectFromCache(std::list<Node> &Cache, bool Perm)
 				m_TriedConnects[ StrtoIP(TryNode.Host).S_addr ] = true;
 
 				// send udp request (do if blocked anyways for quick detect)
-				///SendUdpConnectRequest(TryNode.Host, TryNode.Port);
+				SendUdpConnectRequest(TryNode.Host, TryNode.Port);
 
 				// if blocked send tcp
-				//if(m_pNet->m_UdpFirewall == UDP_BLOCK)
+				if(m_pNet->m_UdpFirewall == UDP_BLOCK)
 					AddNode( TryNode.Host, TryNode.Port);
 
 				return true;

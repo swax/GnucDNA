@@ -172,6 +172,9 @@ int CGnuNetworks::GetNextNodeID()
 
 void CGnuNetworks::Timer()
 {
+	// Netstat
+	NetStat.Timer();
+
 	// Node Timers
 	if(m_pGnu)
 		m_pGnu->Timer();
@@ -265,6 +268,36 @@ int CGnuNetworks::GetMaxHalfConnects()
 		return 8;
 
 	return 18;
+}
+
+bool CGnuNetworks::TcpBacklog()
+{
+	int BacklogSize =   NetStat.GetCount(SYN_SENT) +
+						NetStat.GetCount(SYN_RCVD);
+
+	// count non-existant connections
+	if(m_pGnu)
+		for(int i = 0; i < m_pGnu->m_NodeList.size(); i++)
+			if(m_pGnu->m_NodeList[i]->m_Status == SOCK_CONNECTING)
+				if( NetStat.GetStatus(m_pGnu->m_NodeList[i]->m_Address)== -1)
+					BacklogSize++;
+
+	if(m_pG2)
+		for(int i = 0; i < m_pG2->m_G2NodeList.size(); i++)
+			if(m_pG2->m_G2NodeList[i]->m_Status == SOCK_CONNECTING)
+				if( NetStat.GetStatus(m_pG2->m_G2NodeList[i]->m_Address)== -1)
+					BacklogSize++;
+	
+	for(int i = 0; i < m_pCore->m_pTrans->m_DownloadList.size(); i++)
+		for(int j = 0; j < m_pCore->m_pTrans->m_DownloadList[i]->m_Sockets.size(); j++)
+			if(m_pCore->m_pTrans->m_DownloadList[i]->m_Sockets[j]->m_Status == TRANSFER_CONNECTING)
+				if( NetStat.GetStatus(m_pCore->m_pTrans->m_DownloadList[i]->m_Sockets[j]->m_ConnectAddress)== -1)
+					BacklogSize++;
+
+	if(BacklogSize < GetMaxHalfConnects())
+		return false;
+	
+	return true;
 }
 
 int CGnuNetworks::NetworkConnecting(int Network)

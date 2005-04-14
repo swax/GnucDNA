@@ -35,6 +35,7 @@
 #include "GnuRouting.h"
 #include "GnuNetworks.h"
 #include "GnuControl.h"
+#include "GnuProtocol.h"
 #include "G2Control.h"
 #include "GnuNode.h"
 #include "GnuShare.h"
@@ -93,7 +94,7 @@ CGnuDownloadShell::CGnuDownloadShell(CGnuTransfers* pTrans)
 	// Research
 	m_SearchID = 0;
 
-	m_NextReSearch		= 0;
+	m_NextReSearch		= time(NULL) + (60*60);
 	m_ReSearchInterval	= 0;
 
 	// Tiger Tree
@@ -109,6 +110,7 @@ CGnuDownloadShell::CGnuDownloadShell(CGnuTransfers* pTrans)
 	m_AllocBytesTotal = 0;
 	m_AvgSpeed		  = 0;
 
+	m_LastConnectAttempt = 0;
 
 	// Part Size
 	m_PartSize = DOWNLOAD_CHUNK_SIZE;  // 512KB // Must be power of 2
@@ -292,8 +294,7 @@ void CGnuDownloadShell::TryNextHost()
 	if( m_pNet->NetworkConnecting(NETWORK_G2) )
 		MaxHalfConnects /= 2;
 
-	if( m_pNet->TransfersConnecting() >= MaxHalfConnects)
-		return;
+	std::vector<int> ProbeUdp;
 
 	// try oldest host next
 	int OldestPos  = -1;
@@ -314,6 +315,9 @@ void CGnuDownloadShell::TryNextHost()
 			if(Active)
 				continue;
 
+			if( !m_Queue[i].TriedUdp && ProbeUdp.size() < 5)
+				ProbeUdp.push_back(i);
+
 			if( m_Queue[i].LastTried < OldestTime)
 			{
 				OldestPos  = i;
@@ -321,31 +325,30 @@ void CGnuDownloadShell::TryNextHost()
 			}
 		}
 
-	if(OldestPos != -1)
+	for(i = 0; i < ProbeUdp.size(); i++)
 	{
-		i = OldestPos;
-
-		m_Queue[i].Error = "";
-		CGnuDownload* pSock = new CGnuDownload(this, m_Queue[i].SourceID);
-
-		if(pSock->StartDownload())
-			m_Sockets.push_back(pSock);
-		else
+		int SourceID = ProbeUdp[i];
+		m_Queue[SourceID].TriedUdp = true;
+		
+		// send out udp
+		if(m_pNet->m_pGnu && m_Queue[SourceID].Network == NETWORK_GNUTELLA)
 		{
-			delete pSock;
-			pSock = NULL;
+			m_pNet->m_pGnu->m_pProtocol->Send_Ping(NULL, 1, false, NULL, m_Queue[SourceID].Address);
 		}
 		
-		m_Queue[i].Tries++;
-		m_Queue[i].Status = FileSource::eTrying;
-		m_Queue[i].RetryWait = RETRY_WAIT;
-		m_Queue[i].LastTried = time(NULL);
+		if(m_pNet->m_pG2 && m_Queue[SourceID].Network == NETWORK_G2)
+		{
+			G2_PI Ping;
+			m_pNet->m_pG2->Send_PI(m_Queue[SourceID].Address, Ping, NULL);
+		}
+	}
 
-		if(m_HostTryPos >= m_Queue.size())
-			m_HostTryPos = 1;
-		else
-			m_HostTryPos++;
+	if( m_pNet->TransfersConnecting() >= MaxHalfConnects || m_pNet->TcpBacklog())
+		return;
 
+	if(OldestPos != -1)
+	{
+		CreateDownload( m_Queue[OldestPos] );
 
 		return; // host being tried return
 	}
@@ -383,6 +386,47 @@ void CGnuDownloadShell::TryNextHost()
 	}
 } 
 
+void CGnuDownloadShell::UdpResponse(IPv4 Source)
+{
+	if( m_pNet->TcpBacklog() )
+		return;
+
+	for(int i = 0; i < m_Queue.size(); i++)
+		if(m_Queue[i].Address.Host.S_addr == Source.Host.S_addr)
+		{
+			CreateDownload(m_Queue[i]);
+			break;
+		}
+}
+
+void CGnuDownloadShell::CreateDownload(FileSource &Source)
+{
+	Source.Error = "";
+	CGnuDownload* pSock = new CGnuDownload(this, Source.SourceID);
+
+	if(pSock->StartDownload())
+	{
+		m_LastConnectAttempt = time(NULL);
+
+		m_Sockets.push_back(pSock);
+	}
+	else
+	{
+		delete pSock;
+		pSock = NULL;
+	}
+	
+	Source.Tries++;
+	Source.Status    = FileSource::eTrying;
+	Source.RetryWait = RETRY_WAIT;
+	Source.LastTried = time(NULL);
+
+	if(m_HostTryPos >= m_Queue.size())
+		m_HostTryPos = 1;
+	else
+		m_HostTryPos++;
+}
+
 void CGnuDownloadShell::Start()
 {
 	m_HostTryPos = 1;
@@ -407,6 +451,7 @@ void CGnuDownloadShell::Stop()
 	{
 		m_Queue[i].RetryWait = 0;
 		m_Queue[i].Tries     = 0;
+		m_Queue[i].TriedUdp  = false;
 	}
 
 	m_ShellStatus = eDone;
@@ -507,7 +552,7 @@ void CGnuDownloadShell::Timer()
 		m_Cooling--;
 
 		if(m_Cooling == 0)
-			m_ShellStatus = eActive;
+			m_ShellStatus = ePending;
 
 		m_UpdatedInSecond = true;
 	}

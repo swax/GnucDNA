@@ -1,4 +1,5 @@
 GnucDNA 1.1.1.5
+	swabby: License changed back to GPL
 	swabby: Fixed gnutella udp connect bug
 	swabby: Pong includes only nodes that support udp connect request
 	swabby: Gnutella GGEP COBs and compression support
@@ -9,6 +10,12 @@ GnucDNA 1.1.1.5
 	swabby: Upload tiger hashes deleted when no longer needed
 	swabby: Closed uploads automatically removed from list after 30 seconds
 	swabby: Full support for files larger than 2gb
+	swabby: Alt sources parsed from and sent with query results
+	swabby: IP lists in big pongs compressed
+	swabby: Fixed crawlwer mem leak
+	swabby: Udp probing used to quick-start downloads
+	swabby: Total tcp backlog checked before making new connections
+	swabby: Transfer connection attempts evenly spread across all active transfers
 
 GnucDNA 1.1.1.4
 	swabby: Startup and shutdown time improved by moving loading hashes to thread, and saving to intervals

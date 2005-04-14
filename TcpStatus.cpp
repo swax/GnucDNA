@@ -49,14 +49,11 @@ int TcpStatus::Query(void)
 
 int TcpStatus::GetCount( TCPSTATES status ) //get count of how many entries of this type
 {
-	if( !tcpExTable)
-		return 0;
+	int count = 0;
 
-	int count(0);
-
-	for( int i = 0; i < tcpExTable->dwNumEntries; i++)
+	for( int i = 0; i < TcpEntries.size(); i++)
 	{
-		if( tcpExTable->table[i].dwState != status)
+		if( TcpEntries[i].State != status)
 			continue;
 
 		count++;
@@ -67,26 +64,15 @@ int TcpStatus::GetCount( TCPSTATES status ) //get count of how many entries of t
 
 int TcpStatus::GetStatus( IPv4 address )
 {
-	Query();
-
-	if( !tcpExTable)
-		return NONEXISTENT;
-
-	for( int i = 0; i < tcpExTable->dwNumEntries; i++)
+	for( int i = 0; i < TcpEntries.size(); i++)
 	{
-		DWORD entries = tcpExTable->dwNumEntries;
-
-		IPv4 matchAddress;
-		matchAddress.Host.S_addr = tcpExTable->table[i].dwRemoteAddr;
-		matchAddress.Port        = ntohs(tcpExTable->table[i].dwRemotePort);
-
-		if( address.Host.S_addr != matchAddress.Host.S_addr)
+		if( address.Host.S_addr != TcpEntries[i].Address.Host.S_addr)
 			continue;
 
-		if( address.Port != matchAddress.Port)
+		if( address.Port != TcpEntries[i].Address.Port)
 			continue;
 
-		return tcpExTable->table[i].dwState;
+		return TcpEntries[i].State;
 	}
 
 	return NONEXISTENT;
@@ -137,4 +123,25 @@ CString TcpStatus::StatetoStr(int state)
 	}
 
 	return text;
+}
+
+void TcpStatus::Timer()
+{
+	TcpEntries.clear();
+
+	Query();
+
+	if( !tcpExTable)
+		return;
+
+	for( int i = 0; i < tcpExTable->dwNumEntries; i++)
+	{
+		TcpEntry Entry;
+		Entry.Address.Host.S_addr = tcpExTable->table[i].dwRemoteAddr;
+		Entry.Address.Port        = ntohs(tcpExTable->table[i].dwRemotePort);
+
+		Entry.State = tcpExTable->table[i].dwState;
+
+		TcpEntries.push_back(Entry);
+	}
 }

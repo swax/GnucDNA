@@ -31,6 +31,7 @@
 #include "GnuCore.h"
 #include "GnuNode.h"
 #include "GnuNetworks.h"
+#include "GnuDownloadShell.h"
 #include "GnuShare.h"
 #include "GnuPrefs.h"
 #include "GnuCache.h"
@@ -222,6 +223,7 @@ void CGnuProtocol::Receive_Ping(Gnu_RecvdPacket &Packet)
 			// add cache ips
 			packet_GGEPBlock IppBlock;
 			memcpy(IppBlock.Name, "IPP", 3);
+			IppBlock.Compression = true;
 			IppBlock.Last = (isDna == false);
 			
 			std::vector<IPv4> UltraIPs;
@@ -264,6 +266,7 @@ void CGnuProtocol::Receive_Ping(Gnu_RecvdPacket &Packet)
 			packet_GGEPBlock DnaBlock;
 			memcpy(DnaBlock.Name, "DNA", 3);
 			DnaBlock.Last = (size == 0);
+			DnaBlock.Compression = true;
 			packetLength += Encode_GGEPBlock(DnaBlock, m_PacketBuffer + packetLength, NULL, 0);
 
 			if( UltraIPs.size() )
@@ -272,6 +275,7 @@ void CGnuProtocol::Receive_Ping(Gnu_RecvdPacket &Packet)
 				packet_GGEPBlock DIppBlock;
 				memcpy(DIppBlock.Name, "DIPP", 3);
 				DIppBlock.Last = true;
+				DIppBlock.Compression = true;
 
 				int size = UltraIPs.size() * 6;
 				byte* pIPs = new byte[size];
@@ -411,7 +415,7 @@ void CGnuProtocol::Receive_Pong(Gnu_RecvdPacket &Packet)
 	// if received udp
 	if(pNode == NULL)
 	{
-		if(connectSource && m_pComm->m_TryingConnect)
+		if(connectSource && m_pComm->m_TryingConnect && !m_pNet->TcpBacklog())
 			m_pComm->AddNode(IPtoStr(Packet.Source.Host), Packet.Source.Port);
 		else if(isDna)
 			m_pCache->AddKnown( Node(IPtoStr(Packet.Source.Host), Packet.Source.Port, NETWORK_GNUTELLA, CTime::GetCurrentTime(), true));
@@ -421,6 +425,9 @@ void CGnuProtocol::Receive_Pong(Gnu_RecvdPacket &Packet)
 
 		if(m_pNet->m_UdpFirewall == UDP_BLOCK)
 			m_pNet->m_UdpFirewall = UDP_NAT;
+
+		for(int i = 0; i < m_pTrans->m_DownloadList.size(); i++)
+			m_pTrans->m_DownloadList[i]->UdpResponse(Packet.Source);
 
 		return;
 	}
@@ -555,28 +562,28 @@ void CGnuProtocol::Receive_Query(Gnu_RecvdPacket &Packet)
 #endif*/
 
 		// Queue to be compared with local files
-		GnuQuery G1Query;
-		G1Query.Network    = NETWORK_GNUTELLA;
-		G1Query.OriginID   = SourceNodeID;
-		G1Query.SearchGuid = Query->Header.Guid;
+		GnuQuery* G1Query = new GnuQuery;
+		G1Query->Network    = NETWORK_GNUTELLA;
+		G1Query->OriginID   = SourceNodeID;
+		G1Query->SearchGuid = Query->Header.Guid;
 
 		if(Query->Flags.Set && Query->Flags.OobHits && Query->Header.Hops > 1)
 		{
 			// Host requests UDP response, get address from Guid
-			memcpy(&G1Query.DirectAddress.Host, &Query->Header.Guid, 4);
-			memcpy(&G1Query.DirectAddress.Port, ((byte*) &Query->Header.Guid) + 13, 2);
+			memcpy(&G1Query->DirectAddress.Host, &Query->Header.Guid, 4);
+			memcpy(&G1Query->DirectAddress.Port, ((byte*) &Query->Header.Guid) + 13, 2);
 		}
 
 		if(m_pComm->m_GnuClientMode == GNU_ULTRAPEER)
 		{
-			G1Query.Forward = true;
+			G1Query->Forward = true;
 
 			if(Query->Header.TTL == 1)
-				G1Query.UltraForward = true;
+				G1Query->UltraForward = true;
 		}
 
-		memcpy(G1Query.Packet, (byte*) Query, Packet.Length);
-		G1Query.PacketSize = Packet.Length;
+		memcpy(G1Query->Packet, (byte*) Query, Packet.Length);
+		G1Query->PacketSize = Packet.Length;
 
 		
 		byte* pPayload = (byte*) Query + 25;
@@ -586,7 +593,7 @@ void CGnuProtocol::Receive_Query(Gnu_RecvdPacket &Packet)
 		// Get Query string
 		uint32 BytesRead = ParsePayload(pPayload, BytesLeft, NULL, m_QueryBuffer, 1024);
 		if(BytesRead)
-			G1Query.Terms.push_back( CString((char*) m_QueryBuffer, BytesRead) );
+			G1Query->Terms.push_back( CString((char*) m_QueryBuffer, BytesRead) );
 
 		// read extended info in standard format
 		if(pPayload[0] != 0xC3)
@@ -602,7 +609,7 @@ void CGnuProtocol::Receive_Query(Gnu_RecvdPacket &Packet)
 					if(m_QueryBuffer[BytesRead - 1] == NULL)
 						BytesRead--;
 
-					G1Query.Terms.push_back( CString((char*) m_QueryBuffer, BytesRead) );
+					G1Query->Terms.push_back( CString((char*) m_QueryBuffer, BytesRead) );
 					
 				}
 
@@ -971,6 +978,8 @@ void CGnuProtocol::Decode_QueryHit( std::vector<FileSource> &Sources, Gnu_RecvdP
 		Item.Stable		 = Stable;
 		Item.ActualSpeed = ActualSpeed;
 		
+		std::vector<IPv4> AltSources;
+
 		if(ExtendedPacket)
 			Item.Vendor = GetVendor( Vendor );
 
@@ -1084,6 +1093,16 @@ void CGnuProtocol::Decode_QueryHit( std::vector<FileSource> &Sources, Gnu_RecvdP
 						Item.Size = DecodeLF(block.Payload, block.PayloadSize);
 					}
 
+					if( strcmp(block.Name, "ALT") == 0 && block.PayloadSize % 6 == 0)
+					{
+						for(int i = 0; i < block.PayloadSize; i += 6)
+						{
+							IPv4 AltSource;
+							memcpy(&AltSource, block.Payload + i, 6);
+							AltSources.push_back(AltSource);
+						}	
+					}
+
 					if(block.Last)
 						break;
 				}
@@ -1112,6 +1131,20 @@ void CGnuProtocol::Decode_QueryHit( std::vector<FileSource> &Sources, Gnu_RecvdP
 		// Add to source list
 		Sources.push_back(Item);
 
+		// Add alt sources
+		for(int i = 0; i < AltSources.size(); i++)
+		{
+			FileSource AltSource;
+
+			AltSource.Name      = Item.Name;
+			AltSource.NameLower = Item.Name;
+			AltSource.NameLower.MakeLower();   
+			AltSource.Address  = AltSources[i];
+			AltSource.Size	   = Item.Size;
+			AltSource.Sha1Hash = Item.Sha1Hash;
+			
+			Sources.push_back(AltSource);
+		}
 
 		// Check for end of reply packet
 		if(pos + 1 >= Length - 16)
@@ -1982,6 +2015,8 @@ void CGnuProtocol::ReceiveVM_CrawlReq(Gnu_RecvdPacket &Packet)
 	CrawlAck.Ident = packet_VendIdent("LIME", 6, 1);
 
 	Send_VendMsg( NULL, CrawlAck, payload, ackLength, Packet.Source );
+
+	delete [] payload;
 }
 
 void CGnuProtocol::WriteCrawlResult(byte* buffer, CGnuNode* pNode, byte Flags)
@@ -1990,7 +2025,7 @@ void CGnuProtocol::WriteCrawlResult(byte* buffer, CGnuNode* pNode, byte Flags)
 		
 	int pos = 6;
 
-	if(Flags | CRAWL_UPTIME)
+	if(Flags & CRAWL_UPTIME)
 	{
 		uint16 minutes = time(NULL) - pNode->m_ConnectTime;
 		minutes /= 60;
@@ -1999,7 +2034,7 @@ void CGnuProtocol::WriteCrawlResult(byte* buffer, CGnuNode* pNode, byte Flags)
 		pos += 2;
 	}
 
-	if(Flags | CRAWL_LOCAL)
+	if(Flags & CRAWL_LOCAL)
 	{
 		if(pNode->m_LocalPref.GetLength() == 2)
 			memcpy(buffer + pos, pNode->m_LocalPref, 2);
@@ -2280,19 +2315,19 @@ void CGnuProtocol::Send_Query(byte* Packet, int length)
 		m_pComm->AddDynQuery( new DynQuery(0, Packet, length) );
 
 		// Send immediately to all connected hosts based on QHT			
-		GnuQuery G1Query;
-		G1Query.Network    = NETWORK_GNUTELLA;
-		G1Query.OriginID   = 0;
-		G1Query.SearchGuid = Query->Header.Guid;
+		GnuQuery* G1Query = new GnuQuery;
+		G1Query->Network    = NETWORK_GNUTELLA;
+		G1Query->OriginID   = 0;
+		G1Query->SearchGuid = Query->Header.Guid;
 
 		// Forward to connected ultrapeers
-		G1Query.Forward = true;
-		memcpy(G1Query.Packet, Packet, length);
-		G1Query.PacketSize = length;
+		G1Query->Forward = true;
+		memcpy(G1Query->Packet, Packet, length);
+		G1Query->PacketSize = length;
 
 		// Add text in query to search terms
 		int TextSize   = strlen((char*) Query + 25) + 1;
-		G1Query.Terms.push_back( CString((char*) Query + 25, TextSize) );
+		G1Query->Terms.push_back( CString((char*) Query + 25, TextSize) );
 
 		CString ExtendedQuery;
 		int ExtendedSize = strlen((char*) Query + 25 + TextSize);
@@ -2300,7 +2335,7 @@ void CGnuProtocol::Send_Query(byte* Packet, int length)
 			ExtendedQuery = CString((char*) Query + 25 + TextSize, ExtendedSize);
 		
 		while(!ExtendedQuery.IsEmpty())
-			G1Query.Terms.push_back( ParseString(ExtendedQuery, 0x1C) );
+			G1Query->Terms.push_back( ParseString(ExtendedQuery, 0x1C) );
 
 		m_pShare->m_QueueAccess.Lock();
 			m_pShare->m_PendingQueries.push_front(G1Query);	
@@ -2696,15 +2731,81 @@ void CGnuProtocol::Encode_QueryHit(GnuQuery &FileQuery, std::list<UINT> &Matchin
 		QueryReplyNext   += pFile->Name.size() + 1;
 		QueryReplyLength += pFile->Name.size() + 1;
 
-		// If a large file, put all info in GGEP
-		if(pFile->Size > 0xFFFFFFFF)
+		// Add extended hash
+		bool extended = false;
+
+		if( !pFile->HashValues[HASH_SHA1].empty() )
 		{
+			strcpy ((char*) QueryReplyNext, "urn:sha1:");
+			QueryReplyNext   += 9;
+			QueryReplyLength += 9;
+
+			strcpy ((char*) QueryReplyNext, pFile->HashValues[HASH_SHA1].c_str());
+			QueryReplyNext   += pFile->HashValues[HASH_SHA1].size();
+			QueryReplyLength += pFile->HashValues[HASH_SHA1].size();
+
+			extended = true;
+		}
+
+		// If need ggep block for this result
+		if( pFile->AltHosts.size() || pFile->Size > 0xFFFFFFFF)
+		{
+			// if extended add divider
+			if(extended)
+			{
+				QueryReplyNext[0] = 0x1C; 
+				QueryReplyNext++;
+				QueryReplyLength++;
+			}
+				
 			// ggep magic
 			QueryReplyNext[0] = 0xC3; 
 			QueryReplyNext++;
 			QueryReplyLength++;
 			
-			// Hash Block
+			if( pFile->AltHosts.size() )
+			{
+				int altCount = (pFile->AltHosts.size() > 5) ? 5 : pFile->AltHosts.size();
+
+				packet_GGEPBlock AltBlock;
+				memcpy(AltBlock.Name, "ALT", 3);
+				AltBlock.Encoded = true;
+				AltBlock.Last    = (pFile->Size < 0xFFFFFFFF);
+
+				int   GgepPayloadLength = altCount * 6;
+				byte* GgepPayload       = new byte[GgepPayloadLength];
+
+				for(int i = pFile->AltHosts.size() - 1, x = 0; i >= 0 && x < GgepPayloadLength; i--, x += 6) // move backwards because fresh host at back of list
+					memcpy(GgepPayload + x, &pFile->AltHosts[i], 6);
+
+				// Write ggep block
+				int blockSize = Encode_GGEPBlock(AltBlock, QueryReplyNext, GgepPayload, GgepPayloadLength);
+
+				QueryReplyNext   += blockSize;
+				QueryReplyLength += blockSize;
+
+				delete [] GgepPayload;
+			}
+
+			// if large file
+			if(pFile->Size > 0xFFFFFFFF)
+			{
+				// Large File Block
+				packet_GGEPBlock LF_Block;
+				memcpy(LF_Block.Name, "LF", 2);
+				LF_Block.Encoded = true;
+				LF_Block.Last    = true;
+
+				byte lfBuff[8];
+				int buffSize = EncodeLF(pFile->Size, lfBuff);
+				
+				int blockSize = Encode_GGEPBlock(LF_Block, QueryReplyNext, lfBuff, buffSize);
+
+				QueryReplyNext   += blockSize;
+				QueryReplyLength += blockSize;
+			}
+
+			/* Hash Block
 			if( !pFile->HashValues[HASH_SHA1].empty() )
 			{
 				packet_GGEPBlock H_Block;
@@ -2719,36 +2820,9 @@ void CGnuProtocol::Encode_QueryHit(GnuQuery &FileQuery, std::list<UINT> &Matchin
 
 				QueryReplyNext   += blockSize;
 				QueryReplyLength += blockSize;
-			}
-
-			// Large File Block
-			packet_GGEPBlock LF_Block;
-			memcpy(LF_Block.Name, "LF", 2);
-			LF_Block.Encoded = true;
-			LF_Block.Last    = true;
-
-			byte lfBuff[8];
-			int buffSize = EncodeLF(pFile->Size, lfBuff);
-			
-			int blockSize = Encode_GGEPBlock(LF_Block, QueryReplyNext, lfBuff, buffSize);
-
-			QueryReplyNext   += blockSize;
-			QueryReplyLength += blockSize;
+			}*/
 		}
 
-		// File Hash
-		else if( !pFile->HashValues[HASH_SHA1].empty() )
-		{
-			strcpy ((char*) QueryReplyNext, "urn:sha1:");
-			QueryReplyNext   += 9;
-			QueryReplyLength += 9;
-
-			strcpy ((char*) QueryReplyNext, pFile->HashValues[HASH_SHA1].c_str());
-			QueryReplyNext   += pFile->HashValues[HASH_SHA1].size();
-			QueryReplyLength += pFile->HashValues[HASH_SHA1].size();
-		}
-
-		
 
 		// Add end null
 		QueryReplyNext[0] = NULL;

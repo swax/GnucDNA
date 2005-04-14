@@ -1,21 +1,15 @@
 
-add alt sources
-
-Query M GGEP flag, 1 byte?
-Query Hit CT GGEP flag, 4 bytes?
-Query Hit ALT tag
-
-preference newer versions
-
-compress ip lists, big pong?
-cobs encode query hit push proxies
-
-test gnu big pong - send auto
+Remaining Bugs
+  G2 crasher, change in g2node::close()?
 
 Stop and Start share file
 
-
 ----------------------------------------------------------------------
+
+preference newer versions
+
+digitally signed ban list, public key distributed with client
+keep alt hosts for a half hour then kill
 
 Now	
 	IPrefs::SetSpeedUp

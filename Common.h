@@ -162,6 +162,7 @@ struct FileSource
 	bool	  TigerUseThex;
 	CString   TigerPath;
 	bool	  PushSent;
+	bool	  TriedUdp;
 
 	enum States 
 	{
@@ -225,6 +226,7 @@ struct FileSource
 		TigerSupport = false;
 		TigerUseThex = false;
 		PushSent     = false;
+		TriedUdp	 = false;
 
 		Status = States::eUntested;
 	};

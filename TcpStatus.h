@@ -36,6 +36,18 @@ enum TCPSTATES
 /* Constructing one of these gathers all the TCP socket information into the class where it can
 be instantly fetched. Consider it a "snapshot". To get a new snapshot run Query again or reinstantiate
 the object. */
+
+struct TcpEntry
+{
+	IPv4  Address;
+	int   State;
+
+	TcpEntry()
+	{
+		State = -1;
+	}
+};
+
 class TcpStatus
 {
 	MIB_TCPEXTABLE* tcpExTable;
@@ -64,5 +76,9 @@ public:
 	GetStatus(0, 80); */
 	int GetStatus( IPv4 address); //get status of specific connection -1 means "no socket exists"
 	CString StatetoStr(int state);
+
+	void Timer();
+
+	std::vector<TcpEntry> TcpEntries;
 };
 

@@ -117,7 +117,11 @@ CGnuShare::~CGnuShare()
 
 	m_QueueAccess.Lock();
 
-	m_PendingQueries.clear();
+	while(m_PendingQueries.size())
+	{
+		delete m_PendingQueries.back();
+		m_PendingQueries.pop_back();
+	}
 
 	m_QueueAccess.Unlock();
 
@@ -541,8 +545,6 @@ UINT CGnuShare::ShareWorker(LPVOID pVoidShare)
 	WaitForSingleObject( (HANDLE) pShare->m_HashReady, INFINITE);
 
 	// Search vars
-	GnuQuery FileQuery;
-	
 	byte QueryReply[16384];
 	
 	// Set up event system
@@ -611,6 +613,8 @@ UINT CGnuShare::ShareWorker(LPVOID pVoidShare)
 				continue;
 			}
 
+			GnuQuery* FileQuery = NULL;
+
 			// Check for new searches
 			pShare->m_QueueAccess.Lock();
 
@@ -627,7 +631,10 @@ UINT CGnuShare::ShareWorker(LPVOID pVoidShare)
 
 				// Make sure query buffer isnt overflowing
 				while(pShare->m_PendingQueries.size() > 100)
+				{
+					delete pShare->m_PendingQueries.back();
 					pShare->m_PendingQueries.pop_back();
+				}
 
 			pShare->m_QueueAccess.Unlock();
 
@@ -651,23 +658,23 @@ UINT CGnuShare::ShareWorker(LPVOID pVoidShare)
 			std::list<UINT>	 MatchingIndexes;
 			std::list<int>	 MatchingNodes;
 
-			pWordHash->LookupQuery(FileQuery, MatchingIndexes, MatchingNodes);
+			pWordHash->LookupQuery(*FileQuery, MatchingIndexes, MatchingNodes);
 				
 			// Check for size criteria
-			if(FileQuery.MinSize || FileQuery.MaxSize)
+			if(FileQuery->MinSize || FileQuery->MaxSize)
 			{
 				std::list<UINT>::iterator itIndex;
 				for( itIndex = MatchingIndexes.begin(); itIndex != MatchingIndexes.end(); itIndex++)
 				{
-					if(FileQuery.MinSize)
-						if(pShare->m_SharedFiles[*itIndex].Size < FileQuery.MinSize)
+					if(FileQuery->MinSize)
+						if(pShare->m_SharedFiles[*itIndex].Size < FileQuery->MinSize)
 						{
 							itIndex = MatchingIndexes.erase(itIndex);
 							continue;
 						}
 
-					if(FileQuery.MaxSize)
-						if(pShare->m_SharedFiles[*itIndex].Size > FileQuery.MaxSize)
+					if(FileQuery->MaxSize)
+						if(pShare->m_SharedFiles[*itIndex].Size > FileQuery->MaxSize)
 						{
 							itIndex = MatchingIndexes.erase(itIndex);
 							continue;
@@ -676,26 +683,27 @@ UINT CGnuShare::ShareWorker(LPVOID pVoidShare)
 			}
 
 			// Gnutella
-			if( FileQuery.Network == NETWORK_GNUTELLA && pNet->m_pGnu )
+			if( FileQuery->Network == NETWORK_GNUTELLA && pNet->m_pGnu )
 			{
 				if( MatchingIndexes.size() )
-					pNet->m_pGnu->m_pProtocol->Encode_QueryHit(FileQuery, MatchingIndexes, QueryReply);
+					pNet->m_pGnu->m_pProtocol->Encode_QueryHit(*FileQuery, MatchingIndexes, QueryReply);
 
-				if( FileQuery.Forward && MatchingNodes.size() )
-					pNet->m_pGnu->m_pProtocol->Send_Query(FileQuery, MatchingNodes);
+				if( FileQuery->Forward && MatchingNodes.size() )
+					pNet->m_pGnu->m_pProtocol->Send_Query(*FileQuery, MatchingNodes);
 			}
 	
 
 			// G2
-			else if( FileQuery.Network == NETWORK_G2 && pNet->m_pG2 )
+			else if( FileQuery->Network == NETWORK_G2 && pNet->m_pG2 )
 			{
 				if( MatchingIndexes.size() )
-					pNet->m_pG2->Send_QH2(FileQuery, MatchingIndexes);
+					pNet->m_pG2->Send_QH2(*FileQuery, MatchingIndexes);
 
-				if( FileQuery.Forward && MatchingNodes.size() )
-					pNet->m_pG2->Send_Q2(FileQuery, MatchingNodes);
+				if( FileQuery->Forward && MatchingNodes.size() )
+					pNet->m_pG2->Send_Q2(*FileQuery, MatchingNodes);
 			}
 			
+			delete FileQuery;
 		}		
 	}
 

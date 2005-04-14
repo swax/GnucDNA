@@ -35,6 +35,8 @@ public:
 
 	void AddHost(FileSource);
 	void TryNextHost();
+	void UdpResponse(IPv4 Source);
+	void CreateDownload(FileSource &Source);
 
 	bool CheckCompletion();
 
@@ -160,6 +162,7 @@ public:
 	int m_AllocBytes;
 	int m_AllocBytesTotal;
 
+	time_t m_LastConnectAttempt;
 	
 	CGnuPrefs*     m_pPrefs;
 	CGnuNetworks*  m_pNet;

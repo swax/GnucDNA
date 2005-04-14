@@ -35,6 +35,8 @@ public:
 	IP   GuessLocalHost();
 	//bool ConnectingSlotsOpen();
 	int  GetMaxHalfConnects();
+	bool TcpBacklog();
+
 	int  NetworkConnecting(int Network);
 	int  TransfersConnecting();
 

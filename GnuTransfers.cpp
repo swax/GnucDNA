@@ -222,6 +222,8 @@ void CGnuTransfers::ManageDownloads()
 	int DownloadCount = 0;
 	int MaxBytes      = 0;
 
+	std::list<CGnuDownloadShell*> TimerOrder;
+
 	for(int i = 0; i < m_DownloadList.size(); i++)
 	{
 		CGnuDownloadShell *pDown = m_DownloadList[i];
@@ -240,8 +242,18 @@ void CGnuTransfers::ManageDownloads()
 			}*/
 		}
 
-		pDown->Timer();
+		// fire download timer in order from last to try a connection to source
+		std::list<CGnuDownloadShell*>::iterator itDown = TimerOrder.begin();
+
+		while(itDown != TimerOrder.end() && (*itDown)->m_LastConnectAttempt < pDown->m_LastConnectAttempt)
+			itDown++;
+
+		TimerOrder.insert(itDown, pDown);
 	}
+
+
+	for(std::list<CGnuDownloadShell*>::iterator itDown = TimerOrder.begin(); itDown != TimerOrder.end(); itDown++)
+		(*itDown)->Timer();
 	
 	// Manage Download Bandwidth
 	/*if(m_pPrefs->m_BandwidthDown)

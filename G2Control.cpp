@@ -466,8 +466,6 @@ void CG2Control::ManageNodes()
 			m_NoConnections = 0;
 	}
 
-	m_TryingConnect = false;
-
 	int MaxHalfConnects = m_pNet->GetMaxHalfConnects();
 
 	if( m_pNet->NetworkConnecting(NETWORK_GNUTELLA) )
@@ -475,9 +473,6 @@ void CG2Control::ManageNodes()
 
 	if( m_pNet->TransfersConnecting() )
 		MaxHalfConnects /= 2;
-
-	if(Connecting >= MaxHalfConnects)
-		return;
 
 
 	bool NeedDnaHubs = false;
@@ -491,17 +486,23 @@ void CG2Control::ManageNodes()
 		// More hub connects only means people will find your files faster
 		// Searching on G2 does not require a hub connection
 
-		if(HubConnects < m_pPrefs->m_G2ChildConnects)
+		if(Connecting < MaxHalfConnects && !m_pNet->TcpBacklog())
 		{
-			for(int i = 0; i < OpenSlots; i++)
-				TryConnect(NeedDnaHubs);
-		}
-		else if(HubConnects && NeedDnaHubs)
-		{
-			for(int i = 0; i <= OpenSlots / 2; i++)
-				TryConnect(NeedDnaHubs); // Half connects dna
+			if(HubConnects < m_pPrefs->m_G2ChildConnects)
+			{
+				for(int i = 0; i < OpenSlots; i++)
+					TryConnect(NeedDnaHubs);
+			}
+			else if(HubConnects && NeedDnaHubs)
+			{
+				for(int i = 0; i <= OpenSlots / 2; i++)
+					TryConnect(NeedDnaHubs); // Half connects dna
+			}
+			else
+				m_TryingConnect = false;
 		}
 		
+
 		while(m_pPrefs->m_G2ChildConnects && HubConnects > m_pPrefs->m_G2ChildConnects)
 		{
 			DropNode(G2_HUB, NeedDnaHubs);
@@ -514,16 +515,22 @@ void CG2Control::ManageNodes()
 		// Fixed, searching 1 node, searches 10
 		// Sending queries to 10% of network should hit whole network
 
-		if(m_pPrefs->m_G2MinConnects && HubConnects < m_pPrefs->m_G2MinConnects)
+		if(Connecting < MaxHalfConnects && !m_pNet->TcpBacklog())
 		{
-			for(int i = 0; i < OpenSlots; i++)
-				TryConnect(NeedDnaHubs);
+			if(m_pPrefs->m_G2MinConnects && HubConnects < m_pPrefs->m_G2MinConnects)
+			{
+				for(int i = 0; i < OpenSlots; i++)
+					TryConnect(NeedDnaHubs);
+			}
+			else if(HubConnects && NeedDnaHubs)
+			{
+				for(int i = 0; i <= OpenSlots / 2; i++)
+					TryConnect(NeedDnaHubs); 
+			}
+			else
+				m_TryingConnect = false;
 		}
-		else if(HubConnects && NeedDnaHubs)
-		{
-			for(int i = 0; i <= OpenSlots / 2; i++)
-				TryConnect(NeedDnaHubs); 
-		}
+
 		
 		while(m_pPrefs->m_G2MaxConnects && HubConnects > m_pPrefs->m_G2MaxConnects)
 		{
@@ -1527,7 +1534,7 @@ void CG2Control::Receive_PO(G2_RecvdPacket &PacketPO)
 		else if(m_pNet->m_UdpFirewall == UDP_BLOCK)
 			m_pNet->m_UdpFirewall = UDP_NAT;
 
-		if(m_TryingConnect)
+		if(m_TryingConnect && !m_pNet->TcpBacklog())
 		{
 			if(Pong.ConnectAck)
 			{
@@ -1542,6 +1549,10 @@ void CG2Control::Receive_PO(G2_RecvdPacket &PacketPO)
 		}
 		else
 			m_pCache->AddKnown( Node(IPtoStr(PacketPO.Source.Host), PacketPO.Source.Port, NETWORK_G2) );
+	
+
+		for(int i = 0; i < m_pTrans->m_DownloadList.size(); i++)
+			m_pTrans->m_DownloadList[i]->UdpResponse(PacketPO.Source);
 	}
 }
 
@@ -2100,30 +2111,31 @@ void CG2Control::Receive_Q2(G2_RecvdPacket &PacketQ2)
 
 
 	// Create query structure that share thread can use
-	GnuQuery G2Query;
-	G2Query.Network    = NETWORK_G2;
-	G2Query.SearchGuid = Query.SearchGuid;
+	GnuQuery* G2Query = new GnuQuery;
+	G2Query->Network    = NETWORK_G2;
+	G2Query->SearchGuid = Query.SearchGuid;
 
 	if( PacketQ2.pTCP )
-		G2Query.OriginID = PacketQ2.pTCP->m_G2NodeID;
+		G2Query->OriginID = PacketQ2.pTCP->m_G2NodeID;
 
-	G2Query.DirectAddress = Query.ReturnAddress;
+	G2Query->DirectAddress = Query.ReturnAddress;
 
 	if(m_ClientMode == G2_HUB)
 	{
 		// Set packet to be forwarded, program will know not to forward to hubs when originID is set
-		G2Query.Forward = true;
+		G2Query->Forward = true;
 		
-		if(G2Query.DirectAddress.Host.S_addr == 0) // DA of zero means nat search, this prevents inter-hub QH2s
-			G2Query.Forward = false;
+		if(G2Query->DirectAddress.Host.S_addr == 0) // DA of zero means nat search, this prevents inter-hub QH2s
+			G2Query->Forward = false;
 
 		if(  PacketQ2.Root.PacketSize < MAX_QUERY_PACKET_SIZE )
 		{
-			memcpy(G2Query.Packet, PacketQ2.Root.Packet, PacketQ2.Root.PacketSize);
-			G2Query.PacketSize = PacketQ2.Root.PacketSize;
+			memcpy(G2Query->Packet, PacketQ2.Root.Packet, PacketQ2.Root.PacketSize);
+			G2Query->PacketSize = PacketQ2.Root.PacketSize;
 		}
 		else
 		{
+			delete G2Query;
 			//ASSERT(0); Large query, log
 			return;
 		}
@@ -2131,16 +2143,16 @@ void CG2Control::Receive_Q2(G2_RecvdPacket &PacketQ2)
 
 	// Add Search terms to query
 	if( !Query.DescriptiveName.IsEmpty() )
-		G2Query.Terms.push_back( Query.DescriptiveName );
+		G2Query->Terms.push_back( Query.DescriptiveName );
 	
 	if( !Query.Metadata.IsEmpty() )
-		G2Query.Terms.push_back( Query.Metadata );
+		G2Query->Terms.push_back( Query.Metadata );
 	
 	for( int i = 0; i < Query.URNs.size(); i++ )
-		G2Query.Terms.push_back( Query.URNs[i] );
+		G2Query->Terms.push_back( Query.URNs[i] );
 
-	G2Query.MinSize = Query.MinSize;
-	G2Query.MaxSize = Query.MaxSize;
+	G2Query->MinSize = Query.MinSize;
+	G2Query->MaxSize = Query.MaxSize;
 
 	
 	// Insert into route table
