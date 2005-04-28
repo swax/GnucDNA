@@ -810,11 +810,9 @@ bool CGnuDownloadShell::CheckCompletion()
 			while( !MoveFile(m_PartialPath, FinalPath) )
 				if(GetLastError() == ERROR_ALREADY_EXISTS)
 				{
-					//crit test
 					m_OverrideName = IncrementName(m_OverrideName);
 
-					FinalPath = GetFinalPath();
-						
+					FinalPath = GetFinalPath();	
 				}
 				else
 				{

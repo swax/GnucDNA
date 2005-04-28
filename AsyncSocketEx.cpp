@@ -152,7 +152,7 @@ public:
 
 		m_hWnd=CreateWindow(_T("GnucDNA CAsyncSocketEx Helper Window"), _T("GnucDNA CAsyncSocketEx Helper Window"), 0, 0, 0, 0, 0, 0, 0, 0, GetModuleHandle(0));
 		ASSERT(m_hWnd);
-		SetWindowLong(m_hWnd, GWL_USERDATA, (LONG)this);
+		SetWindowLong(m_hWnd, GWL_USERDATA, LONG_PTR(this));
 	};
 
 	virtual ~CAsyncSocketExHelperWindow()

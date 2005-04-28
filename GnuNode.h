@@ -202,7 +202,7 @@ public:
 
 	// QRP - Recv
 	void ApplyPatchTable();
-	void SetPatchBit(int &remotePos, double &Factor, byte value);
+	void SetPatchBit(int &remotePos, double &Factor, byte value, int &bits);
 
 	UINT	m_CurrentSeq;
 

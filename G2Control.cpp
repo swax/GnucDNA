@@ -2470,7 +2470,6 @@ void CG2Control::Receive_MCA(G2_RecvdPacket &PacketMCA)
 	G2_MCA ModeChangeAck;
 	m_pProtocol->Decode_MCA(PacketMCA.Root, ModeChangeAck);
 
-	ASSERT(PacketMCA.pTCP);
 	if( PacketMCA.pTCP == NULL)
 		return;
 

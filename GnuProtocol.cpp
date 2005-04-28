@@ -2123,7 +2123,7 @@ void CGnuProtocol::Send_PatchReset(CGnuNode* pTCP)
 
 	Reset.PacketType	= 0x0;
 	Reset.TableLength	= 1 << GNU_TABLE_BITS;
-	Reset.Infinity		= TABLE_INFINITY;
+	Reset.Infinity		= 7;
 
 	pTCP->SendPacket(&Reset, 29, PACKET_PATCH, Reset.Header.Hops);
 }

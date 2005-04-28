@@ -16,7 +16,8 @@ GnucDNA 1.1.1.5
 	swabby: Udp probing used to quick-start downloads
 	swabby: Total tcp backlog checked before making new connections
 	swabby: Transfer connection attempts evenly spread across all active transfers
-
+	swabby: QRP table infinity set to 7 to improve compatibility
+	
 GnucDNA 1.1.1.4
 	swabby: Startup and shutdown time improved by moving loading hashes to thread, and saving to intervals
 	swabby: NAT tag for G2 queries, providing direct bandwidth saving response path

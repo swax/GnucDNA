@@ -5,8 +5,6 @@
 #define GNU_TABLE_BITS	16
 #define GNU_TABLE_SIZE  (1 << GNU_TABLE_BITS) / 8
 
-#define TABLE_INFINITY   2
-
 #define G2_TABLE_BITS	20
 #define G2_TABLE_SIZE   (1 << G2_TABLE_BITS) / 8
 

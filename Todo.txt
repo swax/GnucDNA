@@ -1,3 +1,15 @@
+//dna
+patchsize = 32k
+patchbits = 4
+entries = 64k
+entries in bytes = 8k
+
+//bear
+patchsize = 256k
+patchbits = 8
+entries = 256k
+entries in bytes 32k
+
 
 Remaining Bugs
   G2 crasher, change in g2node::close()?
@@ -5,6 +17,10 @@ Remaining Bugs
 Stop and Start share file
 
 ----------------------------------------------------------------------
+
+UPnP
+F2F transfers
+
 
 preference newer versions
 

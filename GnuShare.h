@@ -177,8 +177,8 @@ struct GnuQuery
 
 	std::vector<CString> Terms;
 
-	int MinSize;
-	int MaxSize;
+	uint64 MinSize;
+	uint64 MaxSize;
 
 	byte Packet[MAX_QUERY_PACKET_SIZE];
 	int  PacketSize;

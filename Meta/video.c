@@ -31,7 +31,7 @@ Attribute *video_file_analyze(const char *fileName)
    char fmt[10] = "";
    Format format;
 
-   Data data;
+   Data data = {0};
    data.width = 0;
    data.height = 0;
    data.fps = 0;
@@ -59,8 +59,9 @@ Attribute *video_file_analyze(const char *fileName)
       version = parse_mpeg(file, &data);
       if(version == 1)
 	 strcpy(fmt, "MPEG-1");
-      else if(version == 2)
-	 strcpy(fmt, "MPEG-2");
+      else
+         if(version == 2)
+	         strcpy(fmt, "MPEG-2");
       break;
    case UNKNOWN:
       /* this is only here to quiet compiler warnings */
@@ -72,14 +73,13 @@ Attribute *video_file_analyze(const char *fileName)
    if(data.bitrate == 0 && data.duration != 0)
    {
       fseek(file, 0L, SEEK_END);
-      data.bitrate = (unsigned int)
-	 round_double((double) ftell(file) / data.duration * 8);
+		data.bitrate = (unsigned int) round_double((double) ftell(file) / data.duration * 8);
    }
-   else if(data.duration == 0 && data.bitrate != 0)
+	else
+		if(data.duration == 0 && data.bitrate != 0)
    {
       fseek(file, 0L, SEEK_END);
-      data.duration = (unsigned int)
-	 round_double((double) ftell(file) / data.bitrate * 8);
+			data.duration = (unsigned int) round_double((double) ftell(file) / data.bitrate * 8);
    }
    
    fclose(file);

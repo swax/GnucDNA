@@ -2173,16 +2173,16 @@ void CGnuNode::ApplyPatchTable()
 		{
 			// high bit
 			remotePos = i * 2;
-			SetPatchBit(remotePos, Factor, PatchTable[i] >> 4);
+			SetPatchBit(remotePos, Factor, PatchTable[i] >> 4, m_PatchBits);
 			
 			// low bit
 			remotePos++;
-			SetPatchBit(remotePos, Factor, PatchTable[i] & 0xF);
+			SetPatchBit(remotePos, Factor, PatchTable[i] & 0xF, m_PatchBits);
 		}
 		else if(m_PatchBits == 8)
 		{
 			remotePos = i;
-			SetPatchBit(remotePos, Factor, PatchTable[i]);
+			SetPatchBit(remotePos, Factor, PatchTable[i], m_PatchBits);
 		}
 	}
 
@@ -2198,7 +2198,7 @@ void CGnuNode::ApplyPatchTable()
 				m_pComm->m_NodeList[i]->m_SendDelayPatch = true;
 }
 
-void CGnuNode::SetPatchBit(int &remotePos, double &Factor, byte value)
+void CGnuNode::SetPatchBit(int &remotePos, double &Factor, byte value, int &bits)
 {
 	int localPos  = 0;
 	int lByte = 0, lBit = 0;
@@ -2211,7 +2211,7 @@ void CGnuNode::SetPatchBit(int &remotePos, double &Factor, byte value)
 		lBit  = ( localPos & 7 ); 
 
 		// Switch byte
-		if(value > 7)  // turn on (byte negetive)
+		if( (m_PatchBits == 4 && value > 7) || (m_PatchBits == 8 && value > 127))  // turn on (byte negetive)
 			m_RemoteHitTable[lByte] &= ~(1 << lBit);
 		
 		else if(value > 0) // turn off (byte positive)
