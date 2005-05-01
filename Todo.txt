@@ -1,3 +1,6 @@
+IP Cache sorted by largest difference between (first seen and last seen) minus difference between (current time and last seen)
+
+
 //dna
 patchsize = 32k
 patchbits = 4
@@ -9,10 +12,6 @@ patchsize = 256k
 patchbits = 8
 entries = 256k
 entries in bytes 32k
-
-
-Remaining Bugs
-  G2 crasher, change in g2node::close()?
 
 Stop and Start share file
 
