@@ -73,6 +73,8 @@ CGnuNetworks::CGnuNetworks(CGnuCore* pCore)
 	
 	// Cache
 	m_pCache = new CGnuCache(this);
+
+	m_ActivePort = 0;
 }
 
 CGnuNetworks::~CGnuNetworks(void)
@@ -374,6 +376,9 @@ bool CGnuNetworks::StartListening()
 	if(m_pCore->m_pPrefs->m_ForcedPort)
 		AttemptPort = m_pCore->m_pPrefs->m_ForcedPort;
 
+	if(AttemptPort == m_ActivePort)
+		return true;
+
 	int	 Attempts = 0;
 	bool Success  = false;
 	int  Error    = 0;
@@ -382,19 +387,21 @@ bool CGnuNetworks::StartListening()
 	{
 		StopListening();
 
-		if( Create(AttemptPort) && Listen() )
+		m_pUdpSock = new CUdpListener(this);
+		
+		if( Create(AttemptPort) && 
+			m_pUdpSock->Create(AttemptPort, SOCK_DGRAM) &&
+			Listen())
 		{	
-			Success = true;
+			Success	      = true;
 			m_CurrentPort = AttemptPort;
-
-			m_pUdpSock = new CUdpListener(this);
+			m_ActivePort  = AttemptPort;
 
 			return true;	
 		}
 		else
 		{
-			Error = GetLastError();
-			ASSERT(0);
+			// already listening on port that was tried
 			//m_pCore->LogError("Create Error: " + NumtoStr(GetLastError()));
 		}
 
@@ -407,6 +414,8 @@ bool CGnuNetworks::StartListening()
 
 void CGnuNetworks::StopListening()
 {
+	m_ActivePort = 0;
+
 	Close();
 
 	if(m_pUdpSock)
@@ -477,8 +486,9 @@ bool CGnuNetworks::NotLocal(Node TestNode)
 void CGnuNetworks::IncomingSource(GUID &SearchGuid, FileSource &Source)
 {
 	// Prevent user from getting unreachable sources
-	if( m_TcpFirewall && Source.Firewall)
-		return;
+	// Dont discard results, filter them
+	//if( m_TcpFirewall && Source.Firewall)
+	//	return;
 
 	// Find Requesting Searches
 	CGnuSearch* pSearch = NULL;

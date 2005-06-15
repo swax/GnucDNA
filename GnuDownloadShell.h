@@ -13,6 +13,8 @@ class CGnuCore;
 #define DOWNLOAD_CHUNK_SIZE (512 * 1024) // 512 KB
 #define G2_RESEARCH_INT (10 * 60) //10 minutes
 
+#define UDP_PER_TICK 25
+#define RETRY_WAIT 30
 
 struct FilePart
 {
@@ -35,6 +37,8 @@ public:
 
 	void AddHost(FileSource);
 	void TryNextHost();
+	void TryNextUdp();
+	void UdpTransmit(const FileSource &fs);
 	void UdpResponse(IPv4 Source);
 	void CreateDownload(FileSource &Source);
 
@@ -45,6 +49,13 @@ public:
 
 	void AddNaltLocation(IPv4 Address);
 	CString GetNaltLocHeader(IP ToIP, int HostCount=6);
+
+	void SetHostState(uint32 SourceID, FileSource::States state);
+	void AddToAliveHeap(uint32 SourceID);
+	void AddToWaitHeap(uint32 SourceID);
+	bool CheckHeap();
+
+	void ConnectionDeleted(uint32 SourceID);
 
 	void Start();
 	void Stop();
@@ -145,8 +156,28 @@ public:
 	//CFile m_CheckFile;
 
 	int m_NextHostID;
-	std::map<int, int>  m_HostMap; // HostID, pos in Queue vector
-	std::vector<FileSource> m_Queue;
+	
+	std::map<IPv4, unsigned> m_AddressMap; // IP and port to spot in m_Queue
+	std::map<IP, unsigned>   m_SubnetMap; // IP (subnet) to subnet count
+ 	std::vector<FileSource>  m_Queue;
+	std::deque<FileSource>   m_UdpQueue;
+
+	std::deque<unsigned> m_UdpSuccessQueue;
+	std::deque<unsigned> m_UntestedQueue;
+	std::vector<std::pair<unsigned,uint64> > m_ReadyHeap;
+	std::vector<std::pair<unsigned,uint64> > m_WaitHeap;
+
+	struct HeapComparator
+	{
+		// since more in the past is 'greater', our less than operator 
+		// return the more recent time as 'less'
+		bool operator()(std::pair<unsigned, uint64> i, 
+						std::pair<unsigned, uint64> j) const
+		{
+			return i.second > j.second;
+		}
+	};
+
 	byte m_Packet[255];
 
 	std::deque<IPv4> m_AltHosts;

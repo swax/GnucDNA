@@ -55,20 +55,22 @@ struct packet_Push			// Size 49
 
 struct packet_QueryFlags	    // Size 1
 {
-	byte None		: 2;
-	byte OobHits	: 1;
-	byte GGEP_H		: 1;
-	byte Guidance	: 1;
-	byte XML		: 1;
-	byte Firewalled	: 1;
+	byte None0		: 1;
+	byte SupportF2F : 1; 
+	byte OobHits	: 1; 
+	byte None3		: 1;
+	byte None4		: 1;
+	byte XML		: 1; 
+	byte Firewalled	: 1; 
 	byte Set		: 1;
 	
 	packet_QueryFlags()
 	{
-		None		= 0;
+		None0		= 0;
+		SupportF2F	= 0;
 		OobHits		= 0;
-		GGEP_H		= 0;
-		Guidance	= 0;
+		None3		= 0;
+		None4	    = 0;
 		XML			= 0;
 		Firewalled	= 0;
 		Set			= 0;

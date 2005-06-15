@@ -96,8 +96,8 @@ CGnuUploadShell::CGnuUploadShell(CGnuTransfers* pTrans)
 	m_QueuePos		= 0;
 
 	// Bandwidth
-	m_AvgSentBytes.SetRange(30);
-	m_dwSecBytes = 0;
+	m_AvgSentBytes.SetSize(30);
+
 	
 	m_AllocBytes	  = 0;
 	m_AllocBytesTotal = 0;
@@ -500,23 +500,33 @@ void CGnuUploadShell::PushFile()
 
 	m_Socket = new CGnuUpload(this);
 
-	if(!m_Socket->Create())
+	// if udp push
+	if(m_Index == F2F_PUSH_INDEX)
 	{
-		delete m_Socket;
-		m_Socket = NULL;
-		return;
+		m_Socket->m_pSocket->RudpConnect(IPv4(m_Host, m_Port), m_pNet, false);
 	}
-
-	if(!m_Socket->Connect(IPtoStr(m_Host), m_Port))
-		if(m_Socket->GetLastError() != WSAEWOULDBLOCK)
+	
+	// else tcp push
+	else
+	{
+		if(!m_Socket->m_pSocket->Create())
 		{
-			m_Error = "Unable to Connect";
-			StatusUpdate(TRANSFER_CLOSED);
-			
 			delete m_Socket;
 			m_Socket = NULL;
 			return;
 		}
+
+		if(!m_Socket->m_pSocket->Connect(IPtoStr(m_Host), m_Port))
+			if(m_Socket->m_pSocket->GetLastError() != WSAEWOULDBLOCK)
+			{
+				m_Error = "Unable to Connect";
+				StatusUpdate(TRANSFER_CLOSED);
+				
+				delete m_Socket;
+				m_Socket = NULL;
+				return;
+			}
+	}
 
 	StatusUpdate(TRANSFER_PUSH);
 }
@@ -569,8 +579,8 @@ void CGnuUploadShell::RunFile()
 
 void CGnuUploadShell::Timer()
 {
-	m_AvgSentBytes.Update(m_dwSecBytes);
-
+	if(m_Socket)
+		m_Socket->Timer();
 
 	if(m_UpdatedInSecond)
 	{
@@ -614,8 +624,9 @@ void CGnuUploadShell::Timer()
 
 	else if(TRANSFER_PUSH == m_Status)
 	{
-		if(	m_Name == "Unknown" && !m_FileLength)
-			PushFile();
+		// why is this here? seems recursive
+		//if(	m_Name == "Unknown" && !m_FileLength)
+		//	PushFile();
 
 		m_nSecsDead++;
 
@@ -652,7 +663,7 @@ void CGnuUploadShell::Timer()
 
 
 		// Check for dead transfer
-		if(m_dwSecBytes == 0)
+		if(m_AvgSentBytes.m_SecondSum == 0)
 		{
 			m_nSecsDead++;
 
@@ -671,7 +682,7 @@ void CGnuUploadShell::Timer()
 		if(m_pPrefs->m_MinUpSpeed)
 		{
 			// Check if its under the bandwidth limit
-			if((float)m_dwSecBytes / (float)1024 < m_pPrefs->m_MinUpSpeed)
+			if((float)m_AvgSentBytes.m_SecondSum / (float)1024 < m_pPrefs->m_MinUpSpeed)
 				m_nSecsUnderLimit++;
 			else
 				m_nSecsUnderLimit = 0;
@@ -694,13 +705,13 @@ void CGnuUploadShell::Timer()
 		}
 	}
 
-
-	m_dwSecBytes = 0;
-
-
 	// Check for completion
 	if(m_StopPos && m_CurrentPos == m_StopPos)
 		m_pNet->m_HaveUploaded = true;
+
+
+	// bandwidth average
+	m_AvgSentBytes.Next();
 
 
 	// Clean up Socket

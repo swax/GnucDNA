@@ -57,6 +57,7 @@
 #include <afxsock.h>		// MFC socket extensions
 #include <afxinet.h>		// MFC INet extensions
 #include "AsyncSocketEx.h"  // CAsyncSocket replacement
+
 //#include <msxml2.h>
 
 
@@ -74,7 +75,7 @@
 
 
 // DNA Build Options, only define one
-#define DNA_VERSION "1.1.1.5"
+#define DNA_VERSION "1.1.1.6"
 
 #define BUILD_STATIC           // Compiling or using DNA as library
 //#define BUILD_DYNAMIC_DNA    // Compiling DNA as DLL
@@ -209,4 +210,8 @@ using namespace gdna;
 #include "./FileLock.h"
 #include "./Headers.h"
 #include "./TcpStatus.h"
+
+#include "SocketEvents.h"
+#include "ReliableSocket.h"
+
 

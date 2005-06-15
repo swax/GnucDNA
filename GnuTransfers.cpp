@@ -548,6 +548,7 @@ CGnuDownloadShell* CGnuTransfers::LoadDownloadHosts(CString FilePath)
 			nResult.Busy		= atoi(GetBackupString("Busy", CurrentPos, Backup)) != 0;
 			nResult.Stable		= atoi(GetBackupString("Stable", CurrentPos, Backup)) != 0;
 			nResult.ActualSpeed = atoi(GetBackupString("ActualSpeed", CurrentPos, Backup)) != 0;
+			nResult.SupportF2F  = atoi(GetBackupString("SupportF2F", CurrentPos, Backup)) != 0;
 			DecodeBase16(GetBackupString("PushID", CurrentPos, Backup), 32, (byte*) &nResult.PushID, 16);
 
 			CString Nodes = GetBackupString("Direct", CurrentPos, Backup);
@@ -557,8 +558,6 @@ CGnuDownloadShell* CGnuTransfers::LoadDownloadHosts(CString FilePath)
 			nResult.GnuRouteID = 0;
 			nResult.Distance = 7;
 			//nResult.Icon     = m_pCore->GetIconIndex(nResult.Name);
-		
-			
 
 			Download->AddHost(nResult);
 		}

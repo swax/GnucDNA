@@ -69,7 +69,7 @@ void CGnuPrefs::LoadDefaults()
 	m_LanMode			= false;
 
 	// Local Firewall
-	m_BehindFirewall	= false;
+	m_ForceFirewall	= false;
 
 	// Connect
 	m_LeafModeConnects	= 3;
@@ -161,8 +161,8 @@ void CGnuPrefs::LoadConfig(CString ConfigFile)
 	
 
 	// Local Firewall
-	GetPrivateProfileString("LocalFirewall", "BehindFirewall", NumtoStr(m_BehindFirewall), buffer, 256, ConfigFile);
-	m_BehindFirewall = (0 != atoi(buffer));
+	GetPrivateProfileString("LocalFirewall", "ForceFirewall", NumtoStr(m_ForceFirewall), buffer, 256, ConfigFile);
+	m_ForceFirewall = (0 != atoi(buffer));
 
 	// Connect
 	//GetPrivateProfileString("Connect",  "LeafModeConnects",	NumtoStr(m_LeafModeConnects),		buffer, 256, ConfigFile);
@@ -377,7 +377,7 @@ void CGnuPrefs::SaveConfig(CString ConfigFile)
 	
 
 	// Local Firewall
-	WritePrivateProfileString("LocalFirewall", "BehindFirewall",     NumtoStr(m_BehindFirewall),	ConfigFile);
+	WritePrivateProfileString("LocalFirewall", "ForceFirewall",     NumtoStr(m_ForceFirewall),	ConfigFile);
 
 	// Connect
 	//WritePrivateProfileString("Connect", "LeafModeConnects",NumtoStr(m_LeafModeConnects),	ConfigFile);

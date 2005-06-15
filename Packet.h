@@ -14,7 +14,19 @@ union IP										// Size 4
 	struct {BYTE a, b, c, d;};					// old_IP
 	u_long S_addr;
 
-	inline int operator > (union IP& first)
+	inline bool operator==(const union IP& first) const
+	{
+		return S_addr == first.S_addr;
+	}
+
+	inline int operator < (const union IP& first) const
+	{
+		if (*this > first || *this == first)
+			return false;
+		return true;
+	}
+
+	inline int operator > (const union IP& first) const
 	{	
 		bool result = false;
 
@@ -50,6 +62,27 @@ struct IPv4
 		Host.S_addr = 0;
 		Port = 0;
 	};
+	
+	IPv4(IP host, UINT port)
+	{
+		Host = host;
+		Port = port;
+	};
+
+	bool operator==(const IPv4 &addr) const
+	{
+		return Host == addr.Host && Port == addr.Port;
+	}
+
+	bool operator!=(const IPv4 &addr) const	
+	{ 
+		return !(*this == addr); 
+	}
+
+	bool operator<(const IPv4 &addr) const
+	{
+		return ((Host < addr.Host) || ((Host == addr.Host) && (Port < addr.Port)));
+	}
 };
 
 struct Node
@@ -59,6 +92,7 @@ struct Node
 	UINT    Port;
 	CTime   LastSeen;
 	bool    DNA;
+	bool    TriedUdp;
 
 	// Create a node based on a standard "Host:port" string
 	Node();

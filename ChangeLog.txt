@@ -1,3 +1,10 @@
+GnucDNA 1.1.1.6
+	fcrick: Download system restructured, less cpu utilized
+	swabby: Safer TCP firewall check
+	swabby: Signifigant g1/g2 connection speed up
+	swabby: Firewall to firewall transfer over udp
+	swabby: Simplified code for doing moving averages
+	
 GnucDNA 1.1.1.5
 	swabby: License changed back to GPL
 	swabby: Fixed gnutella udp connect bug

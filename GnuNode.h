@@ -251,11 +251,8 @@ public:
 
 	
 	// Bandwidth, [0] is Received, [1] is Sent, [2] is Dropped
-	CRangeAvg m_AvgPackets[3];   // Packets received/sent in second
-	CRangeAvg m_AvgBytes[3];     // Bytes received/sent in second
-	
-	DWORD m_dwSecPackets[3];
-	DWORD m_dwSecBytes[3];
+	CMovingAvg m_AvgPackets[3];   // Packets received/sent in second
+	CMovingAvg m_AvgBytes[3];     // Bytes received/sent in second
 
 	int m_QuerySendThrottle;
 

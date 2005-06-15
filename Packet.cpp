@@ -40,6 +40,7 @@ Node::Node()
 	Port     = 0;
 	LastSeen = 0;
 	DNA		 = false;
+	TriedUdp = false;
 }
 
 Node::Node(CString HostPort)
@@ -49,6 +50,7 @@ Node::Node(CString HostPort)
 	Network  = NETWORK_GNUTELLA;
 	LastSeen = 0;
 	DNA		 = false;
+	TriedUdp = false;
 }
 
 Node::Node(CString nHost, UINT nPort, int nNetwork, CTime tLastSeen, bool bDNA)
@@ -58,6 +60,7 @@ Node::Node(CString nHost, UINT nPort, int nNetwork, CTime tLastSeen, bool bDNA)
 	Port	 = nPort;
 	LastSeen = tLastSeen;
 	DNA		 = bDNA;
+	TriedUdp = false;
 }
 	
 // Allow Node = "host:port" assignment

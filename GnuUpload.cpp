@@ -61,6 +61,9 @@ CGnuUpload::CGnuUpload(CGnuUploadShell* pShell)
 	m_Authorized = false;
 
 	m_Push = false;
+
+	// sockets
+	m_pSocket = new CReliableSocket(this);
 }
 
 CGnuUpload::~CGnuUpload()
@@ -69,11 +72,8 @@ CGnuUpload::~CGnuUpload()
 
 	// Flush receive buffer
 	byte pBuff[4096];
-	while(Receive(pBuff, 4096) > 0)
+	while(m_pSocket->Receive(pBuff, 4096) > 0)
 		;
-
-	if(m_SocketData.hSocket!= INVALID_SOCKET)
-		AsyncSelect(0);
 
 	m_CanWrite.SetEvent();
 	m_MoreBytes.SetEvent();
@@ -84,16 +84,9 @@ CGnuUpload::~CGnuUpload()
 	
 	if(m_pShell->m_File.m_hFile != CFile::hFileNull)
 		m_pShell->m_File.Abort();
+
+	delete m_pSocket;
 }
-
-
-// Do not edit the following lines, which are needed by ClassWizard.
-#if 0
-BEGIN_MESSAGE_MAP(CGnuUpload, CAsyncSocketEx)
-	//{{AFX_MSG_MAP(CGnuUpload)
-	//}}AFX_MSG_MAP
-END_MESSAGE_MAP()
-#endif	// 0
 
 /////////////////////////////////////////////////////////////////////////////
 // CGnuUpload member functions
@@ -118,20 +111,18 @@ void CGnuUpload::OnConnect(int nErrorCode)
 		HttpGiv = "PUSH guid:" + EncodeBase16((byte*) &m_pPrefs->m_ClientID, 16) + "\r\n\r\n";
 
 
-	Send(HttpGiv, HttpGiv.GetLength());
+	m_pSocket->Send(HttpGiv, HttpGiv.GetLength());
 	m_pShell->StatusUpdate(TRANSFER_CONNECTED);
 
 	m_pShell->m_Handshake  = "";
 	m_pShell->m_Handshake += HttpGiv;
-	
-	CAsyncSocketEx::OnConnect(nErrorCode);
 }
 
 void CGnuUpload::OnReceive(int nErrorCode) 
 {
 	byte pBuff[6000];
 
-	int dwBuffLength = Receive(pBuff, 4096);
+	int dwBuffLength = m_pSocket->Receive(pBuff, 4096);
 
 	switch (dwBuffLength)
 	{
@@ -170,7 +161,7 @@ void CGnuUpload::OnReceive(int nErrorCode)
 			// Get Node info
 			CString Host;
 			UINT    nPort;
-			GetPeerName(Host, nPort);
+			m_pSocket->GetPeerName(Host, nPort);
 			
 
 			// Check if it's a blocked Host 
@@ -211,8 +202,6 @@ void CGnuUpload::OnReceive(int nErrorCode)
 			Close();
 		}
 	}
-
-	CAsyncSocketEx::OnReceive(nErrorCode);
 }
 
 void CGnuUpload::Send_HttpOK()
@@ -334,7 +323,7 @@ void CGnuUpload::Send_HttpOK()
 	HttpOK += "\r\n";
 
 	// Send header
-	Send(HttpOK, HttpOK.GetLength());
+	m_pSocket->Send(HttpOK, HttpOK.GetLength());
 
 	m_pShell->m_Handshake += HttpOK;
 
@@ -420,7 +409,7 @@ void CGnuUpload::Send_TigerTree()
 	HttpTree += "\r\n";
 
 	// Send header
-	Send(HttpTree, HttpTree.GetLength());
+	m_pSocket->Send(HttpTree, HttpTree.GetLength());
 
 	m_pShell->m_Handshake += HttpTree;
 
@@ -540,7 +529,7 @@ void CGnuUpload::Send_HttpBusy()
 	}
 			
 	// Send header
-	Send(Http503, Http503.GetLength());
+	m_pSocket->Send(Http503, Http503.GetLength());
 
 	m_pShell->m_Handshake += Http503;
 
@@ -639,7 +628,7 @@ void CGnuUpload::Send_HttpFailed()
 	}
 
 	// Send header
-	Send(Http503, Http503.GetLength());
+	m_pSocket->Send(Http503, Http503.GetLength());
 
 	m_pShell->m_Error = "Host Already Downloading";
 	m_pShell->m_Handshake += Http503;
@@ -676,7 +665,7 @@ void CGnuUpload::Send_HttpNotFound()
 	}
 
 	// Send header
-	Send(Http404, Http404.GetLength());
+	m_pSocket->Send(Http404, Http404.GetLength());
 
 	m_pShell->m_Error = "File Not Found";
 	m_pShell->m_Handshake += Http404;
@@ -712,7 +701,7 @@ void CGnuUpload::Send_HttpBadRequest()
 	}
 
 	// Send header
-	Send(Http400, Http400.GetLength());
+	m_pSocket->Send(Http400, Http400.GetLength());
 
 	m_pShell->m_Error = "Bad Request";
 	m_pShell->m_Handshake += Http400;
@@ -775,7 +764,7 @@ void CGnuUpload::Send_HttpInternalError()
 	}
 	
 	// Send header
-	Send(Http500, Http500.GetLength());
+	m_pSocket->Send(Http500, Http500.GetLength());
 
 	m_pShell->m_Error = "Internal Server Error";
 	m_pShell->m_Handshake += Http500;
@@ -814,7 +803,7 @@ void CGnuUpload::Send_BrowserBlock()
 	}
 
 	// Send header
-	Send(Http403, Http403.GetLength());
+	m_pSocket->Send(Http403, Http403.GetLength());
 
 	m_pShell->m_Error = "Brower Blocked";
 	m_pShell->m_Handshake += Http403;
@@ -853,7 +842,7 @@ void CGnuUpload::Send_ClientBlock(CString ClientName)
 	}
 
 	// Send header
-	Send(Http403, Http403.GetLength());
+	m_pSocket->Send(Http403, Http403.GetLength());
 
 	m_pShell->m_Error = "Client " + ClientName + " Blocked";
 	m_pShell->m_Handshake += Http403;
@@ -923,7 +912,7 @@ void CGnuUpload::Send_HttpRangeNotAvailable()
 	}
 
 	// Send header
-	Send(Http503, Http503.GetLength());
+	m_pSocket->Send(Http503, Http503.GetLength());
 
 	m_pShell->m_Error = "Host Already Downloading";
 	m_pShell->m_Handshake += Http503;
@@ -936,7 +925,7 @@ int CGnuUpload::Send(const void* lpBuf, int nBufLen, int nFlags)
 {
 	CAutoLock SendLock(&m_SendSection);
 
-	return CAsyncSocketEx::Send(lpBuf, nBufLen, nFlags);
+	return m_pSocket->Send(lpBuf, nBufLen);
 }
 
 
@@ -944,8 +933,6 @@ void CGnuUpload::OnSend(int nErrorCode)
 // keep buffer full
 {	
 	m_CanWrite.SetEvent();
-
-	CAsyncSocketEx::OnSend(nErrorCode);
 }
 
 void CGnuUpload::OnClose(int nErrorCode) 
@@ -954,21 +941,12 @@ void CGnuUpload::OnClose(int nErrorCode)
 		m_pShell->m_Error = "Remotely Canceled";
 
 	Close();
-		
-	CAsyncSocketEx::OnClose(nErrorCode);
 }
 
 void CGnuUpload::Close()
 {
-	if(m_SocketData.hSocket != INVALID_SOCKET)
-	{
-		AsyncSelect(0);
-		ShutDown(2);
-
-		CAsyncSocketEx::Close();
-	}
-
-
+	m_pSocket->Close();
+	
 	// Close file
 	if(m_pShell->m_File.m_hFile != CFile::hFileNull)
 		m_pShell->m_File.Abort();
@@ -981,6 +959,8 @@ void CGnuUpload::Close()
 
 void CGnuUpload::Timer()
 {
+	m_pSocket->OnSecond();
+	
 	// Sometimes OnSend doesnt get called
 	m_CanWrite.SetEvent();
 }
@@ -990,11 +970,11 @@ UINT UploadWorker(LPVOID pVoidUpload)
 	//AfxMessageBox("Worker Thread Started");
 	//TRACE0("*** Upload Thread Started\n");
 
-	CGnuUpload*      pSock  = (CGnuUpload*) pVoidUpload;
-	CGnuUploadShell* pShell = pSock->m_pShell;
-	CGnuNetworks*    pNet   = pShell->m_pNet;
-	CGnuPrefs*		 pPrefs = pShell->m_pPrefs;
-	CGnuTransfers*   pTrans = pShell->m_pTrans;
+	CGnuUpload*      pUpload = (CGnuUpload*) pVoidUpload;
+	CGnuUploadShell* pShell  = pUpload->m_pShell;
+	CGnuNetworks*    pNet    = pShell->m_pNet;
+	CGnuPrefs*		 pPrefs  = pShell->m_pPrefs;
+	CGnuTransfers*   pTrans  = pShell->m_pTrans;
 
 	int BytesRead = 0;
 	int BytesSent = 0;
@@ -1013,7 +993,7 @@ UINT UploadWorker(LPVOID pVoidUpload)
 	// Transport buffer mod test
 	//int sendsize = SEND_BUFF;
 	//int varlen = 4;
-	//pSock->SetSockOpt(SO_SNDBUF, &sendsize, varlen);
+	//pUpload->SetSockOpt(SO_SNDBUF, &sendsize, varlen);
 
 
 	while(pShell->m_Status == TRANSFER_SENDING)
@@ -1029,12 +1009,12 @@ UINT UploadWorker(LPVOID pVoidUpload)
 				//		pShell->m_pNet->m_pCore->DebugLog("Upload Check Failed at " + CommaIze(NumtoStr(pShell->m_BytesSent)));
 
 
-				int AttemptSend = pSock->Send(pBuff + BytesSent, BytesRead - BytesSent);
+				int AttemptSend = pUpload->m_pSocket->Send(pBuff + BytesSent, BytesRead - BytesSent);
 					
 
 				if(AttemptSend == SOCKET_ERROR)
 				{
-					int code = pSock->GetLastError();
+					int code = pUpload->m_pSocket->GetLastError();
 					if(code != WSAEWOULDBLOCK)
 					{
 						pShell->m_Error  = "Remotely Canceled";  // Make more descriptive
@@ -1046,8 +1026,8 @@ UINT UploadWorker(LPVOID pVoidUpload)
 						//if( pShell->m_Sha1Hash.Left(4) == "F2K5" )
 						//	pShell->m_pNet->m_pCore->DebugLog("Block: " + pShell->m_Name + " -- CurrentPos=" + NumtoStr(pShell->m_CurrentPos));
 
-						WaitForSingleObject((HANDLE) pSock->m_CanWrite, INFINITE);
-						pSock->m_CanWrite.ResetEvent();
+						WaitForSingleObject((HANDLE) pUpload->m_CanWrite, INFINITE);
+						pUpload->m_CanWrite.ResetEvent();
 						
 						if(pShell->m_Status != TRANSFER_SENDING)
 							break;
@@ -1079,10 +1059,10 @@ UINT UploadWorker(LPVOID pVoidUpload)
 					//if( pShell->m_Sha1Hash.Left(4) == "F2K5" )
 					//	pShell->m_pNet->m_pCore->DebugLog("Sent: " + pShell->m_Name + " -- CurrentPos=" + NumtoStr(pShell->m_CurrentPos) + ", SentBytes=" + NumtoStr(AttemptSend));
 
-					BytesSent   += AttemptSend;
+					BytesSent			 += AttemptSend;
 					pShell->m_CurrentPos += AttemptSend;
-					pShell->m_dwSecBytes += AttemptSend;
 					pShell->m_BytesSent  += AttemptSend;
+					pShell->m_AvgSentBytes.Input(AttemptSend);
 				}
 
 				if(!pShell->m_UpdatedInSecond)
@@ -1105,8 +1085,8 @@ UINT UploadWorker(LPVOID pVoidUpload)
 					{
 						pShell->m_AllocBytes = 0;
 
-						pSock->m_MoreBytes.ResetEvent();
-						WaitForSingleObject((HANDLE) pSock->m_MoreBytes, INFINITE);
+						pUpload->m_MoreBytes.ResetEvent();
+						WaitForSingleObject((HANDLE) pUpload->m_MoreBytes, INFINITE);
 
 						if(pShell->m_Status != TRANSFER_SENDING)
 							break;
@@ -1166,8 +1146,6 @@ UINT UploadWorker(LPVOID pVoidUpload)
 				}
 				
 				
-
-				
 				if(pPrefs->m_BandwidthUp)
 					pShell->m_AllocBytes -= BytesRead;
 
@@ -1197,7 +1175,7 @@ UINT UploadWorker(LPVOID pVoidUpload)
 			pShell->m_UpdatedInSecond = true;
 
 			if(pShell->m_Socket)
-				pSock->m_ThreadRunning = false;
+				pUpload->m_ThreadRunning = false;
 		}
 
 

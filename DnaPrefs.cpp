@@ -227,9 +227,7 @@ void CDnaPrefs::SetLanName(LPCTSTR newVal)
 
 BOOL CDnaPrefs::GetBehindFirewall(void)
 {
-	  
-
-	if(m_gnuPrefs->m_BehindFirewall)
+	if(m_gnuPrefs->m_ForceFirewall)
 		return TRUE;
 
 	return FALSE;
@@ -237,9 +235,8 @@ BOOL CDnaPrefs::GetBehindFirewall(void)
 
 void CDnaPrefs::SetBehindFirewall(BOOL newVal)
 {
-	  
-
-	m_gnuPrefs->m_BehindFirewall = newVal;
+	// must be done through config file
+	//m_gnuPrefs->m_ForceFirewall = newVal;
 }
 
 LONG CDnaPrefs::GetLeafModeConnects(void)

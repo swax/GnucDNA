@@ -2,7 +2,7 @@
 
 #include "GnuUploadQueue.h"
 
-
+#define F2F_PUSH_INDEX (0x7FFFFFFF - 2)
 
 class CGnuCore;
 class CGnuPrefs;

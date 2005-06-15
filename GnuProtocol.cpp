@@ -341,7 +341,7 @@ void CGnuProtocol::Receive_Pong(Gnu_RecvdPacket &Packet)
 	}
 
 	bool isDna = false;
-	bool connectSource = false;
+	bool spaceAvailable = false;
 	
 	// if ggep pong
 	if(Pong->Header.Payload > 14)
@@ -396,13 +396,11 @@ void CGnuProtocol::Receive_Pong(Gnu_RecvdPacket &Packet)
 					{
 						// if we are leaf and remote node has space
 						if(m_pComm->m_GnuClientMode == GNU_LEAF && Block.Payload[1])
-							if(m_pPrefs->m_LeafModeConnects - m_pComm->CountUltraConnects() > 0 || (isDna && m_pComm->NeedDnaUltras))
-								connectSource = true;
+							spaceAvailable = true;
 
 						// if we are ultra and remote node has space
 						if(m_pComm->m_GnuClientMode == GNU_ULTRAPEER && Block.Payload[2])
-							if(m_pPrefs->m_MaxConnects - m_pComm->CountUltraConnects() > 0 || (isDna && m_pComm->NeedDnaUltras))
-								connectSource = true;
+							spaceAvailable = true;
 					}
 				}
 
@@ -415,12 +413,11 @@ void CGnuProtocol::Receive_Pong(Gnu_RecvdPacket &Packet)
 	// if received udp
 	if(pNode == NULL)
 	{
-		if(connectSource && m_pComm->m_TryingConnect && !m_pNet->TcpBacklog())
-			m_pComm->AddNode(IPtoStr(Packet.Source.Host), Packet.Source.Port);
-		else if(isDna)
+		if(isDna)
 			m_pCache->AddKnown( Node(IPtoStr(Packet.Source.Host), Packet.Source.Port, NETWORK_GNUTELLA, CTime::GetCurrentTime(), true));
+
 		else
-			m_pCache->AddKnown( Node(IPtoStr(Packet.Source.Host), Packet.Source.Port, NETWORK_GNUTELLA, CTime::GetCurrentTime(), false));
+			m_pComm->m_UdpReplyCache.push_front( Node(IPtoStr(Packet.Source.Host), Packet.Source.Port) );
 
 
 		if(m_pNet->m_UdpFirewall == UDP_BLOCK)
@@ -430,6 +427,14 @@ void CGnuProtocol::Receive_Pong(Gnu_RecvdPacket &Packet)
 			m_pTrans->m_DownloadList[i]->UdpResponse(Packet.Source);
 
 		return;
+	}
+
+	// else tcp pong
+	else
+	{
+		if(Packet.pTCP->m_Inbound && !m_pPrefs->m_ForceFirewall)
+			// Firewall not up, unless this is over a LAN
+			m_pNet->m_TcpFirewall = false;
 	}
 
 	// Packet stats
@@ -508,6 +513,11 @@ void CGnuProtocol::Receive_Query(Gnu_RecvdPacket &Packet)
 	// Fresh Query?
 	if(RouteID == -1)
 	{
+		//CString trace = "Query Flags ";
+		//for(int i = 128; i != 0; i /= 2)
+		//	trace += ((*(byte*)&Query->Flags) & i) ? "1" : "0";
+		//TRACE0(trace + "\n");
+
 		m_pComm->m_TableRouting.Insert(Query->Header.Guid, SourceNodeID);
 
 		pNode->AddGoodStat(Query->Header.Function);
@@ -833,6 +843,7 @@ void CGnuProtocol::Decode_QueryHit( std::vector<FileSource> &Sources, Gnu_RecvdP
 	bool Busy			= false;
 	bool Stable			= false;
 	bool ActualSpeed	= false;
+	bool SupportF2F     = false;
 
 	std::vector<IPv4> DirectUltrapeers;
 
@@ -953,6 +964,13 @@ void CGnuProtocol::Decode_QueryHit( std::vector<FileSource> &Sources, Gnu_RecvdP
 						}	
 					}
 
+					// Firewall Transfer
+					if( strcmp(Block.Name, "FW") == 0 && Block.PayloadSize >= 1)
+					{
+						if(Block.Payload[0] > 0)
+							SupportF2F = true;
+					}
+
 					if(Block.Last)
 						break;
 				}
@@ -977,6 +995,7 @@ void CGnuProtocol::Decode_QueryHit( std::vector<FileSource> &Sources, Gnu_RecvdP
 		Item.Busy		 = Busy;
 		Item.Stable		 = Stable;
 		Item.ActualSpeed = ActualSpeed;
+		Item.SupportF2F  = SupportF2F;
 		
 		std::vector<IPv4> AltSources;
 
@@ -2279,18 +2298,18 @@ void CGnuProtocol::Send_Query(byte* Packet, int length)
 	// New MinSpeed Field
 	Query->Reserved = 0;	
 	
-	if(m_pNet->m_UdpFirewall == UDP_FULL) 
-		Query->Flags.OobHits = true;   
+	Query->Flags.Set = true;
 	
-	//Query->Flags.GGEP_H = true;
-	Query->Flags.Guidance =	true;
-	Query->Flags.XML	  = true;	 
-		
 	if(m_pNet->m_TcpFirewall) 
 		Query->Flags.Firewalled = true;
 
-	Query->Flags.Set = true;		
-
+	Query->Flags.XML = true;
+	
+	if(m_pNet->m_UdpFirewall == UDP_FULL) 
+		Query->Flags.OobHits = true;   
+	
+	if(m_pNet->m_TcpFirewall && m_pNet->m_UdpFirewall != UDP_BLOCK)
+		Query->Flags.SupportF2F = true;
 
 	m_pComm->m_TableLocal.Insert(Query->Header.Guid, 0);
 
@@ -2437,6 +2456,8 @@ void CGnuProtocol::Send_QueryHit(GnuQuery &FileQuery, byte* pQueryHit, DWORD Rep
 	QHD->GGEP   = false;
 	QHD->Trash	= 0;
 
+	bool PushBlock = false;
+	bool F2FBlock  = false;
 
 	// Get list of push proxies
 	std::vector<IPv4> PushProxies;
@@ -2446,6 +2467,19 @@ void CGnuProtocol::Send_QueryHit(GnuQuery &FileQuery, byte* pQueryHit, DWORD Rep
 			PushProxies.push_back(m_pComm->m_NodeList[i]->m_PushProxy);
 
 	if( PushProxies.size() )
+		PushBlock = true;
+
+	// Mark our support for F2F us and them suppport it
+	if( pQuery->Flags.SupportF2F &&
+		m_pNet->m_TcpFirewall && m_pNet->m_UdpFirewall != UDP_BLOCK)
+	{
+		F2FBlock = true;
+	}
+
+	// GGEP
+	byte* pGGEPStart = NULL;
+
+	if(PushBlock || F2FBlock)
 	{
 		QHD->GGEP = true;
 
@@ -2453,11 +2487,14 @@ void CGnuProtocol::Send_QueryHit(GnuQuery &FileQuery, byte* pQueryHit, DWORD Rep
 	
 		*pGGEPStart   = 0xC3; // ggep magic
 		packetLength += 1;
+	}
 
+	if(PushBlock)
+	{
 		packet_GGEPBlock Block;
 		memcpy(Block.Name, "PUSH", 4);
 		//Block.Encoded = true;
-		Block.Last    = true;
+		Block.Last    = ( !F2FBlock );
 
 		int   GgepPayloadLength = PushProxies.size() * 6;
 		byte* GgepPayload       = new byte[GgepPayloadLength];
@@ -2470,6 +2507,18 @@ void CGnuProtocol::Send_QueryHit(GnuQuery &FileQuery, byte* pQueryHit, DWORD Rep
 		packetLength += Encode_GGEPBlock(Block, pQueryHit + packetLength, GgepPayload, GgepPayloadLength);
 
 		delete [] GgepPayload;
+	}
+
+	if( F2FBlock )
+	{
+		packet_GGEPBlock Block;
+		memcpy(Block.Name, "FW", 2);
+		Block.Encoded = true;
+		Block.Last    = true;
+
+		byte Version = 1;
+
+		packetLength += Encode_GGEPBlock(Block, pQueryHit + packetLength, &Version, 1);
 	}
 
 	// Add Metadata to packet

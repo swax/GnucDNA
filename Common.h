@@ -44,7 +44,6 @@ std::vector<CString> RandomizeVector(std::vector<CString> vTarget);
 
 } // end gdna namespace
 
-
 // Definitions
 class AltLocation /* : public HashedFile */
 {
@@ -131,6 +130,7 @@ struct FileSource
 	bool Busy;
 	bool Stable;
 	bool ActualSpeed;
+	bool SupportF2F;
 
 	int	RealBytesPerSec;
 
@@ -157,20 +157,24 @@ struct FileSource
 	CString   Error;
 	int		  RetryWait;
 	uint64	  LastTried;
+	uint64	  OnHeapTime;
+	uint64	  TimeToTry;
 	int		  Tries;
 	bool	  TigerSupport;
 	bool	  TigerUseThex;
 	CString   TigerPath;
 	bool	  PushSent;
-	bool	  TriedUdp;
+	bool	  HasDownload; // true while a socket exists for this host
 
 	enum States 
 	{
-		eUntested,
-		eTrying,
-		eAlive,
-		eCorrupt,
-		eFailed
+		eUntested = 1,
+		eTrying   = 2,
+		eAlive    = 4,
+		eCorrupt  = 8,
+		eFailed   = 16,
+		eUdpAlive = 32,
+		eTryAgain = 64
 	} Status;
 
 
@@ -211,6 +215,7 @@ struct FileSource
 		Busy		= false;
 		Stable		= false;
 		ActualSpeed = false;
+		SupportF2F  = false;
 
 		RealBytesPerSec = 0;
 		
@@ -223,10 +228,12 @@ struct FileSource
 		RetryWait	 = 0;
 		Tries		 = 0;
 		LastTried    = 0;
+		OnHeapTime	 = 0;
+		TimeToTry	 = 0;
+		HasDownload  = false;
 		TigerSupport = false;
 		TigerUseThex = false;
 		PushSent     = false;
-		TriedUdp	 = false;
 
 		Status = States::eUntested;
 	};
@@ -267,7 +274,7 @@ struct ResultGroup
 	};
 };
 
-class CRangeAvg
+class CMovingAvg
 {
 public:
 	int* m_pAvg;
@@ -275,23 +282,25 @@ public:
 	int  m_Total;
 	int  m_Entries;
 	int  m_Pos;
+	int  m_SecondSum;
 
-	CRangeAvg()
+	CMovingAvg()
 	{
 		m_pAvg    = NULL;
 		m_Range   = 0;
 		m_Total   = 0;
 		m_Entries = 0;
 		m_Pos	  = 0;
+		m_SecondSum = 0;
 	};
 
-	~CRangeAvg()
+	~CMovingAvg()
 	{
 		if(m_pAvg)
 			delete [] m_pAvg;
 	};
 
-	void SetRange(int size)
+	void SetSize(int size)
 	{
 		ASSERT(size);
 		if(size <= 0)
@@ -310,7 +319,12 @@ public:
 		m_Pos     = 0;
 	};
 
-	void Update(int value)
+	void Input(int value)
+	{
+		m_SecondSum += value;
+	}
+
+	void Next()
 	{
 		if(m_Entries < m_Range)
 			m_Entries++;
@@ -319,8 +333,10 @@ public:
 			m_Pos = 0;
 
 		m_Total       -= m_pAvg[m_Pos];
-		m_pAvg[m_Pos]  = value;
-		m_Total       += value;
+		m_pAvg[m_Pos]  = m_SecondSum;
+		m_Total       += m_SecondSum;
+
+		m_SecondSum = 0;
 
 		m_Pos++;
 	};

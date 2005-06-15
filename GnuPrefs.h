@@ -54,7 +54,7 @@ public:
 	CString m_NetworkName;
 	
 	// Local Firewall
-	bool  m_BehindFirewall;
+	bool  m_ForceFirewall;
 
 	// Connect
 	int		m_LeafModeConnects;

@@ -59,9 +59,12 @@ CGnuDownload::CGnuDownload(CGnuDownloadShell* pShell, int HostID)
 	m_pTrans = pShell->m_pTrans;
 	m_pPrefs = pShell->m_pPrefs;
 
+	m_pShell->m_Queue[HostID].HasDownload = true;
+
 	m_HostID	= HostID;
 	m_Status	= TRANSFER_PENDING;
 	m_Push		= false;
+	m_PushF2F   = false;
 	
 	m_PartActive  = false;
 	m_PartNumber  = 0;
@@ -73,6 +76,7 @@ CGnuDownload::CGnuDownload(CGnuDownloadShell* pShell, int HostID)
 	m_HeadNotSupported = false;
 
 	m_KeepAlive    = false;
+	m_SendAltF2Fs  = false;
 
 	m_TigerRequest  = false;
 	m_TigerLength   = 0;
@@ -81,7 +85,7 @@ CGnuDownload::CGnuDownload(CGnuDownloadShell* pShell, int HostID)
 	m_tempTigerTree = NULL;
 	m_tempTreeSize  = 0;
 	m_tempTreeRes   = 0;
-	
+
 	m_QueuePos	  = 0;
 	m_QueueLength = 0;
 	m_QueueLimit  = 0;
@@ -92,36 +96,40 @@ CGnuDownload::CGnuDownload(CGnuDownloadShell* pShell, int HostID)
 	m_nSecsDead       = 0;
 
 	// Bandwidth
-	m_AvgRecvBytes.SetRange(30);
-	m_dwSecBytes   = 0;
+	m_AvgRecvBytes.SetSize(30);
 
 	//m_BytesRecvd = 0;
 
 	// Proxy
 	m_PushProxy = false;
+
+	// sockets
+	m_pSocket = new CReliableSocket(this);
 }
 
 CGnuDownload::~CGnuDownload()
 {
 	m_Status = TRANSFER_CLOSED;
 
+	m_pShell->ConnectionDeleted(m_HostID);
 
 	if(HostInfo()->Error == "")
 		HostInfo()->Error = "Deleted";
 
 	// Flush receive buffer
 	byte pBuff[4096];
-	while(Receive(pBuff, 4096) > 0)
+	while(m_pSocket->Receive(pBuff, 4096) > 0)
 		;
 
-	if(m_SocketData.hSocket != INVALID_SOCKET)
-		AsyncSelect(0);
+	m_pSocket->Close();
 
 	if(m_TigerReqBuffer)
 		delete [] m_TigerReqBuffer;
 
 	if(m_tempTigerTree)
 		delete [] m_tempTigerTree;
+
+	delete m_pSocket;
 }
 
 
@@ -134,12 +142,37 @@ END_MESSAGE_MAP()
 #endif	// 0
 
 
+void CGnuDownload::OnAccept(int nErrorCode)
+{
+	// only for udp connections is this called
+
+	if(nErrorCode)
+	{
+		SetError("OnAccept Error " + NumtoStr(nErrorCode) );	
+		m_pShell->SetHostState(m_HostID, FileSource::eFailed);
+		
+		SendPushRequest();
+		
+		Close();
+		
+		return;
+	}
+
+	HostInfo()->Tries = 0; // reset, know host can be connected to
+
+	SetError("Accepted");
+
+	StatusUpdate(TRANSFER_CONNECTED);
+
+	m_Push = true;
+	// wait for GIV
+}
 void CGnuDownload::OnConnect(int nErrorCode) 
 {
 	if(nErrorCode)
 	{
 		SetError("OnConnect Error " + NumtoStr(nErrorCode) );	
-		StatusUpdate(TRANSFER_CLOSED);
+		m_pShell->SetHostState(m_HostID, FileSource::eFailed);
 		
 		SendPushRequest();
 		
@@ -153,8 +186,6 @@ void CGnuDownload::OnConnect(int nErrorCode)
 	SetError("Connected");
 
 	SendRequest();
-	
-	CAsyncSocketEx::OnConnect(nErrorCode);
 }
 
 void CGnuDownload::OnReceive(int nErrorCode) 
@@ -163,7 +194,7 @@ void CGnuDownload::OnReceive(int nErrorCode)
 	{
 		SetError("OnReceive Error " + NumtoStr(nErrorCode));	
 
-		StatusUpdate(TRANSFER_CLOSED);
+		m_pShell->SetHostState(m_HostID, FileSource::eFailed);
 		Close();
 		return;
 	}
@@ -194,7 +225,7 @@ void CGnuDownload::OnReceive(int nErrorCode)
 				return;
 
 
-		BuffLength = Receive(m_pBuff, BuffSize);
+		BuffLength = m_pSocket->Receive(m_pBuff, BuffSize);
 
 
 		// Check for errors
@@ -252,7 +283,7 @@ void CGnuDownload::OnReceive(int nErrorCode)
 	{
 	
 		// Receive Data
-		int BuffLength = Receive(m_pBuff, RECEIVE_BUFF);
+		int BuffLength = m_pSocket->Receive(m_pBuff, RECEIVE_BUFF);
 		int i = 0;
 
 		// Check for errors
@@ -298,7 +329,7 @@ void CGnuDownload::OnReceive(int nErrorCode)
 			else if(m_Header.GetLength() > 16384)
 			{
 				SetError("Handshake Error - Overflow");
-				HostInfo()->Status = FileSource::eFailed;
+				m_pShell->SetHostState(m_HostID, FileSource::eFailed);
 				Close();
 				return;
 			}		
@@ -306,13 +337,38 @@ void CGnuDownload::OnReceive(int nErrorCode)
 
 
 		// If the entire header is here
-		if(m_Header.Find("\r\n\r\n") != -1)
+		if(m_Header.Find("\r\n\r\n") != -1 || (m_Header.Find("GIV ") == 0 && m_Header.Find("\n\n") != -1 ))
 		{
 			HostInfo()->Handshake += m_Header;
 			HostInfo()->Handshake += "\r\n";
 
-			m_Header = m_Header.Left( m_Header.Find("\r\n\r\n") + 4);
+			// Handle Push
+			if (m_Header.Left(3) == "GIV")
+			{
+				// Get Server ID of client giving us the file
+				int Front   = m_Header.Find(":") + 1;
+				int End     = m_Header.Find("/");
+				CString RemoteGuid  = m_Header.Mid(Front, End - Front);
+				RemoteGuid.MakeUpper();
 
+				if( EncodeBase16((byte*) &HostInfo()->PushID, 16) != RemoteGuid)
+				{
+					SetError("Push Error - Wrong Server ID");
+					m_pShell->SetHostState(m_HostID, FileSource::eFailed);
+					Close();
+					return;
+				}
+
+				HostInfo()->PushSent  = false;
+				m_Header = "";
+
+				SendRequest();
+
+				return;
+			}
+
+
+			m_Header = m_Header.Left( m_Header.Find("\r\n\r\n") + 4);
 
 			// Verify HTTP header
 			CString StatusLine = m_Header.Left(m_Header.Find("\r\n"));
@@ -347,7 +403,7 @@ void CGnuDownload::OnReceive(int nErrorCode)
 				{
 					//Status-Line does not start with HTTP
 					SetError("Handshake Error - No HTTP");
-					HostInfo()->Status = FileSource::eFailed;
+					m_pShell->SetHostState(m_HostID, FileSource::eFailed);
 					Close();
 					return;	
 				}
@@ -356,7 +412,7 @@ void CGnuDownload::OnReceive(int nErrorCode)
 			{
 				//No space in Status-Line
 				SetError("Handshake Error - No Space");
-				HostInfo()->Status = FileSource::eFailed;
+				m_pShell->SetHostState(m_HostID, FileSource::eFailed);
 				Close();
 				return;
 			}
@@ -446,7 +502,7 @@ void CGnuDownload::OnReceive(int nErrorCode)
 					{
 						SetError("Incorrect Tiger Hash");
 						HostInfo()->TigerSupport = false;
-						HostInfo()->Status = FileSource::eFailed;
+						m_pShell->SetHostState(m_HostID, FileSource::eFailed);
 						Close();
 						return;
 					}
@@ -476,7 +532,7 @@ void CGnuDownload::OnReceive(int nErrorCode)
 				if(!m_pShell->m_Sha1Hash.IsEmpty() && RemoteFileHash != m_pShell->m_Sha1Hash)
 				{
 					SetError("Incorrect Sha1 Hash");
-					HostInfo()->Status = FileSource::eFailed;
+					m_pShell->SetHostState(m_HostID, FileSource::eFailed);
 					Close();
 					return;
 				}
@@ -488,8 +544,13 @@ void CGnuDownload::OnReceive(int nErrorCode)
 				}
 
 				// We're connected, server has file hash, add as alt loc
-				if (!RemoteFileHash.IsEmpty() && !m_Push)
-					m_pShell->AddAltLocation(HostInfo()->Address);						
+				if ( !RemoteFileHash.IsEmpty() )
+				{
+					if( !m_Push )
+						m_pShell->AddAltLocation(HostInfo()->Address);	
+					//else if(m_pSocket->m_RudpMode && m_SendAltF2Fs)
+					//	m_pShell->AddF2FLocation(HostInfo()->Address, HostInfo()->DirectHubs, HostInfo()->PushID);	
+				}
 			}
 
 
@@ -551,6 +612,67 @@ void CGnuDownload::OnReceive(int nErrorCode)
 				HostInfo()->Vendor = UserAgent;
 			}
 
+			// Features
+			CString Features = ParsedHeaders.FindHeader("X-Features");
+			while( !Features.IsEmpty() )
+			{
+				CString Feature = ParseString(Features, ',');
+
+				if( Feature.CompareNoCase("fwt/1.0") == 0)
+					m_SendAltF2Fs = true;
+			}
+
+
+			// Alt locationsB
+			for (i = 0; i < ParsedHeaders.m_Headers.size(); i++)
+			{
+				CString HeaderName  = ParsedHeaders.m_Headers[i].Name;
+				CString HeaderValue = ParsedHeaders.m_Headers[i].Value;
+
+				HeaderName.MakeLower();
+				
+				
+				// Alt-Location (old format)
+				if (HeaderName == "alt-location" || HeaderName == "x-gnutella-alternate-location")
+				{
+					AltLocation OldFormat = HeaderValue;
+
+					IPv4 Address;
+					Address.Host = StrtoIP(OldFormat.HostPort.Host);
+					Address.Port = OldFormat.HostPort.Port;
+
+					AddHosttoMesh(Address);
+				}
+			
+				// X-Alt
+				else if (HeaderName == "x-alt")
+				{
+					// Parse headers breaks up commas
+					AddHosttoMesh( AltLoctoAddress(HeaderValue) );
+				}
+
+				// X-Push-Proxy
+				else if (HeaderName == "x-push-proxy" && HostInfo()->Network == NETWORK_GNUTELLA)
+				{
+					// Parse headers breaks up commas
+					IPv4 PushProxy = StrtoIPv4( HeaderValue );
+
+					if(PushProxy.Port == 0)
+						PushProxy.Port = 6346;
+						
+					bool found = false;
+					for(int i = 0; i < HostInfo()->DirectHubs.size(); i++)
+						if(HostInfo()->DirectHubs[i].Host.S_addr == PushProxy.Host.S_addr)
+						{
+							HostInfo()->DirectHubs[i] = PushProxy;
+							found = true;
+						}
+
+					if(!found)
+						HostInfo()->DirectHubs.push_back(PushProxy);
+				}
+			}
+
 			// Success code
 			if( (200 <= Code && Code < 300) || Code == 302 )
 			{		
@@ -582,58 +704,7 @@ void CGnuDownload::OnReceive(int nErrorCode)
 						CString AuthResponse = "AUTH\r\n";
 						AuthResponse += "X-Auth-Response: " + m_RemoteChallengeAnswer + "\r\n";
 						AuthResponse += "\r\n";
-						Send(AuthResponse, AuthResponse.GetLength());
-					}
-				}
-
-
-				// Go through repeating headers
-				for (i = 0; i < ParsedHeaders.m_Headers.size(); i++)
-				{
-					CString HeaderName  = ParsedHeaders.m_Headers[i].Name;
-					CString HeaderValue = ParsedHeaders.m_Headers[i].Value;
-
-					HeaderName.MakeLower();
-					
-					
-					// Alt-Location (old format)
-					if (HeaderName == "alt-location" || HeaderName == "x-gnutella-alternate-location")
-					{
-						AltLocation OldFormat = HeaderValue;
-
-						IPv4 Address;
-						Address.Host = StrtoIP(OldFormat.HostPort.Host);
-						Address.Port = OldFormat.HostPort.Port;
-
-						AddHosttoMesh(Address);
-					}
-				
-					// X-Alt
-					else if (HeaderName == "x-alt")
-					{
-						// Parse headers breaks up commas
-						AddHosttoMesh( AltLoctoAddress(HeaderValue) );
-					}
-
-					// X-Push-Proxy
-					else if (HeaderName == "x-push-proxy" && HostInfo()->Network == NETWORK_GNUTELLA)
-					{
-						// Parse headers breaks up commas
-						IPv4 PushProxy = StrtoIPv4( HeaderValue );
-
-						if(PushProxy.Port == 0)
-							PushProxy.Port = 6346;
-							
-						bool found = false;
-						for(int i = 0; i < HostInfo()->DirectHubs.size(); i++)
-							if(HostInfo()->DirectHubs[i].Host.S_addr == PushProxy.Host.S_addr)
-							{
-								HostInfo()->DirectHubs[i] = PushProxy;
-								found = true;
-							}
-
-						if(!found)
-							HostInfo()->DirectHubs.push_back(PushProxy);
+						m_pSocket->Send(AuthResponse, AuthResponse.GetLength());
 					}
 				}
 
@@ -642,7 +713,7 @@ void CGnuDownload::OnReceive(int nErrorCode)
 				if( m_ServerName.IsEmpty() )
 				{
 					SetError("Server Not Specified");
-					HostInfo()->Status = FileSource::eFailed;
+					m_pShell->SetHostState(m_HostID, FileSource::eFailed);
 					Close();
 					return;
 				}
@@ -666,8 +737,8 @@ void CGnuDownload::OnReceive(int nErrorCode)
 						else
 						{
 							Close();
-							HostInfo()->Status = FileSource::eAlive;
 							HostInfo()->RetryWait = 0;
+							m_pShell->SetHostState(m_HostID, FileSource::eAlive);
 						}
 
 						return;
@@ -702,8 +773,8 @@ void CGnuDownload::OnReceive(int nErrorCode)
 						else
 						{
 							Close();
-							HostInfo()->Status = FileSource::eAlive;
 							HostInfo()->RetryWait = 0;
+							m_pShell->SetHostState(m_HostID, FileSource::eAlive);
 						}
 
 						return;
@@ -789,7 +860,7 @@ void CGnuDownload::OnReceive(int nErrorCode)
 				else
 				{
 					SetError("Remote File Size Different");
-					HostInfo()->Status = FileSource::eFailed;
+					m_pShell->SetHostState(m_HostID, FileSource::eFailed);
 					Close();
 					return;
 				}
@@ -919,7 +990,7 @@ void CGnuDownload::OnReceive(int nErrorCode)
 				else
 				{
 					SetError("File Not Found");
-					HostInfo()->Status = FileSource::eFailed;
+					m_pShell->SetHostState(m_HostID, FileSource::eFailed);
 				}
 
 				Close();
@@ -928,7 +999,7 @@ void CGnuDownload::OnReceive(int nErrorCode)
 			else
 			{
 				SetError("Server Error - " + NumtoStr(Code));
-				HostInfo()->Status = FileSource::eFailed;
+				m_pShell->SetHostState(m_HostID, FileSource::eFailed);
 				Close();
 			}
 		}
@@ -942,22 +1013,6 @@ void CGnuDownload::OnReceive(int nErrorCode)
 		//SetError("Not Ready to Receive");
 		Close();		
 	}
-
-
-	CAsyncSocketEx::OnReceive(nErrorCode);
-}
-
-int CGnuDownload::Send(const void* lpBuf, int nBufLen, int nFlags) 
-{
-	int Command = CAsyncSocketEx::Send(lpBuf, nBufLen, nFlags);
-
-	return Command;
-}
-
-void CGnuDownload::OnSend(int nErrorCode) 
-{
-
-	CAsyncSocketEx::OnSend(nErrorCode);
 }
 
 void CGnuDownload::OnClose(int nErrorCode) 
@@ -965,8 +1020,6 @@ void CGnuDownload::OnClose(int nErrorCode)
 	HostInfo()->Error = "Remotely Closed";
 
 	Close();
-
-	CAsyncSocketEx::OnClose(nErrorCode);
 }
 
 void CGnuDownload::Close()
@@ -976,25 +1029,15 @@ void CGnuDownload::Close()
 
 	m_pShell->CheckCompletion();
 
-
 	HostInfo()->RealBytesPerSec = m_AvgRecvBytes.GetAverage();
 
-	
 	if(HostInfo()->Error == "")
 		HostInfo()->Error = "Closed";
-	
 	
 	if(HostInfo()->Status == FileSource::eFailed)
 		m_pShell->AddNaltLocation(HostInfo()->Address);// add to nalt list
 
-
-	if(m_SocketData.hSocket != INVALID_SOCKET)
-	{
-		AsyncSelect(0);
-		ShutDown(2);	
-
-		CAsyncSocketEx::Close();
-	}
+	m_pSocket->Close();
 
 	StatusUpdate(TRANSFER_CLOSED);
 }
@@ -1106,7 +1149,7 @@ void CGnuDownload::SendRequest()
 	}
 
 	// Server is alive
-	HostInfo()->Status = FileSource::eAlive;
+	m_pShell->SetHostState(m_HostID, FileSource::eAlive);
 
 
 	// Send TigerTree request if available
@@ -1203,7 +1246,23 @@ void CGnuDownload::SendRequest()
 		GetFile	+= "X-Queue: 0.1\r\n";
 
 		// X-Features
-		GetFile += "X-Features: g2/1.0\r\n";
+		std::vector<CString> Features;
+		Features.push_back("g2/1.0");
+		
+		//crit - not yet
+		/*if( !m_pNet->m_TcpFirewall || m_pNet->m_UdpFirewall != UDP_BLOCK)
+		{
+			Features.push_back("fwalt/0.1");
+		
+			if(m_pNet->m_TcpFirewall)
+				Features.push_back("fwt/1.0");
+		}*/
+	
+		CString FeatureList;
+		for(int i = 0; i < Features.size(); i++)
+			FeatureList += Features[i] + ",";
+
+		GetFile += "X-Features: " + FeatureList.TrimRight(",") + "\r\n";
 	}
 
 
@@ -1217,16 +1276,22 @@ void CGnuDownload::SendRequest()
 
 		//Include self if not firewalled. File is partially shared.
 		//Do this even if not byte is downloaded yet, because there will be
-		if (!m_pNet->m_TcpFirewall && m_pShell->GetBytesCompleted() )
-		{		
+		if( m_pShell->GetBytesCompleted() )
+		{
 			IPv4 LocalAddr;
 			LocalAddr.Host = m_pNet->m_CurrentIP;
 			LocalAddr.Port = m_pNet->m_CurrentPort;
 			
 			if(m_pPrefs->m_ForcedHost.S_addr)
 				LocalAddr.Host = m_pPrefs->m_ForcedHost;
-			
-			m_pShell->AddAltLocation(LocalAddr);
+
+
+			if(!m_pNet->m_TcpFirewall)
+				m_pShell->AddAltLocation(LocalAddr);
+			else if(m_pNet->m_UdpFirewall != UDP_BLOCK)
+			{
+				//m_pShell->AddF2FLocation(LocalAddr, , );
+			}
 		}
 
 		// Alt-Location
@@ -1239,7 +1304,7 @@ void CGnuDownload::SendRequest()
 	GetFile		+= "\r\n";
 
 	// Send Header
-	Send(GetFile, GetFile.GetLength());
+	m_pSocket->Send(GetFile, GetFile.GetLength());
 
 	m_Request = GetFile;
 	HostInfo()->Handshake += GetFile;
@@ -1258,13 +1323,16 @@ void CGnuDownload::SendPushProxyRequest()
 
 	FileSource* pSource = HostInfo();
 
-	CString GetProxy;
+	CString FileRequest;
+	if(m_PushF2F)	
+		FileRequest = "&file=" + NumtoStr(F2F_PUSH_INDEX);	
 
-	GetProxy += "HEAD /gnet/push-proxy?guid=" + EncodeBase16((byte*) &pSource->PushID, 16) + " HTTP/1.1\r\n";
+	CString GetProxy;
+	GetProxy += "HEAD /gnet/push-proxy?guid=" + EncodeBase16((byte*) &pSource->PushID, 16) + FileRequest + " HTTP/1.1\r\n";
 	GetProxy += "X-Node: " + IPtoStr(m_pNet->m_CurrentIP) + ":" + NumtoStr(m_pNet->m_CurrentPort) + "\r\n";
 	GetProxy += "\r\n";
 
-	Send(GetProxy, GetProxy.GetLength());
+	m_pSocket->Send(GetProxy, GetProxy.GetLength());
 
 	m_nSecsDead = 0;
 	m_Request = GetProxy;
@@ -1324,7 +1392,7 @@ void CGnuDownload::SendTigerRequest()
 	GetTree		+= "\r\n";
 
 	// Send Header
-	Send(GetTree, GetTree.GetLength());
+	m_pSocket->Send(GetTree, GetTree.GetLength());
 
 	m_Request = GetTree;
 	HostInfo()->Handshake += GetTree;
@@ -1346,12 +1414,11 @@ bool CGnuDownload::StartDownload()
 
 	StatusUpdate(TRANSFER_CONNECTING);
 
-	if(m_SocketData.hSocket == INVALID_SOCKET)
-		if(!Create())
-		{
-			SetError("Unable to create socket");
-			return false;
-		}
+	if( !m_pSocket->Create() )
+	{
+		SetError("Unable to create socket");
+		return false;
+	}
 
 	if(  m_pShell->m_UseProxy && m_LocalProxy.host.IsEmpty() )
 	{
@@ -1374,7 +1441,7 @@ bool CGnuDownload::StartDownload()
 	}
 
 	// Attempt connect
-	if( !Connect(IPtoStr(m_ConnectAddress.Host), m_ConnectAddress.Port) )
+	if( !m_pSocket->Connect(IPtoStr(m_ConnectAddress.Host), m_ConnectAddress.Port) )
 	{
 		int ErrorCode = GetLastError();
 
@@ -1394,26 +1461,60 @@ bool CGnuDownload::StartDownload()
 
 void CGnuDownload::SendPushRequest()
 {
-	// If we're behind firewall a push attempt can not be received
-	if(m_pNet->m_TcpFirewall)
-		return;
-
 	FileSource* HostSource = HostInfo();
 
 	if( HostSource->Network == NETWORK_GNUTELLA )
 	{
-		if(HostSource->DirectHubs.size())
-			DoPushProxy();
-		
-		else if( m_pNet->m_pGnu ) 
+		bool SendPush = false;
+
+		// if theres a firewall or
+		if( !m_pNet->m_TcpFirewall)
+			SendPush = true;
+
+		if( m_pNet->m_TcpFirewall && HostSource->SupportF2F && m_pNet->m_UdpFirewall != UDP_BLOCK)
 		{
-			m_pNet->m_pGnu->m_pProtocol->Send_Push( *HostSource );
-			SetError("Gnutella Push Sent");
+				m_PushF2F  = true;
+				HostInfo()->FileIndex = F2F_PUSH_INDEX;
+		}
+				
+		if(SendPush || m_PushF2F)
+		{
+			if(HostSource->DirectHubs.size())
+				DoPushProxy();
+			
+			if( m_pNet->m_pGnu ) 
+			{
+				m_pNet->m_pGnu->m_pProtocol->Send_Push( *HostSource );
+				SetError("Gnutella Push Sent");
+			}
+
+			if(m_PushF2F)
+			{
+				// check first if there already is a udp socket trying this host
+				// push can still go through because connection sending udp packets to right place
+				for(int i = 0; i < m_pShell->m_Sockets.size(); i++)
+				{
+					CGnuDownload* download = m_pShell->m_Sockets[i];
+					
+					if(download->m_HostID == HostSource->SourceID && download->m_pSocket->m_RudpMode)
+						return;
+				}
+				
+				CGnuDownload* download  = new CGnuDownload(m_pShell, HostSource->SourceID);
+				m_pShell->m_Sockets.push_back(download);
+				
+				download->m_pSocket->RudpConnect(HostInfo()->Address, m_pNet, true);
+				download->StatusUpdate(TRANSFER_CONNECTING);
+			}
 		}
 	}
 
 	if( m_pNet->m_pG2 && HostSource->Network == NETWORK_G2 )
 	{
+		// If we're behind firewall a push attempt can not be received
+		if(m_pNet->m_TcpFirewall)
+			return;
+		
 		m_pNet->m_pG2->Send_PUSH(HostSource);
 		SetError("G2 Push Sent");
 	}
@@ -1423,12 +1524,15 @@ void CGnuDownload::SendPushRequest()
 
 void CGnuDownload::DoPushProxy()
 {
+	// Close() must be called after this function
+
 	FileSource* pSource = HostInfo();
 	
 	// Create new download to talk with proxy server
 	CGnuDownload* pSock = new CGnuDownload(m_pShell, m_HostID);
 
 	pSock->m_PushProxy = true;
+	pSock->m_PushF2F   = m_PushF2F;
 
 	// Get random push proxy ultrapeer
 	int index = rand() % pSource->DirectHubs.size();
@@ -1478,7 +1582,7 @@ void CGnuDownload::DownloadBytes(byte* pBuff, int nSize)
 
 			memcpy(m_TigerReqBuffer + m_TigerPos, pBuff, CopySize);	
 			m_TigerPos += CopySize;
-			m_dwSecBytes += nSize;
+			m_AvgRecvBytes.Input(nSize);
 		}
 
 		// TigerTree data downloaded
@@ -1553,8 +1657,8 @@ void CGnuDownload::DownloadBytes(byte* pBuff, int nSize)
 			else
 			{
 				Close();
-				HostInfo()->Status = FileSource::eAlive;
 				HostInfo()->RetryWait = 0;
+				m_pShell->SetHostState(m_HostID, FileSource::eAlive);
 			} 
 		}
 
@@ -1594,7 +1698,7 @@ void CGnuDownload::DownloadBytes(byte* pBuff, int nSize)
 
 		pPart->BytesCompleted += nSize;
 
-		m_dwSecBytes += nSize;
+		m_AvgRecvBytes.Input(nSize);
 	}
 	catch(CFileException* e)
 	{
@@ -1634,8 +1738,8 @@ void CGnuDownload::DownloadBytes(byte* pBuff, int nSize)
 		
 		Close();
 
-		HostInfo()->Status = FileSource::eAlive;
 		HostInfo()->RetryWait = 0;
+		m_pShell->SetHostState(m_HostID, FileSource::eAlive);
 	}
 }
 
@@ -1651,23 +1755,22 @@ void CGnuDownload::StatusUpdate(DWORD Status)
 
 void CGnuDownload::SetError(CString Error)
 {
+	if(m_pSocket->m_RudpMode)
+		Error += " (udp)";
+
 	HostInfo()->Error = Error;
 }
 
 FileSource* CGnuDownload::HostInfo()
 {
-	ASSERT( m_HostID );
+	ASSERT( m_HostID >= 0 && m_HostID < m_pShell->m_Queue.size() );
 
-	std::map<int, int>::iterator itHost = m_pShell->m_HostMap.find(m_HostID);
-	if(itHost != m_pShell->m_HostMap.end())
-		return &m_pShell->m_Queue[itHost->second];
-
-	return &dumbResult;
+	return &m_pShell->m_Queue[m_HostID];
 }
 
 void CGnuDownload::Timer()
 {
-	m_AvgRecvBytes.Update(m_dwSecBytes);
+	m_pSocket->OnSecond();
 	
 	HostInfo()->RealBytesPerSec = m_AvgRecvBytes.GetAverage();
 
@@ -1682,7 +1785,12 @@ void CGnuDownload::Timer()
 			SetError("Attempt Timed Out");
 
 			if( HostInfo()->Tries > 10)
-				HostInfo()->Status = FileSource::eFailed;
+				m_pShell->SetHostState(m_HostID, FileSource::eFailed);
+			else
+			{
+				HostInfo()->RetryWait = RETRY_WAIT;
+				m_pShell->SetHostState(m_HostID, FileSource::eTryAgain);
+			}
 			
 			SendPushRequest();	
 			
@@ -1707,7 +1815,7 @@ void CGnuDownload::Timer()
 	{
 
 		// Check for dead transfer
-		if(m_dwSecBytes == 0)
+		if(m_AvgRecvBytes.m_SecondSum == 0)
 		{
 			m_nSecsDead++;
 
@@ -1723,7 +1831,7 @@ void CGnuDownload::Timer()
 		if(m_pPrefs->m_MinDownSpeed)
 		{
 			// Check if its under the bandwidth limit
-			if((float)m_dwSecBytes / (float)1024 < m_pPrefs->m_MinDownSpeed)
+			if((float)m_AvgRecvBytes.m_SecondSum / (float)1024 < m_pPrefs->m_MinDownSpeed)
 				m_nSecsUnderLimit++;
 			else
 				m_nSecsUnderLimit = 0;
@@ -1749,8 +1857,7 @@ void CGnuDownload::Timer()
 		}
 	}
 
-
-	m_dwSecBytes = 0;
+	m_AvgRecvBytes.Next();
 }
 
 bool CGnuDownload::LoadTigerTree()

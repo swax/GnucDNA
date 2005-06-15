@@ -37,12 +37,6 @@ CUdpListener::CUdpListener(CGnuNetworks* pNet)
 {
 	m_pNet = pNet;
 
-	if( !Create(m_pNet->m_CurrentPort, SOCK_DGRAM) )
-	{
-		int error = GetLastError();
-		ASSERT(0);
-	}
-
 	// prevent sending to bad ports from triggering onreceive
 	DWORD bNewBehavior = FALSE;
 	int result = ioctlsocket(m_hSocket, SIO_UDP_CONNRESET, &bNewBehavior);
@@ -50,6 +44,8 @@ CUdpListener::CUdpListener(CGnuNetworks* pNet)
 
 CUdpListener::~CUdpListener(void)
 {
+	Close();
+
 	if(m_hSocket != INVALID_SOCKET)
 		AsyncSelect(0);
 }
@@ -85,7 +81,21 @@ void CUdpListener::OnReceive(int nErrorCode)
 	// Route to Gnutella
 	else if(RecvLength >= 23)
 	{
-		if( m_pNet->m_pGnu )
+		// gnutella transfer
+		if(m_pRecvBuff[16] == 0x41) // 0x41 is the function of the gnutella packet
+		{
+			std::multimap<uint32, CReliableSocket*>::iterator itSocket = m_TransferMap.find(Address.Host.S_addr);
+
+			while(itSocket != m_TransferMap.end() && itSocket->first == Address.Host.S_addr)
+			{
+				Gnu_RecvdPacket Packet( Address, (packet_Header*) m_pRecvBuff, RecvLength);
+				itSocket->second->RudpReceive(Packet);
+				itSocket++;
+			}
+		}
+
+		// gnutella network
+		else if( m_pNet->m_pGnu )
 			m_pNet->m_pGnu->m_pDatagram->OnReceive(Address, m_pRecvBuff, RecvLength);
 	}
 }

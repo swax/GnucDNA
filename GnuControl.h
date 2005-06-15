@@ -61,9 +61,10 @@ public:
 
 	CGnuNode* GetRandNode(int Type, bool dnaOnly=false);
 
-	void AddConnect(bool PrefDna=false);
+	void TryConnect(int Attempts, bool LowGear);
+	void SendUdpProbes(bool LowGear);
 	void DropNode(int GnuMode, bool NeedDna);
-	bool ConnectFromCache(std::list<Node> &Cache, bool Perm);
+	bool ConnectFromCache(std::list<Node> &Cache, bool Perm=false);
 
 	int	 CountUltraConnects();
 	int  CountLeafConnects();
@@ -86,8 +87,9 @@ public:
 
 	std::map<uint32, bool> m_TriedConnects;
 
+	std::list<Node>	m_UdpReplyCache;
+
 	time_t m_LastConnect;
-	bool   m_TryingConnect;
 
 	// Local Client Data
 	CTime   m_ClientUptime;

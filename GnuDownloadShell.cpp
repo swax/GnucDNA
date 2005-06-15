@@ -51,7 +51,6 @@
 #include "GnuDownloadShell.h"
 
 
-#define RETRY_WAIT 30
 #define BUFF_SIZE  32768
 
 CGnuDownloadShell::CGnuDownloadShell(CGnuTransfers* pTrans)
@@ -240,30 +239,46 @@ void CGnuDownloadShell::AddHost(FileSource HostInfo)
 	int SubnetLimit = 0;
 
 	// Check for duplicate hosts
-	for(int i = 0; i < m_Queue.size(); i++)
-	{
-		if(memcmp(&HostInfo.Address.Host.S_addr, &m_Queue[i].Address.Host.S_addr, 3) == 0 &&
-		   !IsPrivateIP(m_Queue[i].Address.Host))
-			SubnetLimit++;
+	if (m_AddressMap.find(HostInfo.Address) != m_AddressMap.end())
+	{		
+		unsigned i = m_AddressMap[HostInfo.Address];
 
-		if( HostInfo.Address.Host.S_addr == m_Queue[i].Address.Host.S_addr && HostInfo.Address.Port == m_Queue[i].Address.Port )
-		{
-			m_Queue[i].FileIndex = HostInfo.FileIndex;
-			m_Queue[i].Name      = HostInfo.Name;
-			m_Queue[i].NameLower = HostInfo.NameLower;
-			m_Queue[i].Vendor    = HostInfo.Vendor;
+		m_Queue[i].FileIndex = HostInfo.FileIndex;
+		m_Queue[i].Name      = HostInfo.Name;
+		m_Queue[i].NameLower = HostInfo.NameLower;
+		m_Queue[i].Vendor    = HostInfo.Vendor;
 
-			m_Queue[i].GnuRouteID = HostInfo.GnuRouteID;
-			m_Queue[i].PushID     = HostInfo.PushID;
-			m_Queue[i].RetryWait  = 0;
-			m_Queue[i].Status     = FileSource::eUntested;
+		m_Queue[i].GnuRouteID = HostInfo.GnuRouteID;
+		m_Queue[i].PushID     = HostInfo.PushID;
+		m_Queue[i].RetryWait  = 0;
 
-			return;
-		}
+		if (m_Queue[i].Status == FileSource::eFailed)
+			SetHostState(i, FileSource::eUntested);
+
+		if(HostInfo.SupportF2F)
+			m_Queue[i].SupportF2F = true;
+
+		m_UntestedQueue.push_back(i);
+		m_UdpQueue.push_back(m_Queue[i]);
+		
+		return;
 	}
 
-	if(SubnetLimit > SUBNET_LIMIT)
-		return;
+	// new host - add to the subnet count
+	if (!IsPrivateIP(HostInfo.Address.Host))
+	{
+		IP Subnet = HostInfo.Address.Host;
+		Subnet.d = 0;
+
+		if (m_SubnetMap.find(Subnet) == m_SubnetMap.end())
+			m_SubnetMap[Subnet] = 0;
+
+		// only let the first SUBNET_LIMIT hosts of any subnet in
+		if (m_SubnetMap[Subnet] >= SUBNET_LIMIT)
+			return;
+
+		m_SubnetMap[Subnet] = m_SubnetMap[Subnet] + 1;
+	}
 
 	HostInfo.Handshake = "";
 	HostInfo.Error     = "";
@@ -273,12 +288,16 @@ void CGnuDownloadShell::AddHost(FileSource HostInfo)
 
 	HostInfo.RealBytesPerSec	= 0;
 
-	HostInfo.SourceID = m_NextHostID++;
-	m_HostMap[HostInfo.SourceID] = m_Queue.size();
-	
+	HostInfo.SourceID = m_Queue.size();
+	m_AddressMap[HostInfo.Address] = HostInfo.SourceID;
+	m_UntestedQueue.push_back(HostInfo.SourceID);
 
 	m_Queue.push_back(HostInfo);
 
+	m_UdpQueue.push_back(HostInfo); // needs Address and Network
+
+	if (m_ShellStatus == eCooling || m_ShellStatus == eWaiting)
+		m_ShellStatus = eActive;
 
 	m_UpdatedInSecond   = true;
 }
@@ -294,90 +313,87 @@ void CGnuDownloadShell::TryNextHost()
 	if( m_pNet->NetworkConnecting(NETWORK_G2) )
 		MaxHalfConnects /= 2;
 
-	std::vector<int> ProbeUdp;
-
-	// try oldest host next
-	int OldestPos  = -1;
-	int OldestTime = time(NULL);
-
-	for(int i = 0; i < m_Queue.size(); i++)
-		if(m_Queue[i].Status == FileSource::eUntested || m_Queue[i].Status == FileSource::eAlive )
-		{
-			if(m_Queue[i].RetryWait)
-				continue;
-
-			// Make sure host is not active
-			bool Active = false;
-			for(int j = 0; j < m_Sockets.size(); j++)
-				if(m_Sockets[j]->m_HostID == m_Queue[i].SourceID)
-					Active = true;
-
-			if(Active)
-				continue;
-
-			if( !m_Queue[i].TriedUdp && ProbeUdp.size() < 5)
-				ProbeUdp.push_back(i);
-
-			if( m_Queue[i].LastTried < OldestTime)
-			{
-				OldestPos  = i;
-				OldestTime = m_Queue[i].LastTried;
-			}
-		}
-
-	for(i = 0; i < ProbeUdp.size(); i++)
-	{
-		int SourceID = ProbeUdp[i];
-		m_Queue[SourceID].TriedUdp = true;
-		
-		// send out udp
-		if(m_pNet->m_pGnu && m_Queue[SourceID].Network == NETWORK_GNUTELLA)
-		{
-			m_pNet->m_pGnu->m_pProtocol->Send_Ping(NULL, 1, false, NULL, m_Queue[SourceID].Address);
-		}
-		
-		if(m_pNet->m_pG2 && m_Queue[SourceID].Network == NETWORK_G2)
-		{
-			G2_PI Ping;
-			m_pNet->m_pG2->Send_PI(m_Queue[SourceID].Address, Ping, NULL);
-		}
-	}
-
+	// return as soon as we know we're over the limit
 	if( m_pNet->TransfersConnecting() >= MaxHalfConnects || m_pNet->TcpBacklog())
 		return;
 
-	if(OldestPos != -1)
-	{
-		CreateDownload( m_Queue[OldestPos] );
+	// loop till we find a host to connect to
+	while (true)
+ 	{
+		unsigned PosToTry = -1;
+		int status = 0;
 
-		return; // host being tried return
+		// TODO: Top priority hosts should be ones we've successfully
+		// gotten pieces from, in order of speed
+
+		// first try the ones that sent us udp back
+		if (m_UdpSuccessQueue.size() > 0)
+		{
+			PosToTry = m_UdpSuccessQueue.front();
+			m_UdpSuccessQueue.pop_front();
+
+			status = FileSource::eUdpAlive;
+		}
+
+		// next try hosts we haven't tried yet
+		else if (m_UntestedQueue.size() > 0)
+		{
+			PosToTry = m_UntestedQueue.front();
+			m_UntestedQueue.pop_front();
+
+			status = FileSource::eUntested;
+		}
+
+		else if (m_ReadyHeap.size() > 0)
+		{
+			unsigned i = m_ReadyHeap.front().first;
+			uint32 t = m_ReadyHeap.front().second;
+			pop_heap(m_ReadyHeap.begin(), m_ReadyHeap.end(), HeapComparator());
+			m_ReadyHeap.pop_back();
+
+			ASSERT(i < m_Queue.size());
+			
+			// if the LastTried time has been changed, ignore this entry
+			if (m_Queue[i].LastTried != t)
+				continue;
+
+			m_Queue[i].OnHeapTime = 0;
+		
+			status = FileSource::eAlive | FileSource::eTryAgain;
+			PosToTry = i;
+		}
+
+		// we failed if we have no one to pick
+		if (PosToTry == -1)
+			break;
+
+		ASSERT(PosToTry < m_Queue.size());
+
+		// if this host is already being tried, don't try it again
+		// if the state isn't one we anticipated, don't use this host
+		if (m_Queue[PosToTry].HasDownload ||
+			!(status & m_Queue[PosToTry].Status))
+			continue;
+ 
+		// host is good - lets go!
+		CreateDownload( m_Queue[PosToTry] );
+		return;
 	}
 
 
 	// All hosts in list have been attempted
 	// And nothing is trying to connect
 	if(m_Sockets.size() == 0)
-	{
-		bool StillHope = false;
-
-		for(i = 0; i < m_Queue.size(); i++)
-			if(m_Queue[i].Status == FileSource::eAlive)
-			{
-				if(!m_Cooling)
-					m_Cooling = m_Queue[i].RetryWait;
-
-				if(m_Cooling > m_Queue[i].RetryWait)
-						m_Cooling = m_Queue[i].RetryWait;
-
-				StillHope = true;
-			}
-
-		m_ShellStatus = StillHope ? eCooling : eWaiting;
-
-		m_Retry   = true; // Gone through host list once so now we are retrying hosts
-
-		if(m_ShellStatus == eWaiting)
+	{		
+		if (m_WaitHeap.size())
 		{
+			m_Retry   = true; // Gone through host list once so now we are retrying hosts
+			m_ShellStatus = eCooling;
+			m_Cooling = m_WaitHeap.front().second - time(NULL);
+		}
+		else
+ 		{
+			m_ShellStatus     = eWaiting;
 			m_ReasonDead	  = "Waiting, more hosts needed";
 			m_Retry			  = false;
 			m_UpdatedInSecond = true;
@@ -386,22 +402,72 @@ void CGnuDownloadShell::TryNextHost()
 	}
 } 
 
+void CGnuDownloadShell::TryNextUdp ()
+{
+	// TODO: limit total UDP per second for transfers as a whole
+	for (int i = 0; i < UDP_PER_TICK; i++)
+	{
+		if (m_UdpQueue.size () == 0)
+			return;
+
+		FileSource fs;
+		fs = m_UdpQueue.front ();
+		m_UdpQueue.pop_front ();
+
+		UdpTransmit (fs);
+	}
+}
+
+void CGnuDownloadShell::UdpTransmit(const FileSource &fs)
+{
+	// send out udp
+	if(m_pNet->m_pGnu && fs.Network == NETWORK_GNUTELLA)
+	{
+		m_pNet->m_pGnu->m_pProtocol->Send_Ping(NULL, 1, false, NULL, fs.Address);
+	}
+
+	if(m_pNet->m_pG2 && fs.Network == NETWORK_G2)
+	{
+		G2_PI Ping;
+		m_pNet->m_pG2->Send_PI(fs.Address, Ping, NULL);
+	}
+}
+
 void CGnuDownloadShell::UdpResponse(IPv4 Source)
 {
-	if( m_pNet->TcpBacklog() )
+	std::map<IPv4,unsigned>::iterator itAddr = m_AddressMap.find(Source);
+
+	if (itAddr == m_AddressMap.end())
 		return;
 
-	for(int i = 0; i < m_Queue.size(); i++)
-		if(m_Queue[i].Address.Host.S_addr == Source.Host.S_addr)
+	uint32 SourceID = itAddr->second;
+
+	ASSERT(SourceID >= 0 && SourceID < m_Queue.size());
+
+	// if we don't have multisource on, never open connections here
+	// save up connections if our SYNs are all used up
+	if( !m_pPrefs->m_Multisource || m_pNet->TcpBacklog() )
+	{
+		if (m_Queue[SourceID].Status == FileSource::eUntested)
 		{
-			CreateDownload(m_Queue[i]);
-			break;
+			SetHostState(SourceID, FileSource::eUdpAlive);
+			m_UdpSuccessQueue.push_back(SourceID);
 		}
+	}
+	else
+	{
+		CreateDownload( m_Queue[SourceID] );
+	}
 }
 
 void CGnuDownloadShell::CreateDownload(FileSource &Source)
 {
 	Source.Error = "";
+	Source.Tries++;
+	SetHostState(Source.SourceID, FileSource::eTrying);
+	Source.RetryWait = RETRY_WAIT;
+	Source.LastTried = time(NULL);
+
 	CGnuDownload* pSock = new CGnuDownload(this, Source.SourceID);
 
 	if(pSock->StartDownload())
@@ -416,15 +482,130 @@ void CGnuDownloadShell::CreateDownload(FileSource &Source)
 		pSock = NULL;
 	}
 	
-	Source.Tries++;
-	Source.Status    = FileSource::eTrying;
-	Source.RetryWait = RETRY_WAIT;
-	Source.LastTried = time(NULL);
-
 	if(m_HostTryPos >= m_Queue.size())
 		m_HostTryPos = 1;
 	else
 		m_HostTryPos++;
+}
+
+void CGnuDownloadShell::SetHostState(uint32 SourceID, FileSource::States state)
+{
+	ASSERT(SourceID < m_Queue.size());
+	FileSource &fs(m_Queue[SourceID]);
+
+	if (state == FileSource::eTryAgain && fs.Status == FileSource::eFailed)
+		return;
+
+	ASSERT(state == FileSource::eTryAgain ? fs.Status &
+		(FileSource::eTrying | FileSource::eTryAgain | FileSource::eAlive) : true);
+	ASSERT(state == FileSource::eFailed ? fs.Status & 
+		(FileSource::eTrying | FileSource::eTryAgain | FileSource::eAlive | FileSource::eFailed) : true);
+	ASSERT(state == FileSource::eAlive ? fs.Status & 
+		(FileSource::eTrying | FileSource::eTryAgain | FileSource::eAlive) : true);
+	ASSERT(state == FileSource::eTryAgain ? fs.RetryWait > 0 : true);
+	
+	fs.Status = state;
+}
+
+void CGnuDownloadShell::AddToAliveHeap(uint32 SourceID)
+{
+	ASSERT(SourceID < m_Queue.size());
+	FileSource &fs(m_Queue[SourceID]);
+
+	if (!(fs.Status & (FileSource::eAlive | FileSource::eTryAgain)))
+		return;
+
+	ASSERT(fs.RetryWait == 0 || fs.TimeToTry <= time(NULL));
+
+	if (fs.OnHeapTime == fs.LastTried)
+		return; // already on heap
+	
+	fs.OnHeapTime = fs.LastTried;
+
+	std::pair<unsigned,uint64> forheap(fs.SourceID,fs.LastTried);
+	m_ReadyHeap.push_back(forheap);
+	push_heap(m_ReadyHeap.begin(), m_ReadyHeap.end(), HeapComparator());
+}
+
+void CGnuDownloadShell::AddToWaitHeap(uint32 SourceID)
+{
+	ASSERT(SourceID < m_Queue.size());
+	FileSource &fs(m_Queue[SourceID]);
+
+	ASSERT(fs.Status & (FileSource::eAlive | FileSource::eTryAgain));
+	ASSERT(fs.RetryWait > 0);
+
+	// check if its already on the heap with this same time
+	if (fs.TimeToTry == time(NULL) + fs.RetryWait)
+		return;
+
+	fs.TimeToTry = time(NULL) + fs.RetryWait;
+
+	std::pair<unsigned,uint64> forheap(fs.SourceID,fs.TimeToTry);
+	m_WaitHeap.push_back(forheap);
+	push_heap(m_WaitHeap.begin(), m_WaitHeap.end(), HeapComparator());
+}
+
+#if 0
+// use this to confirm the heap is working properly
+bool CGnuDownloadShell::CheckHeap()
+{
+	std::vector<std::pair<unsigned, uint64> >::iterator i(m_ReadyHeap.begin());
+	std::ostringstream heapstr;
+	for (; i != m_ReadyHeap.end(); i++)
+	{
+		heapstr << "H>" << i->second << " (" << i->first << ")\n";
+	}
+	heapstr << "\n";
+	TRACE0(heapstr.str().c_str());
+
+	sort_heap(m_ReadyHeap.begin(),m_ReadyHeap.end(), HeapComparator());
+
+	i = m_ReadyHeap.begin();
+	std::ostringstream heapstr2;
+	for (; i != m_ReadyHeap.end(); i++)
+	{
+		heapstr2 << "S>" << i->second << " (" << i->first << ")\n";
+	}
+	heapstr2 << "\n";
+	TRACE0(heapstr2.str().c_str());
+
+	if (m_ReadyHeap.size() <= 1)
+		return true;
+
+	i = m_ReadyHeap.begin();
+	std::vector<std::pair<unsigned, uint64> >::iterator j(i+1);
+	// now it should go recent->old (or high->low)
+	for (; j != m_ReadyHeap.end(); i++, j++)
+	{
+		uint64 ti = i->second;
+		uint64 tj = j->second;
+		if (ti < tj)
+			return false;
+	}
+	
+	make_heap(m_ReadyHeap.begin(),m_ReadyHeap.end(), HeapComparator());
+	return true;
+}
+#endif
+
+void CGnuDownloadShell::ConnectionDeleted(uint32 SourceID)
+{
+	if (m_ShellStatus == eDone)
+		return;
+
+	ASSERT(SourceID < m_Queue.size());
+	m_Queue[SourceID].HasDownload = false;
+
+	FileSource &fs(m_Queue[SourceID]);
+
+	if (m_Queue[SourceID].Status & (FileSource::eAlive | FileSource::eTryAgain))
+	{
+		if (m_Queue[SourceID].RetryWait == 0)
+			AddToAliveHeap(SourceID);
+		else
+			AddToWaitHeap(SourceID);
+	}
 }
 
 void CGnuDownloadShell::Start()
@@ -447,11 +628,16 @@ void CGnuDownloadShell::Stop()
 {
 	m_HostTryPos = 1;
 
+	m_UdpQueue.clear();
+	m_UntestedQueue.clear();
+
 	for(int i = 0; i < m_Queue.size(); i++)
 	{
+		m_Queue[i].Status = FileSource::eUntested;
 		m_Queue[i].RetryWait = 0;
 		m_Queue[i].Tries     = 0;
-		m_Queue[i].TriedUdp  = false;
+		m_UdpQueue.push_back(m_Queue[i]);
+		m_UntestedQueue.push_back(i);
 	}
 
 	m_ShellStatus = eDone;
@@ -500,9 +686,38 @@ void CGnuDownloadShell::Timer()
 
 	if(m_ShellStatus != eDone)
 	{
-		for(i = 0; i < m_Queue.size(); i++)
-			if(m_Queue[i].RetryWait > 0)
-				m_Queue[i].RetryWait--;
+		#ifdef _DEBUG
+			// for testing
+			for(i = 0; i < m_Queue.size(); i++)
+			{
+				FileSource &foo = m_Queue[i];
+				time_t now = time(NULL);
+				int bar = foo.Status + 7 + now;
+			}
+		#endif
+
+		// move items from the wait heap to the ready heap
+		while (!m_WaitHeap.empty())
+		{
+			unsigned SourceID = m_WaitHeap.front().first;
+			uint32 TimeToTry  = m_WaitHeap.front().second;
+
+			// stop if the next one is in the future
+			if (TimeToTry > time(NULL))
+				break;
+
+			// pop off this entry
+			pop_heap(m_WaitHeap.begin(), m_WaitHeap.end(), HeapComparator());
+			m_WaitHeap.pop_back();
+
+			ASSERT(SourceID < m_Queue.size());
+
+			// if its been put on this heap again in the meantime, ignore it
+			if (TimeToTry != m_Queue[SourceID].TimeToTry)
+				continue;
+
+			AddToAliveHeap(SourceID);
+		}
 	}
 
 	// If download is pending
@@ -520,28 +735,14 @@ void CGnuDownloadShell::Timer()
 	{
 		if( !AllPartsActive() || m_FileLength == 0) // Do not combine with below, avoid trynexthost()
 		{
-			if( IsDownloading() )
+			// send out UDP packets if we have more to send
+			TryNextUdp();
+
+			// try to connect to someone else
+			if( m_pPrefs->m_Multisource || !IsDownloading() )
 			{
-				float NetUtilized = 0;
-
-				if(m_pNet->m_RealSpeedDown)
-				{
-					if( m_pNet->m_pGnu )
-						NetUtilized += (float) m_pNet->m_pGnu->m_NetSecBytesDown;
-
-					NetUtilized += (float) m_pTrans->m_DownloadSecBytes;
-
-					NetUtilized /= (float) m_pNet->m_RealSpeedDown;
-				}
-
-				if(m_pPrefs->m_Multisource && NetUtilized < 0.6)
-					TryNextHost();
-			}
-			else
-			{
-				m_UpdatedInSecond = true;
-
 				TryNextHost();
+				m_UpdatedInSecond = true;
 			}
 		}
 	}
@@ -551,7 +752,7 @@ void CGnuDownloadShell::Timer()
 	{
 		m_Cooling--;
 
-		if(m_Cooling == 0)
+		if(m_Cooling <= 0)
 			m_ShellStatus = ePending;
 
 		m_UpdatedInSecond = true;
@@ -563,12 +764,14 @@ void CGnuDownloadShell::Timer()
 
 	}
 
-	// Else this socket is dead
-	else
+	// Else this download is dead
+	else if (m_ShellStatus == eDone)
 	{
 		for(i = 0; i < m_Sockets.size(); i++)
 			m_Sockets[i]->Close();
 	}
+	else
+		ASSERT(0);
 
 	
 	// Backup parts and hosts
@@ -940,8 +1143,9 @@ void CGnuDownloadShell::BackupHosts()
 		Backup += "Busy="			+ NumtoStr(m_Queue[i].Busy) + "\n";
 		Backup += "Stable="			+ NumtoStr(m_Queue[i].Stable) + "\n";
 		Backup += "ActualSpeed="	+ NumtoStr(m_Queue[i].ActualSpeed) + "\n";
+		Backup += "SupportF2F="		+ NumtoStr(m_Queue[i].SupportF2F) + "\n";
 		Backup += "PushID="			+ EncodeBase16((byte*) &m_Queue[i].PushID, 16) + "\n";
-
+		
 		CString Nodes;
 		for(int x = 0; x < m_Queue[i].DirectHubs.size(); x++)
 			Nodes += IPv4toStr( m_Queue[i].DirectHubs[x]) + ", ";
@@ -999,6 +1203,8 @@ void CGnuDownloadShell::Erase()
 
 	m_ShellAccess.Lock();
 	
+	m_ShellStatus = eDone;
+
 	// Remove sockets
 	while(m_Sockets.size())
 	{
@@ -1476,9 +1682,8 @@ bool CGnuDownloadShell::PartVerified(int PartNumber)
 	
 
 	// Tag corrupt hosts
-	std::map<int, int>::iterator itHost = m_HostMap.find(pPart->SourceHostID);
-	if(itHost != m_HostMap.end())
-		m_Queue[itHost->second].Status = FileSource::eCorrupt;
+	ASSERT(pPart->SourceHostID >= 0 && pPart->SourceHostID < m_Queue.size());
+	m_Queue[pPart->SourceHostID].Status = FileSource::eCorrupt;
 
 	for(i = PartNumber; i < m_PartList.size(); i++)
 		if( m_PartList[i].StartByte < pPart->StartByte + m_TreeRes)

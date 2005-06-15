@@ -374,9 +374,8 @@ ULONG CDnaDownload::GetSourceIP(LONG DownloadID, LONG SourceID)
 	{
 		CGnuDownloadShell* pDown = itDL->second;
 
-		std::map<int, int>::iterator itSource = pDown->m_HostMap.find(SourceID);
-		if(itSource != pDown->m_HostMap.end())
-			return pDown->m_Queue[itSource->second].Address.Host.S_addr;
+		ASSERT(SourceID >= 0 && SourceID < pDown->m_Queue.size());
+		return pDown->m_Queue[SourceID].Address.Host.S_addr;
 	}
 
 	return 0;
@@ -391,9 +390,8 @@ LONG CDnaDownload::GetSourcePort(LONG DownloadID, LONG SourceID)
 	{
 		CGnuDownloadShell* pDown = itDL->second;
 
-		std::map<int, int>::iterator itSource = pDown->m_HostMap.find(SourceID);
-		if(itSource != pDown->m_HostMap.end())
-			return pDown->m_Queue[itSource->second].Address.Port;
+		ASSERT(SourceID >= 0 && SourceID < pDown->m_Queue.size());
+		return pDown->m_Queue[SourceID].Address.Port;
 	}
 
 	return 0;
@@ -410,9 +408,8 @@ CString CDnaDownload::GetSourceName(LONG DownloadID, LONG SourceID)
 	{
 		CGnuDownloadShell* pDown = itDL->second;
 
-		std::map<int, int>::iterator itSource = pDown->m_HostMap.find(SourceID);
-		if(itSource != pDown->m_HostMap.end())
-			strResult = pDown->m_Queue[itSource->second].Name;
+		ASSERT(SourceID >= 0 && SourceID < pDown->m_Queue.size());
+		strResult = pDown->m_Queue[SourceID].Name;
 	}
 
 	return strResult;
@@ -427,9 +424,8 @@ LONG CDnaDownload::GetSourceSpeed(LONG DownloadID, LONG SourceID)
 	{
 		CGnuDownloadShell* pDown = itDL->second;
 
-		std::map<int, int>::iterator itSource = pDown->m_HostMap.find(SourceID);
-		if(itSource != pDown->m_HostMap.end())
-			return pDown->m_Queue[itSource->second].Speed / 8;
+		ASSERT(SourceID >= 0 && SourceID < pDown->m_Queue.size());
+		return pDown->m_Queue[SourceID].Speed / 8;
 	}
 
 	return 0;
@@ -446,9 +442,8 @@ CString CDnaDownload::GetSourceStatusStr(LONG DownloadID, LONG SourceID)
 	{
 		CGnuDownloadShell* pDown = itDL->second;
 
-		std::map<int, int>::iterator itSource = pDown->m_HostMap.find(SourceID);
-		if(itSource != pDown->m_HostMap.end())
-			strResult = pDown->m_Queue[itSource->second].Error;
+		ASSERT(SourceID >= 0 && SourceID < pDown->m_Queue.size());
+		strResult = pDown->m_Queue[SourceID].Error;
 	}
 
 	return strResult;
@@ -465,9 +460,8 @@ CString CDnaDownload::GetSourceVendor(LONG DownloadID, LONG SourceID)
 	{
 		CGnuDownloadShell* pDown = itDL->second;
 
-		std::map<int, int>::iterator itSource = pDown->m_HostMap.find(SourceID);
-		if(itSource != pDown->m_HostMap.end())
-			strResult = pDown->m_Queue[itSource->second].Vendor;
+		ASSERT(SourceID >= 0 && SourceID < pDown->m_Queue.size());
+		strResult = pDown->m_Queue[SourceID].Vendor;
 	}
 
 	return strResult;
@@ -484,9 +478,8 @@ CString CDnaDownload::GetSourceHandshake(LONG DownloadID, LONG SourceID)
 	{
 		CGnuDownloadShell* pDown = itDL->second;
 
-		std::map<int, int>::iterator itSource = pDown->m_HostMap.find(SourceID);
-		if(itSource != pDown->m_HostMap.end())
-			strResult = pDown->m_Queue[itSource->second].Handshake;
+		ASSERT(SourceID >= 0 && SourceID < pDown->m_Queue.size());
+		strResult = pDown->m_Queue[SourceID].Handshake;
 	}
 
 	return strResult;
@@ -574,9 +567,8 @@ LONG CDnaDownload::GetSourceBytesPerSec(LONG DownloadID, LONG SourceID)
 	{
 		CGnuDownloadShell* pDown = itDL->second;
 
-		std::map<int, int>::iterator itSource = pDown->m_HostMap.find(SourceID);
-		if(itSource != pDown->m_HostMap.end())
-			return pDown->m_Queue[itSource->second].RealBytesPerSec;
+		ASSERT(SourceID >= 0 && SourceID < pDown->m_Queue.size());
+		return pDown->m_Queue[SourceID].RealBytesPerSec;
 	}
 
 	return 0;

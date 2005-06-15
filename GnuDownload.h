@@ -9,8 +9,9 @@ class CGnuNode;
 class CGnuDownloadShell;
 class CGnuPrefs;
 class CGnuTransfers;
+class CReliableSocket;
 
-class CGnuDownload : public CAsyncSocketEx
+class CGnuDownload : public CSocketEvents
 {
 public:
 	CGnuDownload(CGnuDownloadShell*, int);
@@ -66,6 +67,8 @@ public:
 	int	  m_tempTreeSize;
 	int	  m_tempTreeRes;
 	
+	// Features
+	bool m_SendAltF2Fs;
 
 	// Queue info
 	int m_QueuePos;
@@ -82,33 +85,28 @@ public:
 	CString   m_ServerName;
 	int       m_Status;
 	bool      m_Push;
+	bool	  m_PushF2F;
 	ProxyAddr m_LocalProxy;
 	
 	CString   m_RemoteChallenge;
 	CString   m_RemoteChallengeAnswer;
 
 	// Bandwidth
-	CRangeAvg m_AvgRecvBytes;
-	DWORD     m_dwSecBytes;      // Bytes sent in second
+	CMovingAvg m_AvgRecvBytes;
 
 	// Proxy
 	bool m_PushProxy;
 	IPv4 m_ProxyAddress;
 
-	//{{AFX_VIRTUAL(CGnuDownload)
-	public:
-	virtual void OnConnect(int nErrorCode);
-	virtual void OnReceive(int nErrorCode);
-	virtual void OnClose(int nErrorCode);
-	virtual int Send(const void* lpBuf, int nBufLen, int nFlags = 0);
-	virtual void OnSend(int nErrorCode);
-	virtual void Close();
-	//}}AFX_VIRTUAL
+	// Socket
+	CReliableSocket* m_pSocket;
 
-	//{{AFX_MSG(CGnuDownload)
-		// NOTE - the ClassWizard will add and remove member functions here.
-	//}}AFX_MSG
-
+	void OnAccept(int nErrorCode);
+	void OnConnect(int nErrorCode);
+	void OnReceive(int nErrorCode);
+	void OnClose(int nErrorCode);
+	
+	void Close();	
 
 public:
 

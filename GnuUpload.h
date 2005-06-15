@@ -9,7 +9,7 @@ class CGnuShare;
 class CGnuPrefs;
 
 
-class CGnuUpload : public CAsyncSocketEx
+class CGnuUpload : public CSocketEvents
 {
 public:
 	CGnuUpload(CGnuUploadShell*);
@@ -51,14 +51,16 @@ public:
 	CGnuShare*       m_pShare;
 	CGnuPrefs*       m_pPrefs;
 
+	// Socket
+	CReliableSocket* m_pSocket;
 
-	virtual void OnClose(int nErrorCode);
-	virtual void OnConnect(int nErrorCode);
-	virtual void OnReceive(int nErrorCode);
-	virtual void OnSend(int nErrorCode);
-	
-	virtual int Send(const void* lpBuf, int nBufLen, int nFlags = 0);
-	virtual void Close();
+	void OnClose(int nErrorCode);
+	void OnConnect(int nErrorCode);
+	void OnReceive(int nErrorCode);
+	void OnSend(int nErrorCode);
+	 
+	int  Send(const void* lpBuf, int nBufLen, int nFlags = 0);
+	void Close();
 };
 
 

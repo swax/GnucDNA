@@ -1,30 +1,47 @@
-IP Cache sorted by largest difference between (first seen and last seen) minus difference between (current time and last seen)
+
+host that asks for alt source is put into map
+map<host, vector of sources>
+send x-features in upload header
 
 
-//dna
-patchsize = 32k
-patchbits = 4
-entries = 64k
-entries in bytes = 8k
+download 
+	dont send same hosts in alt loc
+	add f2f loc
+	add self to f2f loc
+	remove push locs
 
-//bear
-patchsize = 256k
-patchbits = 8
-entries = 256k
-entries in bytes 32k
+u/l and d/l headers for alt push
+dl nexttry limits
+
+keep track of alt-locs already sent to host so they are not repeated
+keep push proxies in alt list updated
+
+
+Upload Header
+	X-Features: fwt/1.0, fwalt/0.1 
+
+X-Falt  ...
+X-NFalt ...
+
+Alternate location testing on hour
+
+Handshake encode/decode
 
 Stop and Start share file
 
 ----------------------------------------------------------------------
 
+Support G2 version of push proxy
 UPnP
-F2F transfers
 
+IP Cache sorted by largest difference between (first seen and last seen) minus difference between (current time and last seen)
 
 preference newer versions
 
 digitally signed ban list, public key distributed with client
 keep alt hosts for a half hour then kill
+
+Decode / Encode handshakes
 
 Now	
 	IPrefs::SetSpeedUp
@@ -96,7 +113,17 @@ IChat
 	OnRecvDirectMessage(IP:Port, Message)
 
 
+//dna
+patchsize = 32k
+patchbits = 4
+entries = 64k
+entries in bytes = 8k
 
+//bear
+patchsize = 256k
+patchbits = 8
+entries = 256k
+entries in bytes 32k
 	
 	
 

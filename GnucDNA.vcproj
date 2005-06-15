@@ -167,6 +167,9 @@
 					RelativePath="Packet.cpp">
 				</File>
 				<File
+					RelativePath=".\ReliableSocket.cpp">
+				</File>
+				<File
 					RelativePath="stdafx.cpp">
 					<FileConfiguration
 						Name="Debug|Win32">
@@ -241,16 +244,6 @@
 						RelativePath=".\G2Protocol.cpp">
 					</File>
 				</Filter>
-			</Filter>
-			<Filter
-				Name="Preferences"
-				Filter="">
-				<File
-					RelativePath=".\DnaPrefs.cpp">
-				</File>
-				<File
-					RelativePath="GnuPrefs.cpp">
-				</File>
 			</Filter>
 			<Filter
 				Name="Search"
@@ -676,6 +669,16 @@
 					RelativePath="GnuDownloadShell.cpp">
 				</File>
 			</Filter>
+			<Filter
+				Name="Preferences"
+				Filter="">
+				<File
+					RelativePath=".\DnaPrefs.cpp">
+				</File>
+				<File
+					RelativePath="GnuPrefs.cpp">
+				</File>
+			</Filter>
 		</Filter>
 		<Filter
 			Name="Header Files"
@@ -725,6 +728,12 @@
 				</File>
 				<File
 					RelativePath="Packet.h">
+				</File>
+				<File
+					RelativePath=".\ReliableSocket.h">
+				</File>
+				<File
+					RelativePath=".\SocketEvents.h">
 				</File>
 				<File
 					RelativePath="stdafx.h">

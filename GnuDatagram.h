@@ -3,7 +3,6 @@
 class CGnuControl;
 class CGnuProtocol;
 
-
 class CGnuDatagram
 {
 public:
@@ -19,11 +18,8 @@ public:
 	void SendPacket(IPv4 Address, byte* packet, uint32 length);
 
 	// Bandwidth
-	CRangeAvg m_AvgUdpDown;
-	CRangeAvg m_AvgUdpUp;
-
-	int m_UdpSecBytesDown;
-	int m_UdpSecBytesUp;
+	CMovingAvg m_AvgUdpDown;
+	CMovingAvg m_AvgUdpUp;
 
 	CGnuControl*  m_pComm;
 	CGnuProtocol* m_pProtocol;

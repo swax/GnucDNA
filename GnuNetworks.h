@@ -68,6 +68,8 @@ public:
 	bool StartListening();
 	void StopListening();
 	
+	uint16 m_ActivePort;
+
 	virtual void OnAccept(int nErrorCode);
 
 	std::vector<CGnuSock*>	m_SockList;

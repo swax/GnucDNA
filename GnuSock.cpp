@@ -91,11 +91,6 @@ void CGnuSock::OnReceive(int nErrorCode)
 		return;
 	}
 
-	// Firewall not up, unless this is over a LAN
-	if(!m_pPrefs->m_BehindFirewall)
-		m_pNet->m_TcpFirewall = false;
-
-
 	// Get Host Check if blocked
 	GetPeerName(m_RemoteHost, m_RemotePort);
 
@@ -121,16 +116,19 @@ void CGnuSock::OnReceive(int nErrorCode)
 		return;
 	}
 
+	// old response from firewall test
+	if( !m_pPrefs->m_ForceFirewall && m_Handshake.Find("\n\n") == 0)
+		m_pNet->m_TcpFirewall = false;
+
+
 	// Parse if handshake finished
 	if( m_Handshake.Find("\r\n\r\n") != -1 )
 	{
 		if(m_Handshake.Find(" CONNECT/") != -1 )
 			ParseConnectRequest();
 
-//#ifdef _DEBUG
 		else if(m_Handshake.Left(10) == "GET / HTTP")
 			ParseBrowseRequest();
-//#endif
 
 		else if(m_Handshake.Find("/gnutella/pushproxy?")  != -1 || 
 			    m_Handshake.Find("/gnutella/push-proxy?") != -1 || 
@@ -143,7 +141,8 @@ void CGnuSock::OnReceive(int nErrorCode)
 		else if(m_Handshake.Left(5) == "PUSH ")
 			ParseDownloadRequest(NETWORK_G2);
 
-		
+		else if(!m_pPrefs->m_ForceFirewall && m_Handshake.Find("CONNECT BACK") == 0)
+			m_pNet->m_TcpFirewall = false;
 
 		Close();
 	}
@@ -218,6 +217,10 @@ void CGnuSock::ParseConnectRequest()
 
 		m_pNet->m_pG2->G2NodeUpdate(G2NodeSock);
 		
+		if(!m_pPrefs->m_ForceFirewall)
+			m_pNet->m_TcpFirewall = false;
+
+
 		G2NodeSock->ParseIncomingHandshake(m_Handshake, m_pBuff, m_BuffLength);
 	}
 
@@ -291,7 +294,7 @@ void CGnuSock::ParseUploadRequest()
 	RequestURI = DecodeURL(RequestURI);
 
 
-	CGnuUploadShell* UploadSock = NULL;
+	CGnuUploadShell* pShell = NULL;
 
 	// Try to find an upload from the same host with the same request
 	for(int i = 0; i < m_pTrans->m_UploadList.size(); i++)
@@ -309,41 +312,41 @@ void CGnuSock::ParseUploadRequest()
 					return;
 				}
 				else 
-					UploadSock = p;
+					pShell = p;
 			}
 	}
 
 	
 	// If new upload
-	if(!UploadSock)
+	if(!pShell)
 	{
-		UploadSock = new CGnuUploadShell(m_pTrans);
+		pShell = new CGnuUploadShell(m_pTrans);
 
 		m_pTrans->m_UploadAccess.Lock();
-		m_pTrans->m_UploadList.push_back(UploadSock);
+		m_pTrans->m_UploadList.push_back(pShell);
 		m_pTrans->m_UploadAccess.Unlock();
 	}
 	
 
 	// Set Variables
-	UploadSock->m_Host       = StrtoIP(m_RemoteHost);
-	UploadSock->m_Port       = m_RemotePort;
-	UploadSock->m_Handshake  = m_Handshake;
+	pShell->m_Host       = StrtoIP(m_RemoteHost);
+	pShell->m_Port       = m_RemotePort;
+	pShell->m_Handshake  = m_Handshake;
 	
-	UploadSock->m_Status     = TRANSFER_CONNECTED;
+	pShell->m_Status     = TRANSFER_CONNECTED;
 
 
 	// Attach socket to upload
-	UploadSock->m_Socket = new CGnuUpload(UploadSock);
-	UploadSock->m_Socket->m_GetRequest = m_Handshake;
+	pShell->m_Socket = new CGnuUpload(pShell);
+	pShell->m_Socket->m_GetRequest = m_Handshake;
 
 	SOCKET FreeSock = Detach();
-	UploadSock->m_Socket->Attach(FreeSock);
+	pShell->m_Socket->m_pSocket->Attach(FreeSock);
 		
-	UploadSock->m_RequsetPending = true;
+	pShell->m_RequsetPending = true;
 
 
-	m_pTrans->UploadUpdate(UploadSock->m_UploadID);
+	m_pTrans->UploadUpdate(pShell->m_UploadID);
 
 	Close();
 	return;
@@ -415,7 +418,7 @@ void CGnuSock::ParseDownloadRequest(int Network)
 			PushedFile->m_Push = true;
 			
 			SOCKET FreeSock = Detach();
-			PushedFile->Attach(FreeSock);
+			PushedFile->m_pSocket->Attach(FreeSock);
 			
 			p->m_Sockets.push_back(PushedFile);
 

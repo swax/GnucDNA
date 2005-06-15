@@ -71,6 +71,7 @@ CG2Node::CG2Node(CG2Control* pG2Comm, CString Host, uint32 Port)
 
 	m_ConnectTime = time(NULL);
 	m_RemoteIdent = 0;
+	m_ConnectBack = false;
 
 	m_Status     = SOCK_CONNECTING;	
 	m_LastState  = 0;
@@ -133,12 +134,7 @@ CG2Node::CG2Node(CG2Control* pG2Comm, CString Host, uint32 Port)
 	
 	// Bandwidth
 	for(int i = 0; i < 3; i++)
-	{
-		m_AvgBytes[i].SetRange(30);
-
-		m_dwSecBytes[i] = 0;
-	}
-
+		m_AvgBytes[i].SetSize(30);
 
 
 	m_pG2Comm->G2NodeUpdate(this);
@@ -267,7 +263,7 @@ void CG2Node::Timer()
 
 
 		// Drop if socket stops responding for a minute
-		if(m_dwSecBytes[0] == 0)
+		if(m_AvgBytes[0].m_SecondSum == 0)
 		{
 			m_SecsDead++;
 
@@ -336,11 +332,7 @@ void CG2Node::Timer()
     //      i = 1 its send stats
 	//		i = 2 its dropped stats
 	for(int i = 0; i < 3; i++)
-	{
-		m_AvgBytes[i].Update( m_dwSecBytes[i] );
-
-		m_dwSecBytes[i]   = 0;	
-	}
+		m_AvgBytes[i].Next();
 }
 
 void CG2Node::OnConnect(int nErrorCode)
@@ -353,6 +345,16 @@ void CG2Node::OnConnect(int nErrorCode)
 	}
 
 	m_pG2Comm->m_LastConnect = time(NULL);
+
+	// Connected node requested we connect back to test their firewall
+	if(m_ConnectBack)
+	{
+		CString ConnectBack = "CONNECT BACK\r\n\r\n";
+		Send(ConnectBack, ConnectBack.GetLength());
+		CloseWithReason("TCP Connect Back");
+		m_WholeHandshake += ConnectBack;
+		return;
+	}
 
 	CString Handshake;
 
@@ -434,7 +436,7 @@ void CG2Node::OnReceive(int nErrorCode)
 
 
 	// Bandwidth stats
-	m_dwSecBytes[0] += RecvLength;
+	m_AvgBytes[0].Input(RecvLength);
 
 
 	// Connected to node, sending and receiving packets
@@ -609,7 +611,7 @@ void CG2Node::ParseOutboundHandshake(CString Data, byte* Stream, int StreamLengt
 		ParseTryHeader( HubsToTry, true);
 
 	// Parse X-Try-Ultrapeers
-	if(m_lowHandshake.Find("application/x-gnutella2") != -1)
+	if(m_lowHandshake.Find("application/x-gnutella2") != -1 || ValidAgent(m_RemoteAgent))
 		ParseTryHeader( FindHeader("X-Try-Ultrapeers") );
 	else
 		ParseG1TryHeader( FindHeader("X-Try-Ultrapeers") );
@@ -1089,6 +1091,8 @@ void CG2Node::Send_ConnectError(CString Reason)
 
 	Handshake += "User-Agent: " + m_pCore->GetUserAgent() + "\r\n";
 
+	Handshake += "Content-Type: application/x-gnutella2\r\n";
+
 	// X-Try-Ultrapeers header
 	CString HubsToTry;
 	if(m_pG2Comm->GetAltHubs(HubsToTry, this, false))
@@ -1146,10 +1150,9 @@ void CG2Node::ParseTryHeader(CString TryHeader, bool DnaOnly)
 		tryNode.Port = atoi(ParseString(Address, ' '));
 		tryNode.DNA  = DnaOnly;
 
-		if(Address.IsEmpty()) // Is not sending timestamp, probably G1 node in G2 cache
-			return;
-
-		tryNode.LastSeen = StrToCTime(Address);
+		// dna wasnt sending timestamps before, fix
+		if(!Address.IsEmpty()) 
+			tryNode.LastSeen = StrToCTime(Address);
 
 		TryHosts.push_front(tryNode);
 
@@ -1516,7 +1519,7 @@ void CG2Node::FlushSendQueue(bool FullFlush)
 				}
 				else
 				{
-					m_dwSecBytes[2] += m_SendBuffLength - BytesSent;
+					m_AvgBytes[2].Input(m_SendBuffLength - BytesSent);
 
 					memmove(m_SendBuff, m_SendBuff + BytesSent, m_SendBuffLength - BytesSent);
 					m_SendBuffLength -= BytesSent;

@@ -101,6 +101,7 @@ public:
 
 	bool m_Inbound;
 	bool m_TriedUpgrade;
+	bool m_ConnectBack;
 
 	int m_Status;
 	int m_LastState;
@@ -170,8 +171,7 @@ public:
 
 	
 	// Bandwidth, [0] is Received, [1] is Sent, [2] is Dropped
-	CRangeAvg m_AvgBytes[3];     
-	DWORD     m_dwSecBytes[3];
+	CMovingAvg m_AvgBytes[3];     
 
 
 	// CAsyncSocket Overrides

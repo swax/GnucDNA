@@ -65,19 +65,19 @@ public:
 	// Connections
 	void ManageNodes();
 	
-	void TryConnect(bool PrefDna);
+	void TryConnect(int Attempts, bool LowGear);
 	void DropNode(int G2Mode, bool NeedDna);
 	bool ConnectFromCache(std::list<Node> &Cache, bool Perm);
 
+	void SendUdpProbes(bool LowGear);
 	void SendUdpConnect(Node HostInfo);
-	void CreateNode(Node HostInfo);
+	void CreateNode(Node HostInfo, bool ConnectBack=false);
 	void RemoveNode(CG2Node*);
 
 	std::map<uint32, bool> m_TriedConnects;
+	std::list<Node>		   m_UdpReplyCache;
 
 	time_t m_LastConnect;
-
-	bool m_TryingConnect;
 
 	// Hub Balancing
 	void HubBalancing();
@@ -208,11 +208,8 @@ public:
 	double m_NetSecBytesUp;
 
 	// Avg Query Packets
-	CRangeAvg m_PacketsAvgQKR[2];
-	CRangeAvg m_PacketsAvgQ2[2];
-	
-	uint16    m_PacketsQKR[2];
-	uint16    m_PacketsQ2[2];
+	CMovingAvg m_PacketsAvgQKR[2];
+	CMovingAvg m_PacketsAvgQ2[2];
 
 	// Links
 	CGnuNetworks*  m_pNet;

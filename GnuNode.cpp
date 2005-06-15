@@ -203,11 +203,8 @@ CGnuNode::CGnuNode(CGnuControl* pComm, CString Host, UINT Port)
 	// Bandwidth
 	for(i = 0; i < 3; i++)
 	{
-		m_AvgPackets[i].SetRange(30);
-		m_AvgBytes[i].SetRange(30);
-
-		m_dwSecPackets[i] = 0;
-		m_dwSecBytes[i]   = 0;
+		m_AvgPackets[i].SetSize(30);
+		m_AvgBytes[i].SetSize(30);
 	}
 
 	m_QuerySendThrottle = 0;
@@ -322,9 +319,10 @@ void CGnuNode::OnConnect(int nErrorCode)
 	// Connected node requested we connect back to test their firewall
 	if(m_ConnectBack)
 	{
-		Send("\n\n", 2);
+		CString ConnectBack = "CONNECT BACK\r\n\r\n";
+		Send(ConnectBack, ConnectBack.GetLength());
 		CloseWithReason("TCP Connect Back");
-		m_WholeHandshake += "\r\n\r\n";
+		m_WholeHandshake += ConnectBack;
 		return;
 	}
 
@@ -435,7 +433,7 @@ void CGnuNode::OnReceive(int nErrorCode)
 
 	// Incoming bandwidth throttling
 	// if average bw in over 30 secs is greater than 1 kb/s, limit traffic to 1 kb/s
-	if( m_dwSecBytes[0] > 1024 && m_AvgBytes[0].GetAverage() > 1024)
+	if( m_AvgBytes[0].m_SecondSum > 1024 && m_AvgBytes[0].GetAverage() > 1024)
 		return;
 
 
@@ -466,7 +464,7 @@ void CGnuNode::OnReceive(int nErrorCode)
 
 
 	// Bandwidth stats
-	m_dwSecBytes[0] += BuffLength;
+	m_AvgBytes[0].Input(BuffLength);
 
 
 	// Connected to node, sending and receiving packets
@@ -1850,8 +1848,8 @@ void CGnuNode::FlushSendBuffer(bool FullFlush)
 					}
 					else
 					{
-						m_dwSecPackets[2]++;
-						m_dwSecBytes[2] += m_BackBuffLength - BytesSent;
+						m_AvgPackets[2].Input(1);
+						m_AvgBytes[2].Input(m_BackBuffLength - BytesSent);
 
 						memmove(m_BackBuff, m_BackBuff + BytesSent, m_BackBuffLength - BytesSent);
 						m_BackBuffLength -= BytesSent;
@@ -1871,7 +1869,7 @@ void CGnuNode::FlushSendBuffer(bool FullFlush)
 
 			m_PacketList[i].pop_front();
 
-			m_dwSecPackets[1]++;
+			m_AvgPackets[1].Input(1);
 
 			if(SendFinished)
 				return;
@@ -1886,7 +1884,7 @@ int CGnuNode::Send(const void* lpBuf, int nBuffLen, int nFlags)
 	BytesSent = CAsyncSocketEx::Send(lpBuf, nBuffLen, nFlags);
 					
 	if(BytesSent > 0)
-		m_dwSecBytes[1] += BytesSent;
+		m_AvgBytes[1].Input(BytesSent);
 
 	return BytesSent;
 }
@@ -2040,7 +2038,7 @@ void CGnuNode::SplitBundle(byte* bundle, DWORD length)
 			{
 				if (nextPos + sizeof(packet_Header) + packet->Payload <= length)
 				{
-					m_dwSecPackets[0]++;
+					m_AvgPackets[0].Input(1);
 
 					Gnu_RecvdPacket Packet( m_Address, packet, 23 + packet->Payload, this);
 					m_pProtocol->ReceivePacket( Packet );
@@ -2290,11 +2288,8 @@ void CGnuNode::Timer()
 	//		i = 2 its dropped stats
 	for(int i = 0; i < 3; i++)
 	{
-		m_AvgPackets[i].Update( m_dwSecPackets[i] );
-		m_AvgBytes[i].Update( m_dwSecBytes[i] );
-
-		m_dwSecPackets[i] = 0;
-		m_dwSecBytes[i]   = 0;	
+		m_AvgPackets[i].Next();
+		m_AvgBytes[i].Next();
 	}
 	
 	m_QuerySendThrottle = 0;
@@ -2375,7 +2370,7 @@ void CGnuNode::NodeManagement()
 		FlushSendBuffer(true);
 
 		// Drop if not socket gone mute 30 secs
-		if(m_dwSecBytes[0] == 0)
+		if(m_AvgBytes[0].m_SecondSum == 0)
 		{
 			m_SecsDead++;
 

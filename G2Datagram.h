@@ -65,11 +65,8 @@ public:
 	int m_FlushCounter; // Cross between flushing immediately and flushing at a timer interval
 
 	// Bandwidth
-	CRangeAvg m_AvgUdpDown;
-	CRangeAvg m_AvgUdpUp;
-
-	int m_UdpSecBytesDown;
-	int m_UdpSecBytesUp;
+	CMovingAvg m_AvgUdpDown;
+	CMovingAvg m_AvgUdpUp;
 
 	CG2Control*  m_pG2Comm;
 	CG2Protocol* m_pProtocol;

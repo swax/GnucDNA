@@ -43,12 +43,8 @@ CGnuDatagram::CGnuDatagram(CGnuControl* pComm)
 	m_pComm     = pComm;
 	m_pProtocol = pComm->m_pProtocol;
 
-	m_AvgUdpDown.SetRange(30);
-	m_AvgUdpUp.SetRange(30);
-
-	m_UdpSecBytesDown = 0;
-	m_UdpSecBytesUp   = 0;
-
+	m_AvgUdpDown.SetSize(30);
+	m_AvgUdpUp.SetSize(30);
 }
 
 CGnuDatagram::~CGnuDatagram()
@@ -58,24 +54,26 @@ CGnuDatagram::~CGnuDatagram()
 
 void CGnuDatagram::Timer()
 {
-	m_AvgUdpDown.Update(m_UdpSecBytesDown);
-	m_AvgUdpUp.Update(m_UdpSecBytesUp);
-
-	m_UdpSecBytesDown = 0;
-	m_UdpSecBytesUp   = 0;
+	m_AvgUdpDown.Next();
+	m_AvgUdpUp.Next();
 }
 
 void CGnuDatagram::OnReceive(IPv4 Address, byte* pRecvBuff, int RecvLength)
 {
 
-	m_UdpSecBytesDown += RecvLength;
+	m_AvgUdpDown.Input(RecvLength);
 
 	if(RecvLength >= 23)
 	{
 		Gnu_RecvdPacket Packet( Address, (packet_Header*) pRecvBuff, RecvLength);
 
-		if(RecvLength == 23 + Packet.Header->Payload)
-			m_pProtocol->ReceivePacket( Packet );
+		if(RecvLength != 23 + Packet.Header->Payload)
+		{
+			ASSERT(0); 
+			return;
+		}
+
+		m_pProtocol->ReceivePacket( Packet );
 	}
 }
 
@@ -96,5 +94,5 @@ void CGnuDatagram::SendPacket(IPv4 Address, byte* packet, uint32 length)
 	if(m_pComm->m_pNet->m_pUdpSock)
 		UdpSent = m_pComm->m_pNet->m_pUdpSock->SendTo( packet, length, (SOCKADDR*) &sa, sizeof(SOCKADDR) );
 
-	m_UdpSecBytesUp += length;
+	m_AvgUdpUp.Input(length);
 }

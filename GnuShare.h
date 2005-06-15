@@ -170,6 +170,7 @@ struct GnuQuery
 	bool Forward;
 
 	bool UltraForward;
+	bool SupportF2F;
 
 	int   OriginID;
 	IPv4  DirectAddress;
@@ -189,6 +190,7 @@ struct GnuQuery
 		Forward  = false;
 
 		UltraForward = false;
+		SupportF2F   = false;
 
 		OriginID = 0;
 

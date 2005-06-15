@@ -93,8 +93,8 @@ public:
 	int    m_AllocBytes;		// Bytes left to use in a second
 	
 	// Bandwidth
-	CRangeAvg m_AvgSentBytes;
-	DWORD     m_dwSecBytes;     // Bytes sent in second
+	CMovingAvg m_AvgSentBytes;
+
 
 	int    m_nSecsUnderLimit;
 	int	   m_nSecsDead;

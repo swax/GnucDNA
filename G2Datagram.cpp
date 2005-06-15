@@ -53,11 +53,8 @@ CG2Datagram::CG2Datagram(CG2Control* pG2Comm)
 
 	m_SendBytesAvail = 0;
 
-	m_AvgUdpDown.SetRange(30);
-	m_AvgUdpUp.SetRange(30);
-
-	m_UdpSecBytesDown = 0;
-	m_UdpSecBytesUp   = 0;
+	m_AvgUdpDown.SetSize(30);
+	m_AvgUdpUp.SetSize(30);
 
 	m_FlushCounter = 0;
 }
@@ -91,11 +88,9 @@ CG2Datagram::~CG2Datagram()
 
 void CG2Datagram::Timer()
 {
-	m_AvgUdpDown.Update(m_UdpSecBytesDown);
-	m_AvgUdpUp.Update(m_UdpSecBytesUp);
+	m_AvgUdpDown.Next();
+	m_AvgUdpUp.Next();
 
-	m_UdpSecBytesDown = 0;
-	m_UdpSecBytesUp   = 0;
 
 	// Timeout recv buff
 	std::list<GND_Packet*>::iterator itPacket = m_RecvCache.begin();
@@ -176,9 +171,9 @@ void CG2Datagram::Decode_GND(IPv4 Address, GND_Header* RecvPacket, int length)
 	// Record bandwidth
 	std::map<uint32, CG2Node*>::iterator itNode = m_pG2Comm->m_G2NodeAddrMap.find(Address.Host.S_addr);
 	if(itNode != m_pG2Comm->m_G2NodeAddrMap.end())
-		itNode->second->m_dwSecBytes[0] += length;
+		itNode->second->m_AvgBytes[0].Input(length);
 	else
-		m_UdpSecBytesDown += length;
+		m_AvgUdpDown.Input(length);
 
 	byte debugFlags = RecvPacket->Flags;
 
@@ -534,9 +529,9 @@ void CG2Datagram::FlushSendBuffer()
 		// Record bandwidth
 		std::map<uint32, CG2Node*>::iterator itNode = m_pG2Comm->m_G2NodeAddrMap.find((*itAck).Address.Host.S_addr);
 		if(itNode != m_pG2Comm->m_G2NodeAddrMap.end())
-			itNode->second->m_dwSecBytes[1] += ACK_LENGTH;
+			itNode->second->m_AvgBytes[1].Input(ACK_LENGTH);
 		else
-			m_UdpSecBytesUp += ACK_LENGTH;
+			m_AvgUdpUp.Input(ACK_LENGTH);
 
 		itAck = m_AckCache.erase(itAck);
 	}
@@ -598,9 +593,9 @@ void CG2Datagram::FlushSendBuffer()
 					// Record bandwidth
 					std::map<uint32, CG2Node*>::iterator itNode = m_pG2Comm->m_G2NodeAddrMap.find(pPacket->Address.Host.S_addr);
 					if(itNode != m_pG2Comm->m_G2NodeAddrMap.end())
-						itNode->second->m_dwSecBytes[1] += pFrag->Length;
+						itNode->second->m_AvgBytes[1].Input(pFrag->Length);
 					else
-						m_UdpSecBytesUp += pFrag->Length;
+						m_AvgUdpUp.Input(pFrag->Length);
 
 					pFrag->Sent = true;
 					pFrag->Wait = pPacket->Timeout + GND_SEND_RETRY;

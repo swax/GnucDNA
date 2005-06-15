@@ -78,8 +78,6 @@ CG2Control::CG2Control(CGnuNetworks* pNet)
 
 	m_GlobalUnique = rand() * rand();
 
-	m_TryingConnect = false;
-
 	// Stagger cleanup every 5 mins
 	m_CleanRoutesNext = time(NULL) + 2*60;
 	m_CleanKeysNext   = time(NULL) + 1*60;
@@ -99,13 +97,10 @@ CG2Control::CG2Control(CGnuNetworks* pNet)
 	m_NetSecBytesUp		= 0;
 
 	// Avg Query Packets
-	m_PacketsAvgQKR[AVG_DNA].SetRange(30);
-	m_PacketsAvgQKR[AVG_TOTAL].SetRange(30);
-	m_PacketsAvgQ2[AVG_DNA].SetRange(30);
-	m_PacketsAvgQ2[AVG_TOTAL].SetRange(30);
-	
-	m_PacketsQKR[0] = m_PacketsQKR[1] = 0;
-	m_PacketsQ2[0]  = m_PacketsQ2[1]  = 0;
+	m_PacketsAvgQKR[AVG_DNA].SetSize(30);
+	m_PacketsAvgQKR[AVG_TOTAL].SetSize(30);
+	m_PacketsAvgQ2[AVG_DNA].SetSize(30);
+	m_PacketsAvgQ2[AVG_TOTAL].SetSize(30);
 
 
 	m_pDispatch = new CG2Datagram(this);
@@ -193,13 +188,10 @@ void CG2Control::Timer()
 	m_ActiveSearchCount = 0;
 
 	// Avg Query Packets
-	m_PacketsAvgQKR[AVG_DNA].Update(   m_PacketsQKR[AVG_DNA] );
-	m_PacketsAvgQKR[AVG_TOTAL].Update( m_PacketsQKR[AVG_TOTAL] );
-	m_PacketsAvgQ2[AVG_DNA].Update(    m_PacketsQ2[AVG_DNA] );
-	m_PacketsAvgQ2[AVG_TOTAL].Update(  m_PacketsQ2[AVG_TOTAL]);
-	
-	m_PacketsQKR[0] = m_PacketsQKR[1] = 0;
-	m_PacketsQ2[0]  = m_PacketsQ2[1]  = 0;
+	m_PacketsAvgQKR[AVG_DNA].Next();
+	m_PacketsAvgQKR[AVG_TOTAL].Next();
+	m_PacketsAvgQ2[AVG_DNA].Next();
+	m_PacketsAvgQ2[AVG_TOTAL].Next();
 
 
 	//ASSERT( m_RouteMap.size()   < MAX_ROUTES);
@@ -207,6 +199,10 @@ void CG2Control::Timer()
 	//ASSERT( m_GlobalHubs.size() < MAX_GLOBAL);
 
 	TrimMaps();
+
+	// clean udp cache
+	while(m_UdpReplyCache.size() > 100)
+		m_UdpReplyCache.pop_back();
 
 	// Clean Route Table
 	if( time(NULL) > m_CleanRoutesNext )
@@ -474,19 +470,32 @@ void CG2Control::ManageNodes()
 	if( m_pNet->TransfersConnecting() )
 		MaxHalfConnects /= 2;
 
-
+	bool LowGear     = false;
 	bool NeedDnaHubs = false;
 	if(HubConnects && HubDnaConnects * 100 / HubConnects < 50)
 		NeedDnaHubs = true;
 
-	int OpenSlots = MaxHalfConnects - Connecting;
+	int Attempts = 0;
+	if(MaxHalfConnects > Connecting)
+		Attempts = MaxHalfConnects - Connecting;
+
+	if(Connecting >= MaxHalfConnects || m_pNet->TcpBacklog())
+		Attempts = 0;
 
 	if( m_ClientMode == G2_CHILD )
 	{
 		// More hub connects only means people will find your files faster
 		// Searching on G2 does not require a hub connection
 
-		if(Connecting < MaxHalfConnects && !m_pNet->TcpBacklog())
+		if(HubConnects < m_pPrefs->m_G2ChildConnects || NeedDnaHubs)
+		{
+			if(HubConnects >= m_pPrefs->m_G2ChildConnects && NeedDnaHubs)
+				LowGear = true;
+		
+			TryConnect(Attempts, LowGear);
+		}
+
+		/*if(Connecting < MaxHalfConnects && !m_pNet->TcpBacklog())
 		{
 			if(HubConnects < m_pPrefs->m_G2ChildConnects)
 			{
@@ -500,7 +509,7 @@ void CG2Control::ManageNodes()
 			}
 			else
 				m_TryingConnect = false;
-		}
+		}*/
 		
 
 		while(m_pPrefs->m_G2ChildConnects && HubConnects > m_pPrefs->m_G2ChildConnects)
@@ -515,7 +524,18 @@ void CG2Control::ManageNodes()
 		// Fixed, searching 1 node, searches 10
 		// Sending queries to 10% of network should hit whole network
 
-		if(Connecting < MaxHalfConnects && !m_pNet->TcpBacklog())
+		if(m_pPrefs->m_G2MinConnects == 0)
+			return;
+
+		if(HubConnects < m_pPrefs->m_G2MinConnects || NeedDnaHubs)
+		{
+			if(HubConnects >= m_pPrefs->m_G2MinConnects && NeedDnaHubs)
+				LowGear = true;
+
+			TryConnect(Attempts, LowGear);
+		}
+
+		/*if(Connecting < MaxHalfConnects && !m_pNet->TcpBacklog())
 		{
 			if(m_pPrefs->m_G2MinConnects && HubConnects < m_pPrefs->m_G2MinConnects)
 			{
@@ -529,7 +549,7 @@ void CG2Control::ManageNodes()
 			}
 			else
 				m_TryingConnect = false;
-		}
+		}*/
 
 		
 		while(m_pPrefs->m_G2MaxConnects && HubConnects > m_pPrefs->m_G2MaxConnects)
@@ -581,66 +601,108 @@ void CG2Control::CleanDeadSocks()
 	}
 }
 
-void CG2Control::TryConnect(bool PrefDna)
+void CG2Control::TryConnect(int Attempts, bool LowGear)
 {
-	m_TryingConnect = true;
-	
-	if( PrefDna && ConnectFromCache(m_pCache->m_G2Dna, false) )
-		return;
+	SendUdpProbes(LowGear);
 
-	if( ConnectFromCache(m_pCache->m_G2Real, false) )
-		return;
+	if(LowGear)
+		Attempts /= 2;
 
-	if( ConnectFromCache(m_pCache->m_G2Perm, true) )
-		return;
+	for(int i = 0; i < Attempts; i++)
+	{
+		if( LowGear && ConnectFromCache(m_pCache->m_G2Dna, false) )
+			continue;
+
+		if( ConnectFromCache(m_UdpReplyCache, false) )
+			continue;
+
+		if( ConnectFromCache(m_pCache->m_G2Real, false) )
+			continue;
+
+		if( ConnectFromCache(m_pCache->m_G2Perm, true) )
+			continue;
 
 
-	// Do web cache request only if not connected to g1 because g2 hosts can be found through there
-	if( CountHubConnects() == 0 && m_pNet->m_pGnu == NULL && m_LastConnect < time(NULL) - 60)
-		m_pCache->WebCacheGetRequest("gnutella2");
+		// Do web cache request only if not connected to g1 because g2 hosts can be found through there
+		if( CountHubConnects() == 0 && m_pNet->m_pGnu == NULL && m_LastConnect < time(NULL) - 60)
+		{
+			m_TriedConnects.clear();
+			m_pCache->WebCacheGetRequest("gnutella2");
+		}
 
+		// try gnutella ips as last resort
+		/*if( LowGear && ConnectFromCache(m_pCache->m_GnuDna, true) )
+			continue;
 
-	// try gnutella ips as last resort
-	if( ConnectFromCache(m_pCache->m_GnuDna, true) )
-		return;
-	
-	if( ConnectFromCache(m_pCache->m_GnuReal, true) )
-		return;
+		if(m_pNet->m_pGnu)
+			if( ConnectFromCache(m_pNet->m_pGnu->m_UdpReplyCache, true) )
+				continue;
+		
+		if( ConnectFromCache(m_pCache->m_GnuReal, true) )
+			continue;
 
-	if( ConnectFromCache(m_pCache->m_GnuPerm, true) )
-		return;
+		if( ConnectFromCache(m_pCache->m_GnuPerm, true) )
+			continue;*/
+	}
+}
+
+void CG2Control::SendUdpProbes(bool LowGear)
+{
+	int ProbesLeft = LowGear ? 4 : 8;
+
+	// go through known cache find nodes not tried udp
+	std::list<Node>::iterator itNode;
+	for(itNode = m_pCache->m_G2Real.begin(); itNode != m_pCache->m_G2Real.end(); itNode++)
+		if( (*itNode).TriedUdp == false )
+		{
+			SendUdpConnect(*itNode);
+			(*itNode).TriedUdp = true;
+			
+			ProbesLeft--;
+			if(ProbesLeft <= 0)
+				return;
+		}
+
+	// try perm cache if none in known cache
+	for(itNode = m_pCache->m_G2Perm.begin(); itNode != m_pCache->m_G2Perm.end(); itNode++)
+		if( (*itNode).TriedUdp == false )
+		{
+			SendUdpConnect(*itNode);
+			(*itNode).TriedUdp = true;
+
+			ProbesLeft--;
+			if(ProbesLeft <= 0)
+				return;
+		}
 }
 
 bool CG2Control::ConnectFromCache(std::list<Node> &Cache, bool Perm)
 {
 	// If Real list has values
-	if(Cache.size())
-	{
-		int CachePos = (Perm) ? rand() % Cache.size() : 0;
-		
-		std::list<Node>::iterator itNode = Cache.begin();
-		for(int i = 0; itNode != Cache.end(); itNode++, i++)
-			if(i == CachePos)
-			{
-				Node TryNode = *itNode;
+	if(Cache.size() == 0)
+		return false;
 
-				if( !Perm )
-					Cache.erase(itNode);
+	int CachePos = (Perm) ? rand() % Cache.size() : 0;
+	
+	std::list<Node>::iterator itNode = Cache.begin();
+	for(int i = 0; itNode != Cache.end(); itNode++, i++)
+		if(i == CachePos)
+		{
+			Node TryNode = *itNode;
 
-				std::map<uint32, bool>::iterator itAddr = m_TriedConnects.find( StrtoIP(TryNode.Host).S_addr );
-				if(itAddr != m_TriedConnects.end())
-					break;
+			if( !Perm )
+				Cache.erase(itNode);
 
-				m_TriedConnects[ StrtoIP(TryNode.Host).S_addr ] = true;
+			std::map<uint32, bool>::iterator itAddr = m_TriedConnects.find( StrtoIP(TryNode.Host).S_addr );
+			if(itAddr != m_TriedConnects.end())
+				break;
 
-				SendUdpConnect( TryNode );
+			m_TriedConnects[ StrtoIP(TryNode.Host).S_addr ] = true;
 
-				if(m_pNet->m_UdpFirewall == UDP_BLOCK)
-					CreateNode(TryNode);
+			CreateNode(TryNode);
 
-				return true;	
-			}
-	}
+			return true;	
+		}
 
 	return false;
 }
@@ -660,14 +722,16 @@ void CG2Control::SendUdpConnect(Node HostInfo)
 	Send_PI(address, Ping, NULL);
 }
 
-void CG2Control::CreateNode(Node HostInfo)
+void CG2Control::CreateNode(Node HostInfo, bool ConnectBack)
 {
 	// Check if already connected to node
-	if( FindNode( HostInfo.Host, 0, false ) != NULL)
-		return;
+	if(!ConnectBack)
+		if( FindNode( HostInfo.Host, 0, false ) != NULL)
+			return;
 
 
 	CG2Node* NewNode = new CG2Node(this, HostInfo.Host, HostInfo.Port);
+	NewNode->m_ConnectBack = ConnectBack;
 
 	//Attempt to connect to node
 	if( !NewNode->Create() )
@@ -801,7 +865,7 @@ bool CG2Control::GetAltHubs(CString &HostList, CG2Node* NodeExclude, bool DnaOnl
 				DnaMap[ LeafCount ] = m_G2NodeList[i]->m_Address;
 			}
 			else
-				Hubs.push_back( IPv4toStr( m_G2NodeList[i]->m_Address) );
+				Hubs.push_back( IPv4toStr( m_G2NodeList[i]->m_Address) + " " + CTimeToStr(CTime::GetCurrentTime()));
 		}
 
 	// put dna nodes in order of least leaves to promote fast connections / even ultrapeer fill up
@@ -809,7 +873,7 @@ bool CG2Control::GetAltHubs(CString &HostList, CG2Node* NodeExclude, bool DnaOnl
 	{
 		std::map<int, IPv4>::iterator itNode;
 		for(itNode = DnaMap.begin(); itNode != DnaMap.end(); itNode++)
-			Hubs.push_back( IPv4toStr( itNode->second) );
+			Hubs.push_back( IPv4toStr( itNode->second) + " " + CTimeToStr(CTime::GetCurrentTime()));
 	}
 	// ultrapeers given random to encourage to nice multi-vendor network
 	else
@@ -1474,7 +1538,7 @@ void CG2Control::Receive_PI(G2_RecvdPacket &PacketPI)
 							Send_PI(m_G2NodeList[i]->m_Address, Ping, m_G2NodeList[i] ); 
 
 				if( Ping.TestFirewall )
-					CreateNode( Node(IPtoStr(Ping.UdpAddress.Host), Ping.UdpAddress.Port, NETWORK_G2) );
+					CreateNode( Node(IPtoStr(Ping.UdpAddress.Host), Ping.UdpAddress.Port, NETWORK_G2), true );
 			}	
 		}
 
@@ -1534,25 +1598,21 @@ void CG2Control::Receive_PO(G2_RecvdPacket &PacketPO)
 		else if(m_pNet->m_UdpFirewall == UDP_BLOCK)
 			m_pNet->m_UdpFirewall = UDP_NAT;
 
-		if(m_TryingConnect && !m_pNet->TcpBacklog())
-		{
-			if(Pong.ConnectAck)
-			{
-				if(Pong.SpaceAvailable)
-					CreateNode( Node(IPtoStr(PacketPO.Source.Host), PacketPO.Source.Port, NETWORK_G2) );
+		m_UdpReplyCache.push_front( Node(IPtoStr(PacketPO.Source.Host), PacketPO.Source.Port, NETWORK_G2) );
 
-				for(int i = 0; i < Pong.Cached.size(); i++)
-					m_pCache->AddKnown( Node(IPtoStr(Pong.Cached[i].Host), Pong.Cached[i].Port, NETWORK_G2) );
-			}
-			else
-				CreateNode( Node(IPtoStr(PacketPO.Source.Host), PacketPO.Source.Port, NETWORK_G2) );
-		}
-		else
-			m_pCache->AddKnown( Node(IPtoStr(PacketPO.Source.Host), PacketPO.Source.Port, NETWORK_G2) );
-	
+		for(int i = 0; i < Pong.Cached.size(); i++)
+			m_pCache->AddKnown( Node(IPtoStr(Pong.Cached[i].Host), Pong.Cached[i].Port, NETWORK_G2) );
 
 		for(int i = 0; i < m_pTrans->m_DownloadList.size(); i++)
 			m_pTrans->m_DownloadList[i]->UdpResponse(PacketPO.Source);
+	}
+
+	// tcp pong
+	else
+	{
+		if(PacketPO.pTCP->m_Inbound && !m_pPrefs->m_ForceFirewall)
+			// Firewall not up, unless this is over a LAN
+			m_pNet->m_TcpFirewall = false;
 	}
 }
 
@@ -1911,9 +1971,9 @@ void CG2Control::Receive_QKR(G2_RecvdPacket &PacketQKR)
 
 	if(m_ClientMode == G2_HUB)
 	{
-		m_PacketsQKR[AVG_TOTAL]++;
+		m_PacketsAvgQKR[AVG_TOTAL].Input(1);
 		if(QueryKeyRequest.dna)
-			m_PacketsQKR[AVG_DNA]++;
+			m_PacketsAvgQKR[AVG_DNA].Input(1);
 
 		if( QueryKeyRequest.RequestingAddress.Host.S_addr == 0)
 			QueryKeyRequest.RequestingAddress = PacketQKR.Source;
@@ -2022,9 +2082,9 @@ void CG2Control::Receive_Q2(G2_RecvdPacket &PacketQ2)
 
 	if(m_ClientMode == G2_HUB && PacketQ2.pTCP == NULL)
 	{
-		m_PacketsQ2[AVG_TOTAL]++;
+		m_PacketsAvgQ2[AVG_TOTAL].Input(1);
 		if(Query.dna)
-			m_PacketsQ2[AVG_DNA]++;
+			m_PacketsAvgQ2[AVG_DNA].Input(1);
 
 		ResponseAddress = Query.ReturnAddress;
 		if(ResponseAddress.Host.S_addr == 0 || Query.NAT)
