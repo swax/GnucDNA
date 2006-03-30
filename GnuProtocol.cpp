@@ -273,7 +273,7 @@ void CGnuProtocol::Receive_Ping(Gnu_RecvdPacket &Packet)
 			{
 				// add dna ips
 				packet_GGEPBlock DIppBlock;
-				memcpy(DIppBlock.Name, "DIPP", 3);
+				memcpy(DIppBlock.Name, "DIPP", 4);
 				DIppBlock.Last = true;
 				DIppBlock.Compression = true;
 
